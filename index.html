@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src 'self' http://localhost:3000 https://login.microsoftonline.com https://*.sharepoint.com; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'none'">
+    <title>GESTIONE OPERATIVA - auser Asti</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="components/servizio_card.css">
+</head>
+<body>
+    <h1>SharePoint List Manager</h1>
+    <button id="loginBtn">Login con Microsoft</button>
+    <span id="status">Non autenticato</span>
+    <br><br>
+    <button id="loadBtn">Carica Elenchi</button>
+    <button id="saveBtn">Aggiungi Elemento</button>
+    <ul id="list"></ul>
+
+    <!-- Header principale -->
+    <header class="main-header">
+        <div class="header-left">
+            <div class="logo">
+                <h2>auser Asti</h2>
+            </div>
+            <div class="dev-mode-info">
+                <span>🔧 MODALITÀ SVILUPPO - Dati locali</span>
+            </div>
+        </div>
+        
+        <div class="header-center">
+            <div class="version-info">L.P. Creation - Vers. 11082025</div>
+            <h1 class="main-title">GESTIONE OPERATIVA</h1>
+            
+            <!-- Indicatore stato SharePoint -->
+            <div class="connection-status">
+                <span class="status-disconnected">🔴 Connessione SharePoint in corso...</span>
+            </div>
+        </div>
+        
+        <div class="header-right">
+            <div class="current-date">mercoledì 20 agosto 2025</div>
+            <div class="week-info">Settimana numero 34</div>
+        </div>
+    </header>
+
+    <!-- Sezione navigazione -->
+    <nav class="navigation-section">
+        <button class="nav-btn" data-text="CALENDARIO ONLINE">CALENDARIO ONLINE</button>
+        <button class="nav-btn">REPORT DEL GIORNO</button>
+        <button class="nav-btn">REPORT SETTIMANALE</button>
+        <button class="nav-btn">ELENCO SERVIZI</button>
+        <button class="nav-btn">ELENCO SOCI</button>
+        <button class="nav-btn">ELENCO OPERATORI</button>
+        <button class="nav-btn">ELENCO MEZZI</button>
+        <button class="nav-btn" data-text="NUOVO SERVIZIO">NUOVO SERVIZIO</button>
+    </nav>
+
+    <!-- Contenuto principale -->
+    <main class="main-content">
+        <!-- Colonna sinistra - SERVIZI DEL GIORNO -->
+        <section class="content-column">
+            <h3 class="column-title">SERVIZI DEL GIORNO</h3>
+            <div class="services-container">
+                <!-- I servizi verranno caricati dinamicamente da SharePoint o dati locali -->
+                <div class="loading-services">
+                    <p>🔄 Caricamento servizi...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Colonna centrale - PROSSIMI SERVIZI -->
+        <section class="content-column">
+            <h3 class="column-title">PROSSIMI SERVIZI</h3>
+            <div class="services-container">
+                <!-- I servizi futuri verranno caricati dinamicamente da SharePoint o dati locali -->
+                <div class="loading-services">
+                    <p>🔄 Caricamento servizi futuri...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Colonna destra - TESSERE DA FARE -->
+        <section class="content-column">
+            <h3 class="column-title">TESSERE DA FARE</h3>
+            <div class="tessere-container">
+                <!-- Le tessere verranno caricate dinamicamente da SharePoint o dati locali -->
+                <div class="loading-tessere">
+                    <p>🔄 Caricamento tessere...</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer con pulsante di chiusura -->
+    <footer class="main-footer">
+        <button class="btn-close-app">CHIUDI APPLICAZIONE</button>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="renderer.js"></script>
+    <script src="config.js"></script>
+    <script src="localData.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

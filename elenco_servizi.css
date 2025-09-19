@@ -1,0 +1,606 @@
+/* Reset base */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background-color: #fff;
+  color: #000;
+  margin-bottom: 80px;
+}
+
+/* Header */
+.header {
+  background-color: #00A651;
+  color: white;
+  text-align: center;
+  padding: 20px;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* Barra di ricerca */
+.search-bar {
+  display: flex;
+  gap: 15px;
+  padding: 15px;
+  background-color: #f2f2ee;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Gruppo di ricerca (label + input) */
+.search-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Label per i campi di ricerca */
+.search-label {
+  font-size: 12px;
+  font-weight: bold;
+  color: #000;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  min-width: fit-content;
+}
+
+/* Input di ricerca personalizzabili */
+.search-input-id {
+  padding: 8px;
+  width: 70px;
+  border: 2px solid #000;
+  background-color: #FFD700;
+  color: #000;
+  border-radius: 5px;
+  font-size: 14px;
+}
+
+.search-input-data {
+  padding: 8px;
+  width: 150px;
+  border: 2px solid #000;
+  background-color: #FFD700;
+  color: #000;
+  border-radius: 5px;
+  font-size: 14px;
+}
+
+.search-input-socio {
+  padding: 8px;
+  width: 150px;
+  border: 2px solid #000;
+  background-color: #FFD700;
+  color: #000;
+  border-radius: 5px;
+  font-size: 14px;
+}
+
+.search-input-operatore {
+  padding: 8px;
+  width: 150px;
+  border: 2px solid #000;
+  background-color: #FFD700;
+  color: #000;
+  border-radius: 5px;
+  font-size: 14px;
+}
+
+/* Pulsante MOSTRA TUTTO personalizzabile */
+.btn-mostra-tutto {
+  padding: 8px 12px;
+  background-color: #FF4500;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+  border-radius: 5px;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.btn-mostra-tutto:hover {
+  background-color: #CC3300;
+  transform: scale(1.02);
+}
+
+/* Pulsanti di test SharePoint */
+.btn-test-sharepoint {
+  padding: 8px 12px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  cursor: pointer;
+  margin-left: 10px;
+  border-radius: 5px;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.btn-diagnosi {
+  padding: 8px 12px;
+  background-color: #17a2b8;
+  color: white;
+  border: none;
+  cursor: pointer;
+  margin-left: 10px;
+  border-radius: 5px;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.btn-test-sharepoint:hover {
+  background-color: #218838;
+  transform: scale(1.02);
+}
+
+.btn-diagnosi:hover {
+  background-color: #138496;
+  transform: scale(1.02);
+}
+
+.btn-apri-sharepoint {
+  padding: 8px 12px;
+  background-color: #6f42c1;
+  color: white;
+  border: none;
+  cursor: pointer;
+  margin-left: 10px;
+  border-radius: 5px;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.btn-apri-sharepoint:hover {
+  background-color: #5a2d91;
+  transform: scale(1.02);
+}
+
+/* Contenuto principale */
+.container {
+  background-color: #F4A460;
+  padding: 10px;
+  border-bottom: 2px solid #000;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 15px;
+  align-items: flex-start;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 0 0 auto;
+}
+
+/* ========================================
+   PRIMA RIGA - CAMPI PRINCIPALI
+   ======================================== */
+
+/* CAMPO IDS */
+.col-ids {
+  flex: 0 0 60px;
+}
+.row:first-child .col-ids {
+  margin-right: 0;
+}
+
+/* CAMPO DATA PRELIEVO */
+.col-data {
+  flex: 0 0 100px;
+}
+.col-data input {
+  text-align: center;
+}
+.row:first-child .col-data {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+/* CAMPO IDSOCIO */
+.col-idsocio {
+  flex: 0 0 50px;
+}
+.col-idsocio input {
+  text-align: center;
+}
+.row:first-child .col-idsocio {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+/* CAMPO SOCIO TRASPORTATO */
+.col-socio {
+  flex: 0 0 300px;
+}
+.row:first-child .col-socio {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+/* PULSANTE FILTRA */
+.col-filtra {
+  flex: 0 0 80px;
+  justify-content: flex-end;
+  align-items: center;
+}
+.row:first-child .col-filtra {
+  margin-right: 0;
+  margin-left: 5px;
+}
+
+/* CAMPO ORA INIZIO */
+.col-ora {
+  flex: 0 0 80px;
+}
+.col-ora input {
+  text-align: center;
+  width: 100%;
+  padding: 4px;
+}
+.row:first-child .col-ora {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+/* CAMPO COMUNE DI PRELIEVO */
+.col-comune {
+  flex: 0 0 200px;
+}
+.row:first-child .col-comune {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+/* CAMPO LUOGO DI PRELIEVO */
+.col-luogo {
+  flex: 0 0 300px;
+}
+.row:first-child .col-luogo {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+/* CAMPO TIPO SERVIZIO */
+.col-tipo-servizio {
+  flex: 0 0 120px;
+}
+.col-tipo-servizio input {
+  text-align: center;
+}
+.row:first-child .col-tipo-servizio {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+/* CAMPO CARROZZINA */
+.col-carrozzina {
+  flex: 0 0 100px;
+}
+.row:first-child .col-carrozzina {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+/* ========================================
+   SECONDA RIGA - DETTAGLI SERVIZIO
+   ======================================== */
+
+/* CAMPO RICHIEDENTE IL SERVIZIO */
+.col-richiedente {
+  flex: 0 0 170px;
+}
+.row:nth-child(2) .col-richiedente {
+  margin-right: 0;
+}
+
+/* CAMPO MOTIVAZIONE DEL SERVIZIO */
+.col-motivazione {
+  flex: 0 0 450px;
+}
+.row:nth-child(2) .col-motivazione {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+/* CAMPO ORA ARRIVO */
+.col-ora-arrivo {
+  flex: 0 0 80px;
+}
+.col-ora-arrivo input {
+  text-align: center;
+}
+.row:nth-child(2) .col-ora-arrivo {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+/* CAMPO COMUNE DI DESTINAZIONE */
+.col-comune-destinazione {
+  flex: 0 0 200px;
+}
+.row:nth-child(2) .col-comune-destinazione {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+/* CAMPO LUOGO DI DESTINAZIONE */
+.col-luogo-destinazione {
+  flex: 0 0 300px;
+}
+.row:nth-child(2) .col-luogo-destinazione {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+/* CAMPO PAGAMENTO */
+.col-pagamento {
+  flex: 0 0 80px;
+}
+.row:nth-child(2) .col-pagamento {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+/* CAMPO STATO INCASSO */
+.col-stato-incasso {
+  flex: 0 0 135px;
+}
+.row:nth-child(2) .col-stato-incasso {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+
+
+/* ========================================
+   TERZA RIGA - OPERATIVI
+   ======================================== */
+
+/* CAMPO OPERATORE */
+.col-operatore {
+  flex: 0 0 350px;
+}
+
+.row:nth-child(3) .col-operatore {
+  margin-right: 0;
+  margin-left: 0px;
+}
+
+/* CAMPO MEZZO USATO */
+.col-mezzo {
+    flex: 0 0 300px;
+  }
+
+  .row:nth-child(3) .col-mezzo {
+    margin-right: 0;
+    margin-left: 10px;
+  }
+
+/* CAMPO TEMPO */
+.col-tempo {
+  flex: 0 0 50px;
+}
+
+.row:nth-child(3) .col-tempo {
+  margin-right: 0;
+  margin-left: 30px;
+}
+
+/* CAMPO KM */
+.col-km {
+  flex: 0 0 50px;
+}
+
+.row:nth-child(3) .col-km {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+
+
+/* CAMPO TIPO DI PAGAMENTO */
+.col-tipo-pagamento {
+    flex: 0 0 150px;
+ }
+
+ .row:nth-child(3) .col-tipo-pagamento {
+  margin-right: 0;
+  margin-left: 40px;
+ }
+  
+  /* CAMPO DATA BONIFICO */
+  .col-data-bonifico {
+    flex: 0 0 135px;
+  }
+
+  .row:nth-child(3) .col-data-bonifico {
+    margin-right: 0;
+    margin-left: 10px;
+  }
+
+  /* CAMPO STATO DEL SERVIZIO */
+.col-stato-servizio {
+    flex: 0 0 150px;
+  }
+
+  .row:nth-child(3) .col-stato-servizio {
+    margin-right: 0;
+    margin-left: 50px;
+  }
+
+/* ========================================
+   QUARTA RIGA - FINALIZZAZIONE
+   ======================================== */
+
+/* CAMPO NOTE FINE SERVIZIO */
+.col-note {
+  flex: 0 0 1130px;
+}
+
+.row:nth-child(4) .col-note {
+  margin-right: 0;
+  margin-left: 0;
+}
+
+
+/* CONTAINER PULSANTI */
+.col-pulsanti {
+  flex: 0 0 400px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.row:nth-child(4) .col-pulsanti {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+/* ========================================
+   STILI GENERALI
+   ======================================== */
+
+/* Allineamento righe */
+.row:first-child {
+  justify-content: flex-start;
+  gap: 0;
+}
+
+.row:nth-child(2) {
+  justify-content: flex-start;
+  gap: 0;
+}
+
+.row:nth-child(3) {
+  justify-content: flex-start;
+}
+
+.row:nth-child(4) {
+  justify-content: flex-start;
+}
+
+/* Stili comuni */
+.label {
+  font-size: 12px;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.input-field {
+  padding: 5px;
+  width: 100%;
+  border: 1px solid #000;
+  background-color: white;
+  color: black;
+}
+
+/* Pulsanti */
+.btn-filtra {
+  background-color: #90EE90;
+  color: #000;
+  border: 1px solid #000;
+  padding: 5px 10px;
+  font-weight: bold;
+  cursor: pointer;
+  height: 100%;
+  align-self: flex-end;
+  margin-top: 20px;
+}
+
+.btn-filtra:hover {
+  background-color: #80C080;
+}
+
+.btn-stampa {
+  background-color: #FF0000;
+  color: white;
+  border: 2px solid #000;
+  padding: 10px 15px;
+  font-weight: bold;
+  margin-right: 10px;
+  cursor: pointer;
+  width: 100px;
+  height: 50px;
+}
+
+.btn-modifica {
+  background-color: #FFD700;
+  color: #000;
+  border: 2px solid #000;
+  padding: 10px 15px;
+  font-weight: bold;
+  margin-right: 10px;
+  cursor: pointer;
+  width: 100px;
+  height: 50px;
+}
+
+.btn-completa {
+  background-color: #00A651;
+  color: white;
+  border: 2px solid #000;
+  padding: 10px 15px;
+  font-weight: bold;
+  cursor: pointer;
+  width: 100px;
+  height: 50px;
+}
+
+.btn-stampa:hover,
+.btn-modifica:hover,
+.btn-completa:hover {
+  transform: scale(1.02);
+}
+
+.btn-chiudi {
+  background-color: #FFA500;
+  color: black;
+  border: 2px solid #000;
+  padding: 10px 20px;
+  font-weight: bold;
+  font-size: 18px;
+  cursor: pointer;
+  border-radius: 5px;
+  width: 100%;
+}
+
+.btn-chiudi:hover {
+  background-color: #FF8C00;
+  transform: scale(1.02);
+}
+
+.note {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #000;
+  background-color: white;
+}
+
+.footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  text-align: center;
+  padding: 10px;
+  background-color: #edebe6;
+  color: black;
+  font-weight: bold;
+  font-size: 18px;
+  border-radius: 5px;
+  z-index: 1000;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+}

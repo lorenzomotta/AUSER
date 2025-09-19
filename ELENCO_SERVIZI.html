@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Elenco Generale Servizi</title>
+  <link rel="stylesheet" href="elenco_servizi.css" />
+  <script src="sharepoint_config.js"></script>
+  <script src="elenco_servizi.js"></script>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    ELENCO GENERALE SERVIZI
+  </div>
+
+  <!-- Barra di ricerca -->
+  <div class="search-bar">
+    <div class="search-group">
+      <label class="search-label">ID:</label>
+      <input type="text" class="search-input-id" placeholder="Ricerca per ID" />
+    </div>
+    
+    <div class="search-group">
+      <label class="search-label">Data:</label>
+      <input type="text" class="search-input-data" placeholder="Ricerca per data" />
+    </div>
+    
+    <div class="search-group">
+      <label class="search-label">Socio:</label>
+      <input type="text" class="search-input-socio" placeholder="Ricerca per nominativo socio" />
+    </div>
+    
+    <div class="search-group">
+      <label class="search-label">Operatore:</label>
+      <input type="text" class="search-input-operatore" placeholder="Ricerca per operatore" />
+    </div>
+    
+    <button class="btn-mostra-tutto">MOSTRA TUTTO</button>
+    <button class="btn-test-sharepoint" onclick="testaConnessioneSharePoint()">TEST SHAREPOINT</button>
+    <button class="btn-diagnosi" onclick="diagnoseSharePoint()">DIAGNOSI COMPLETA</button>
+    <button class="btn-apri-sharepoint" onclick="apriSharePoint()">APRI SHAREPOINT</button>
+  </div>
+
+  <!-- Template per i servizi -->
+  <template id="servizio-template">
+    <div class="container" data-servizio-id="">
+      <div class="row">
+        <div class="col col-ids">
+          <div class="label">IDS</div>
+          <input type="text" class="input-field service-ids" readonly />
+        </div>
+        <div class="col col-data">
+          <div class="label">DATA PRELIEVO</div>
+          <input type="text" class="input-field service-data" />
+        </div>
+        <div class="col col-idsocio">
+          <div class="label">IDSOCIO</div>
+          <input type="text" class="input-field service-idsocio" />
+        </div>
+        <div class="col col-socio">
+          <div class="label">SOCIO TRASPORTATO</div>
+          <input type="text" class="input-field service-socio" />
+        </div>
+        <div class="col col-filtra">
+          <button class="btn-filtra">FILTRA</button>
+        </div>
+        <div class="col col-ora">
+          <div class="label">ORA INIZIO</div>
+          <input type="text" class="input-field service-ora-inizio" />
+        </div>
+        <div class="col col-comune">
+          <div class="label">COMUNE DI PRELIEVO</div>
+          <input type="text" class="input-field service-comune" />
+        </div>
+        <div class="col col-luogo">
+          <div class="label">LUOGO DI PRELIEVO</div>
+          <input type="text" class="input-field service-luogo" />
+        </div>
+        <div class="col col-tipo-servizio">
+          <div class="label">TIPO SERVIZIO</div>
+          <input type="text" class="input-field service-tipo" readonly />
+        </div>
+        <div class="col col-carrozzina">
+          <div class="label">CARROZZINA</div>
+          <input type="text" class="input-field service-carrozzina" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col col-richiedente">
+          <div class="label">RICHIEDENTE IL SERVIZIO</div>
+          <input type="text" class="input-field" />
+        </div>
+        <div class="col col-motivazione">
+          <div class="label">MOTIVAZIONE DEL SERVIZIO</div>
+          <input type="text" class="input-field" />
+        </div>
+        <div class="col col-ora-arrivo">
+          <div class="label">ORA ARRIVO</div>
+          <input type="text" class="input-field" />
+        </div>
+        <div class="col col-comune-destinazione">
+          <div class="label">COMUNE DI DESTINAZIONE</div>
+          <input type="text" class="input-field" />
+        </div>
+        <div class="col col-luogo-destinazione">
+          <div class="label">LUOGO DI DESTINAZIONE</div>
+          <input type="text" class="input-field" />
+        </div>
+        <div class="col col-pagamento">
+          <div class="label">PAGAMENTO</div>
+          <input type="text" class="input-field" />
+        </div>
+        <div class="col col-stato-incasso">
+          <div class="label">STATO INCASSO</div>
+          <input type="text" class="input-field" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col col-operatore">
+          <div class="label">OPERATORE</div>
+          <input type="text" class="input-field" />
+        </div> 
+
+        <div class="col col-filtra">
+          <button class="btn-filtra">FILTRA</button>
+        </div>
+
+        <div class="col col-mezzo">
+          <div class="label">MEZZO USATO</div>
+          <input type="text" class="input-field" />
+        </div> 
+
+        <div class="col col-tempo">
+          <div class="label">TEMPO</div>
+          <input type="text" class="input-field" />
+          </div>
+        
+        <div class="col col-km">
+          <div class="label">KM</div>
+          <input type="text" class="input-field" />
+        </div>
+
+        <div class="col col-tipo-pagamento">
+            <div class="label">TIPO DI PAGAMENTO</div>
+            <input type="text" class="input-field" />
+          </div>
+          <div class="col col-data-bonifico">
+            <div class="label">DATA BONIFICO</div>
+            <input type="text" class="input-field" />
+          </div>
+          
+        <div class="col col-stato-servizio">
+          <div class="label">STATO DEL SERVIZIO</div>
+          <input type="text" class="input-field" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col col-note">
+          <div class="label">NOTE FINE SERVIZIO</div>
+          <input type="text" class="note" />
+        </div>
+        
+        <div class="col col-pulsanti">
+          <button class="btn-stampa">STAMPA</button>
+          <button class="btn-modifica">MODIFICA</button>
+          <button class="btn-completa">COMPLETA</button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Container per i servizi generati dinamicamente -->
+  <div id="servizi-container">
+    <!-- I servizi verranno generati qui -->
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <button class="btn-chiudi">CHIUDI</button>
+  </div>
+
+</body>
+</html>

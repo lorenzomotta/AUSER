@@ -1,0 +1,17 @@
+.svc-card { background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 8px; margin: 8px 0; }
+.svc-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.svc-label { font-weight: 600; font-size: 12px; color: #333; margin: 0 6px; }
+.svc-id { width: 60px; }
+.svc-data { width: 110px; }
+.svc-operatore, .svc-nominativo, .svc-tipo { flex: 1; }
+.svc-ora-sotto-casa, .svc-ora-destinazione { width: 80px; text-align: center; }
+.svc-actions { display: flex; gap: 8px; margin-top: 8px; }
+.svc-btn { border: 0; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 600; }
+.svc-btn-print { background: #d9534f; color: #fff; }
+.svc-btn-edit { background: #f0ad4e; color: #000; }
+.svc-btn-complete { background: #5cb85c; color: #fff; }
+
+/* Personalizzazione rapida per ogni controllo */
+.svc-card input { border: 1px solid #bbb; border-radius: 4px; padding: 4px 6px; background: #f9f9f9; }
+.svc-card input.readonly { background: #f4f4f4; }
+
