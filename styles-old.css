@@ -1,0 +1,586 @@
+/* Reset e base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f5f5f5;
+    overflow-x: hidden;
+}
+
+/* Header Section - Green Bar */
+.header-section {
+    background-color: #2d7a32;
+    color: white;
+    padding: 15px 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.logo-section {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.logo-circle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background-color: white;
+    color: #2d7a32;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.logo-text {
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.btn-monitor {
+    background-color: #2d7a32;
+    border: 1px solid white;
+    color: white;
+    font-size: 12px;
+    padding: 2px 8px;
+}
+
+.date-info {
+    color: white;
+    font-size: 14px;
+}
+
+.main-title {
+    font-size: 32px;
+    font-weight: bold;
+    color: white;
+    margin: 0;
+}
+
+.version-info {
+    font-size: 12px;
+    color: white;
+    margin-top: 5px;
+}
+
+.btn-calendar {
+    background-color: #0066cc;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    margin-right: 10px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    display: block;
+    width: 100%;
+}
+
+.btn-new-service {
+    background-color: #ff6600;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    font-weight: bold;
+    display: block;
+    width: 100%;
+}
+
+.btn-calendar:hover,
+.btn-new-service:hover {
+    opacity: 0.9;
+}
+
+/* Sub Navigation Bar - Green Buttons */
+.sub-nav {
+    background-color: #f5f5f5;
+    padding: 10px 0;
+    border-bottom: 2px solid #2d7a32;
+}
+
+.btn-nav {
+    background-color: #2d7a32;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    margin-right: 10px;
+    margin-bottom: 5px;
+    font-weight: bold;
+    font-size: 14px;
+    border-radius: 4px;
+}
+
+.btn-nav:hover {
+    background-color: #1f5a23;
+    color: white;
+}
+
+/* Main Content Area */
+.main-content {
+    background-color: #ffe5cc;
+    min-height: calc(100vh - 250px);
+    padding: 20px;
+    margin-bottom: 60px; /* Spazio per il footer fisso */
+}
+
+.main-content .row {
+    margin-bottom: 15px;
+    display: block;
+    width: 100%;
+    clear: both;
+}
+
+.main-content .row:last-child {
+    margin-bottom: 0;
+}
+
+.main-content .row .col-12 {
+    width: 100%;
+    display: block;
+    float: none;
+}
+
+.main-content .row .col-md-4 {
+    width: 33.333%;
+    display: inline-block;
+    vertical-align: top;
+    padding: 0 10px;
+    float: left;
+    box-sizing: border-box;
+}
+
+.main-content .row .col-md-4:first-child {
+    padding-left: 0;
+}
+
+.main-content .row .col-md-4:last-child {
+    padding-right: 0;
+}
+
+.main-content .row .col-md-4 .section-title {
+    margin-bottom: 10px;
+}
+
+.section-title {
+    color: #8b4513;
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+/* Services Columns */
+.services-column {
+    min-height: 200px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 10px;
+    border: 2px solid #ffcc99;
+    border-radius: 4px;
+}
+
+/* Rettangolo verde per SERVIZI DEL GIORNO */
+.services-column-green {
+    background-color: #28a745;
+    max-height: calc(100vh - 350px);
+    height: calc(100vh - 350px);
+    color: white;
+}
+
+.services-column-green .service-entry {
+    background-color: rgba(255, 255, 255, 0.95);
+    color: #333;
+}
+
+/* Rettangolo arancione per PROSSIMI SERVIZI */
+.services-column-orange {
+    background-color: #ff6600;
+    max-height: calc(100vh - 350px);
+    height: calc(100vh - 350px);
+    color: white;
+}
+
+.services-column-orange .service-entry {
+    background-color: rgba(255, 255, 255, 0.95);
+    color: #333;
+}
+
+/* Rettangolo giallo per SERVIZI INSERITI OGGI */
+.services-column-yellow {
+    background-color: #ffc107;
+    max-height: calc((100vh - 500px) / 2);
+    height: calc((100vh - 500px) / 2);
+    margin-bottom: 15px;
+    color: #000;
+}
+
+.services-column-yellow .service-entry {
+    background-color: rgba(255, 255, 255, 0.95);
+    color: #333;
+}
+
+.services-column-full {
+    max-height: 300px;
+    height: 300px;
+}
+
+.services-column-half {
+    max-height: 150px;
+    height: 150px;
+}
+
+.service-entry {
+    background-color: #faf8f5;
+    border: 2px solid #ffcc99;
+    border-radius: 4px;
+    padding: 8px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    position: relative;
+}
+
+.service-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 5px;
+}
+
+.service-id {
+    background-color: #2d7a32;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+    font-weight: bold;
+    font-size: 16px;
+    min-width: 60px;
+    width: 60px;
+    height: 35px;
+    border-radius: 0;
+    flex-shrink: 0;
+}
+
+.service-header .service-field-inline {
+    flex: 1;
+    min-width: 0;
+    margin-left: 0;
+}
+
+.service-header .service-field-inline input {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Rimossa regola duplicata - vedi sotto */
+
+.service-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 5px;
+    align-items: center;
+    position: relative;
+}
+
+.service-date-input {
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 2px;
+    font-size: 13px;
+    background-color: white;
+    width: 90px;
+    flex-shrink: 0;
+}
+
+.service-field-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.service-field-inline label {
+    font-weight: bold;
+    color: #333;
+    font-size: 13px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.service-field-inline input {
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 2px;
+    font-size: 13px;
+    background-color: white;
+    min-width: 0;
+}
+
+/* Nominativo - più largo */
+.service-nominativo {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.service-nominativo label {
+    flex-shrink: 0;
+}
+
+.service-nominativo input {
+    flex: 1;
+    min-width: 0;
+}
+
+/* ORA SOTTO CASA - più stretto */
+.service-ora-sotto-casa {
+    flex: 0 0 auto;
+    width: 140px;
+}
+
+.service-ora-sotto-casa input {
+    width: 50px;
+    flex: none;
+}
+
+/* ORA A DESTINAZIONE - allineato con Nominativo sopra */
+.service-row .service-field-inline.service-ora-destinazione {
+    flex: 1 !important;
+    min-width: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin-left: 78px !important;
+    width: auto !important;
+}
+
+.service-row .service-field-inline.service-ora-destinazione label {
+    font-weight: bold !important;
+    color: #333 !important;
+    font-size: 13px !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+}
+
+.service-row .service-field-inline.service-ora-destinazione input {
+    width: 60px !important;
+    flex: none !important;
+    min-width: 60px !important;
+}
+
+.service-field-full {
+    margin-bottom: 5px;
+}
+
+.service-field-full label {
+    font-weight: bold;
+    color: #333;
+    display: block;
+    margin-bottom: 5px;
+    font-size: 13px;
+}
+
+.service-field-full input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 2px;
+    font-size: 13px;
+    background-color: white;
+}
+
+.service-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    justify-content: space-between;
+}
+
+.btn-stampa {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    font-weight: bold;
+    flex: 1;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.btn-stampa:hover {
+    background-color: #c82333;
+}
+
+.btn-modifica {
+    background-color: #ffc107;
+    color: #000;
+    border: none;
+    padding: 8px 20px;
+    font-weight: bold;
+    flex: 1;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.btn-modifica:hover {
+    background-color: #e0a800;
+}
+
+.btn-completa {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    font-weight: bold;
+    flex: 1;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.btn-completa:hover {
+    background-color: #218838;
+}
+
+/* Cards Column */
+.cards-column {
+    min-height: 150px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 10px;
+    border: 2px solid #ffcc99;
+    border-radius: 4px;
+}
+
+/* Rettangolo blu per TESSERE DA FARE */
+.cards-column-blue {
+    background-color: #0066cc;
+    max-height: calc((100vh - 500px) / 2);
+    height: calc((100vh - 500px) / 2);
+    color: white;
+}
+
+.cards-column-blue .card-entry {
+    background-color: rgba(255, 255, 255, 0.95);
+    color: #333;
+}
+
+.cards-column-half {
+    max-height: 150px;
+    height: 150px;
+}
+
+.cards-column-full {
+    max-height: 200px;
+    height: 200px;
+}
+
+.card-entry {
+    background-color: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.card-id {
+    font-weight: bold;
+    color: #333;
+    min-width: 50px;
+}
+
+.card-description {
+    flex: 1;
+}
+
+.card-description input {
+    width: 100%;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.btn-nuovo {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.btn-arrow {
+    background-color: #ff6600;
+    color: white;
+    border: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 4px;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Footer Section - Orange Bar */
+.footer-section {
+    background-color: #ff6600;
+    padding: 15px 0;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+}
+
+.btn-close-app {
+    background-color: #ff6600;
+    color: white;
+    border: 2px solid white;
+    padding: 10px 30px;
+    font-weight: bold;
+    font-size: 16px;
+    width: 100%;
+}
+
+.btn-close-app:hover {
+    background-color: #e55a00;
+    color: white;
+}
+
+/* Scrollbar styling */
+.services-column::-webkit-scrollbar,
+.cards-column::-webkit-scrollbar {
+    width: 10px;
+}
+
+.services-column::-webkit-scrollbar-track,
+.cards-column::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 5px;
+}
+
+.services-column::-webkit-scrollbar-thumb,
+.cards-column::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 5px;
+}
+
+.services-column::-webkit-scrollbar-thumb:hover,
+.cards-column::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+

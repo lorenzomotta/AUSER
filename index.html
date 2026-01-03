@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AUSER Asti - Gestione Operativa</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Sidebar Section -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo-section">
+                <div class="logo-circle">a</div>
+                <div class="logo-text">auser Asti</div>
+            </div>
+        </div>
+        
+        <div class="sidebar-buttons">
+            <button class="btn btn-sidebar btn-sidebar-primary" id="btn-calendario-online">CALENDARIO ONLINE</button>
+            <button class="btn btn-sidebar btn-sidebar-secondary">NUOVO SERVIZIO</button>
+            
+            <div class="sidebar-divider"></div>
+            
+            <button class="btn btn-sidebar btn-sidebar-nav" id="btn-elenco-servizi">ELENCO SERVIZI</button>
+            <button class="btn btn-sidebar btn-sidebar-nav">REPORT DEL GIORNO</button>
+            <button class="btn btn-sidebar btn-sidebar-nav">REPORT SETTIMANALE</button>
+            <button class="btn btn-sidebar btn-sidebar-nav">ELENCO SOCI</button>
+            <button class="btn btn-sidebar btn-sidebar-nav">ELENCO OPERATORI</button>
+            <button class="btn btn-sidebar btn-sidebar-nav">ELENCO MEZZI</button>
+        </div>
+    </aside>
+
+    <!-- Main Content Wrapper -->
+    <div class="main-wrapper">
+        <!-- Header Section -->
+        <header class="header-section">
+            <button class="btn btn-close-app-header" title="Chiudi Applicazione">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                    <polyline points="7 3 7 8 15 8"></polyline>
+                </svg>
+            </button>
+            <div class="container-fluid">
+                <div class="row align-items-center justify-content-center">
+                    <div class="col-12 text-center">
+                        <h1 class="main-title">GESTIONE OPERATIVA</h1>
+                        <div class="date-info">
+                            <span id="current-date"></span>
+                            <span class="date-separator"> - </span>
+                            <span id="week-number"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <div class="container-fluid">
+                <div class="row">
+                    <!-- Colonna sinistra: SERVIZI DEL GIORNO (verde) -->
+                    <div class="col-md-4">
+                        <h2 class="section-title">SERVIZI DEL GIORNO</h2>
+                        <div class="services-column services-column-green" id="servizi-giorno">
+                            <div style="padding: 20px; text-align: center; color: #666;">Caricamento servizi...</div>
+                        </div>
+                    </div>
+
+                    <!-- Colonna centrale: PROSSIMI SERVIZI (arancione) -->
+                    <div class="col-md-4">
+                        <h2 class="section-title">PROSSIMI SERVIZI</h2>
+                        <div class="services-column services-column-orange" id="prossimi-servizi">
+                            <!-- Service entries will be dynamically loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Colonna destra: SERVIZI INSERITI OGGI (giallo) e TESSERE DA FARE (blu) -->
+                    <div class="col-md-4">
+                        <h2 class="section-title">SERVIZI INSERITI OGGI</h2>
+                        <div class="services-column services-column-yellow" id="servizi-inseriti-oggi">
+                            <!-- Service entries will be dynamically loaded here -->
+                        </div>
+                        
+                        <h2 class="section-title">TESSERE DA FARE</h2>
+                        <div class="cards-column cards-column-blue" id="tessere-da-fare">
+                            <!-- Card entries will be dynamically loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Log immediato per verificare se index-sidebar.html viene caricato
+        console.log('=== index-sidebar.html caricato ===');
+        console.log('URL:', window.location.href);
+        console.log('Query string:', window.location.search);
+    </script>
+    <script type="module" src="main.js"></script>
+</body>
+</html>
+

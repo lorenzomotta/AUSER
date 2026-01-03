@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AUSER Asti - Gestione Operativa</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Header Section -->
+    <header class="header-section">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col-md-2">
+                    <div class="logo-section">
+                        <div class="logo-circle">a</div>
+                        <div class="logo-text">auser Asti</div>
+                        <button class="btn btn-sm btn-monitor">MONITOR 4/3</button>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="date-info">
+                        <div id="current-date"></div>
+                        <div id="week-number"></div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-center">
+                    <h1 class="main-title">GESTIONE OPERATIVA</h1>
+                    <div class="version-info">LP. Creation - Vers. 21122025</div>
+                </div>
+                <div class="col-md-2 text-end">
+                    <button class="btn btn-calendar">CALENDARIO ONLINE</button>
+                    <button class="btn btn-new-service">NUOVO SERVIZIO</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Sub Navigation Bar -->
+    <nav class="sub-nav">
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col">
+                    <button class="btn btn-nav">REPORT DEL GIORNO</button>
+                    <button class="btn btn-nav">REPORT SETTIMANALE</button>
+                    <button class="btn btn-nav">ELENCO SERVIZI</button>
+                    <button class="btn btn-nav">ELENCO SOCI</button>
+                    <button class="btn btn-nav">ELENCO OPERATORI</button>
+                    <button class="btn btn-nav">ELENCO MEZZI</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <div class="container-fluid">
+            <div class="row">
+                <!-- Colonna sinistra: SERVIZI DEL GIORNO (verde) -->
+                <div class="col-md-4">
+                    <h2 class="section-title">SERVIZI DEL GIORNO</h2>
+                    <div class="services-column services-column-green" id="servizi-giorno">
+                        <div style="padding: 20px; text-align: center; color: #666;">Caricamento servizi...</div>
+                    </div>
+                </div>
+
+                <!-- Colonna centrale: PROSSIMI SERVIZI (arancione) -->
+                <div class="col-md-4">
+                    <h2 class="section-title">PROSSIMI SERVIZI</h2>
+                    <div class="services-column services-column-orange" id="prossimi-servizi">
+                        <!-- Service entries will be dynamically loaded here -->
+                    </div>
+                </div>
+
+                <!-- Colonna destra: SERVIZI INSERITI OGGI (giallo) e TESSERE DA FARE (blu) -->
+                <div class="col-md-4">
+                    <h2 class="section-title">SERVIZI INSERITI OGGI</h2>
+                    <div class="services-column services-column-yellow" id="servizi-inseriti-oggi">
+                        <!-- Service entries will be dynamically loaded here -->
+                    </div>
+                    
+                    <h2 class="section-title">TESSERE DA FARE</h2>
+                    <div class="cards-column cards-column-blue" id="tessere-da-fare">
+                        <!-- Card entries will be dynamically loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer Section -->
+    <footer class="footer-section">
+        <div class="container-fluid">
+            <button class="btn btn-close-app">CHIUDI APPLICAZIONE</button>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Log immediato per verificare se index.html viene caricato
+        console.log('=== index.html caricato ===');
+        console.log('URL:', window.location.href);
+        console.log('Query string:', window.location.search);
+    </script>
+    <script type="module" src="main.js"></script>
+</body>
+</html>
+

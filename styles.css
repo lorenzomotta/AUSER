@@ -1,0 +1,711 @@
+/* Reset e base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f5f5f5;
+    overflow-x: hidden;
+    display: flex;
+    height: 100vh;
+}
+
+/* Sidebar Section */
+.sidebar {
+    width: 250px;
+    background-color: #2d7a32;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.sidebar-header {
+    padding: 20px 15px;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.logo-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.logo-circle {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: white;
+    color: #2d7a32;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.logo-text {
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.btn-monitor {
+    background-color: #2d7a32;
+    border: 1px solid white;
+    color: white;
+    font-size: 12px;
+    padding: 4px 10px;
+    width: 100%;
+}
+
+.sidebar-buttons {
+    padding: 15px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.btn-sidebar {
+    width: 100%;
+    padding: 12px 15px;
+    border: none;
+    font-weight: bold;
+    font-size: 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.btn-sidebar-primary {
+    background-color: #0066cc;
+    color: white;
+}
+
+.btn-sidebar-primary:hover {
+    background-color: #0052a3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.btn-sidebar-secondary {
+    background-color: #ff6600;
+    color: white;
+}
+
+.btn-sidebar-secondary:hover {
+    background-color: #e55a00;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.btn-sidebar-nav {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn-sidebar-nav:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: translateX(5px);
+}
+
+.sidebar-divider {
+    height: 2px;
+    background-color: rgba(255, 255, 255, 0.2);
+    margin: 10px 0;
+}
+
+/* Main Wrapper - contiene header, content e footer */
+.main-wrapper {
+    flex: 1;
+    margin-left: 250px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* Header Section - Green Bar */
+.header-section {
+    background-color: #2d7a32;
+    color: white;
+    padding: 15px 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: relative;
+}
+
+.btn-close-app-header {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    background-color: #dc3545;
+    color: white;
+    border: 2px solid white;
+    border-radius: 4px;
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    z-index: 10;
+}
+
+.btn-close-app-header:hover {
+    background-color: #c82333;
+    transform: scale(1.05);
+}
+
+.btn-close-app-header svg {
+    width: 20px;
+    height: 20px;
+}
+
+.date-info {
+    color: white;
+    font-size: 14px;
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.date-separator {
+    margin: 0 5px;
+}
+
+.main-title {
+    font-size: 32px;
+    font-weight: bold;
+    color: white;
+    margin: 0;
+}
+
+
+/* Main Content Area */
+.main-content {
+    background-color: #ffe5cc;
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.main-content .row {
+    margin-bottom: 15px;
+    display: block;
+    width: 100%;
+    clear: both;
+}
+
+.main-content .row:last-child {
+    margin-bottom: 0;
+}
+
+.main-content .row .col-12 {
+    width: 100%;
+    display: block;
+    float: none;
+}
+
+.main-content .row .col-md-4 {
+    width: 33.333%;
+    display: inline-block;
+    vertical-align: top;
+    padding: 0 10px;
+    float: left;
+    box-sizing: border-box;
+}
+
+.main-content .row .col-md-4:first-child {
+    padding-left: 0;
+}
+
+.main-content .row .col-md-4:last-child {
+    padding-right: 0;
+}
+
+.main-content .row .col-md-4 .section-title {
+    margin-bottom: 10px;
+}
+
+.section-title {
+    color: #8b4513;
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+/* Services Columns */
+.services-column {
+    min-height: 200px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 10px;
+    border: 2px solid #ffcc99;
+    border-radius: 4px;
+}
+
+/* Rettangolo verde per SERVIZI DEL GIORNO */
+.services-column-green {
+    background-color: #28a745;
+    max-height: calc(100vh - 170px);
+    height: calc(100vh - 170px);
+    color: white;
+}
+
+.services-column-green .service-entry {
+    background-color: rgba(255, 255, 255, 0.95);
+    color: #333;
+}
+
+/* Rettangolo arancione per PROSSIMI SERVIZI */
+.services-column-orange {
+    background-color: #ff6600;
+    max-height: calc(100vh - 170px);
+    height: calc(100vh - 170px);
+    color: white;
+}
+
+.services-column-orange .service-entry {
+    background-color: rgba(255, 255, 255, 0.95);
+    color: #333;
+}
+
+/* Rettangolo giallo per SERVIZI INSERITI OGGI */
+.services-column-yellow {
+    background-color: #ffc107;
+    max-height: calc((100vh - 225px) / 2);
+    height: calc((100vh - 225px) / 2);
+    margin-bottom: 15px;
+    color: #000;
+}
+
+.services-column-yellow .service-entry {
+    background-color: rgba(255, 255, 255, 0.95);
+    color: #333;
+}
+
+.services-column-full {
+    max-height: 300px;
+    height: 300px;
+}
+
+.services-column-half {
+    max-height: 150px;
+    height: 150px;
+}
+
+.service-entry {
+    background-color: #faf8f5;
+    border: 2px solid #ffcc99;
+    border-radius: 4px;
+    padding: 8px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    position: relative;
+}
+
+.service-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 5px;
+}
+
+.service-id {
+    background-color: #2d7a32;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+    font-weight: bold;
+    font-size: 16px;
+    min-width: 60px;
+    width: 60px;
+    height: 35px;
+    border-radius: 0;
+    flex-shrink: 0;
+}
+
+.service-header .service-field-inline {
+    flex: 1;
+    min-width: 0;
+    margin-left: 0;
+}
+
+.service-header .service-field-inline input {
+    flex: 1;
+    min-width: 0;
+}
+
+.service-row {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 5px;
+    align-items: center;
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+}
+
+/* Su schermi molto piccoli, permettere wrap anche per la riga DATA/O.S.C./O.A.D. */
+@media (max-width: 800px) {
+    .service-row {
+        flex-wrap: wrap;
+    }
+}
+
+.service-date-input {
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 2px;
+    font-size: 13px;
+    background-color: white;
+    width: 90px;
+    flex-shrink: 0;
+}
+
+.service-field-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.service-field-inline label {
+    font-weight: bold;
+    color: #333;
+    font-size: 13px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.service-field-inline input {
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 2px;
+    font-size: 13px;
+    background-color: white;
+    min-width: 0;
+}
+
+/* Nominativo - più largo */
+.service-nominativo {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.service-nominativo label {
+    flex-shrink: 0;
+}
+
+.service-nominativo input {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Nominativo a tutta larghezza */
+.service-nominativo-full {
+    width: 100%;
+    flex: 1 1 100%;
+}
+
+.service-nominativo-full input {
+    width: 100%;
+    flex: 1;
+}
+
+/* Campo data con label */
+.service-data-field {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+.service-data-field label {
+    font-weight: bold;
+    color: #333;
+    font-size: 13px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* ORA SOTTO CASA - più stretto */
+.service-ora-sotto-casa {
+    flex: 0 0 auto;
+    width: 120px;
+}
+
+.service-ora-sotto-casa input {
+    width: 55px;
+    flex: none;
+}
+
+/* ORA A DESTINAZIONE - dimensioni fisse per evitare overflow */
+.service-row .service-field-inline.service-ora-destinazione {
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    margin-left: auto !important;
+    width: auto !important;
+    max-width: 120px !important;
+    flex-shrink: 1 !important;
+}
+
+/* Responsive: su schermi piccoli, O.A.D. non usa margin-left auto */
+@media (max-width: 1200px) {
+    .service-row .service-field-inline.service-ora-destinazione {
+        margin-left: 0 !important;
+        max-width: 100% !important;
+    }
+}
+
+.service-row .service-field-inline.service-ora-destinazione label {
+    font-weight: bold !important;
+    color: #333 !important;
+    font-size: 13px !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+}
+
+.service-row .service-field-inline.service-ora-destinazione input {
+    width: 55px !important;
+    flex: none !important;
+    min-width: 55px !important;
+    max-width: 55px !important;
+}
+
+.service-field-full {
+    margin-bottom: 5px;
+}
+
+.service-field-full label {
+    font-weight: bold;
+    color: #333;
+    display: block;
+    margin-bottom: 5px;
+    font-size: 13px;
+}
+
+.service-field-full input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 2px;
+    font-size: 13px;
+    background-color: white;
+}
+
+.service-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    width: 100%;
+}
+
+.btn-stampa {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    font-weight: bold;
+    flex: 1;
+    cursor: pointer;
+    font-size: 13px;
+    min-width: 0;
+    flex-shrink: 1;
+}
+
+.btn-stampa:hover {
+    background-color: #c82333;
+}
+
+.btn-modifica {
+    background-color: #ffc107;
+    color: #000;
+    border: none;
+    padding: 8px 20px;
+    font-weight: bold;
+    flex: 1;
+    cursor: pointer;
+    font-size: 13px;
+    min-width: 0;
+    flex-shrink: 1;
+}
+
+.btn-modifica:hover {
+    background-color: #e0a800;
+}
+
+.btn-completa {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    font-weight: bold;
+    flex: 1;
+    cursor: pointer;
+    font-size: 13px;
+    min-width: 0;
+    flex-shrink: 1;
+}
+
+.btn-completa:hover {
+    background-color: #218838;
+}
+
+/* Cards Column */
+.cards-column {
+    min-height: 150px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 10px;
+    border: 2px solid #ffcc99;
+    border-radius: 4px;
+}
+
+/* Rettangolo blu per TESSERE DA FARE */
+.cards-column-blue {
+    background-color: #0066cc;
+    max-height: calc((100vh - 225px) / 2);
+    height: calc((100vh - 225px) / 2);
+    color: white;
+}
+
+.cards-column-blue .card-entry {
+    background-color: rgba(255, 255, 255, 0.95);
+    color: #333;
+}
+
+.cards-column-half {
+    max-height: 150px;
+    height: 150px;
+}
+
+.cards-column-full {
+    max-height: 200px;
+    height: 200px;
+}
+
+.card-entry {
+    background-color: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.card-id {
+    font-weight: bold;
+    color: #333;
+    min-width: 50px;
+}
+
+.card-description {
+    flex: 1;
+}
+
+.card-description input {
+    width: 100%;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.btn-nuovo {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.btn-arrow {
+    background-color: #ff6600;
+    color: white;
+    border: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 4px;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+
+/* Scrollbar styling */
+.services-column::-webkit-scrollbar,
+.cards-column::-webkit-scrollbar,
+.sidebar::-webkit-scrollbar {
+    width: 10px;
+}
+
+.services-column::-webkit-scrollbar-track,
+.cards-column::-webkit-scrollbar-track,
+.sidebar::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 5px;
+}
+
+.services-column::-webkit-scrollbar-thumb,
+.cards-column::-webkit-scrollbar-thumb,
+.sidebar::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 5px;
+}
+
+.services-column::-webkit-scrollbar-thumb:hover,
+.cards-column::-webkit-scrollbar-thumb:hover,
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Responsive - per schermi più piccoli */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 200px;
+    }
+    
+    .main-wrapper {
+        margin-left: 200px;
+    }
+    
+    .footer-section {
+        width: calc(100% - 200px);
+        margin-left: 200px;
+    }
+}
+

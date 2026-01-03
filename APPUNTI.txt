@@ -1,0 +1,3 @@
+Aggiungere colonna NOTAAGGIUNTIVA alla lista TESSERATI (testo lungo)
+Aggiungere colonna ATTIVO alla lista TESSERATI (si/no)
+Aggiungere colonna DISPONIBILITA alla lista TESSERATI (scelta : AUTISTA,CENTRALISTA con scelta multila)

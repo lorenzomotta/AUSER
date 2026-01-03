@@ -1,0 +1,19 @@
+{
+  "sharepoint": {
+    "site_url": "https://tuodominio.sharepoint.com",
+    "client_id": "your-client-id-here",
+    "client_secret": "your-client-secret-here",
+    "tenant_id": "your-tenant-id-here"
+  },
+  "github": {
+    "username": "your-username",
+    "repo": "auser-tauri-app"
+  },
+  "lists": {
+    "servizi_giorno": "ServiziDelGiorno",
+    "prossimi_servizi": "ProssimiServizi",
+    "servizi_inseriti_oggi": "ServiziInseritiOggi",
+    "tessere_da_fare": "TessereDaFare"
+  }
+}
+

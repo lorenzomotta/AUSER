@@ -1,0 +1,21 @@
+{
+  "name": "auser-tauri-app",
+  "version": "1.0.0",
+  "description": "AUSER Asti - Gestione Operativa",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^1.5.3"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^1.5.3",
+    "vite": "^5.0.0",
+    "bootstrap": "^5.3.2"
+  }
+}
+

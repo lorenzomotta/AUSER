@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autenticazione in corso...</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+        }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Autenticazione completata!</h2>
+        <div class="spinner"></div>
+        <p>Stai per essere reindirizzato...</p>
+    </div>
+    <script type="module">
+        console.log('=== oauth-redirect.html caricato ===');
+        console.log('URL completa:', window.location.href);
+        console.log('Query string:', window.location.search);
+        console.log('Hash:', window.location.hash);
+        
+        import { emit } from '@tauri-apps/api/event';
+        import { appWindow } from '@tauri-apps/api/window';
+        
+        // Estrai il codice dalla URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const code = urlParams.get('code') || hashParams.get('code');
+        const error = urlParams.get('error') || hashParams.get('error');
+        
+        console.log('Codice trovato:', code ? 'SÌ (' + code.substring(0, 20) + '...)' : 'NO');
+        console.log('Errore trovato:', error || 'NO');
+        
+        // Verifica se siamo nella finestra OAuth
+        appWindow.label().then(async (label) => {
+            console.log('Label finestra corrente:', label);
+            
+            if (error) {
+                console.log('Errore OAuth:', error);
+                await emit('oauth-error', { error });
+                document.querySelector('h2').textContent = 'Errore di autenticazione';
+                document.querySelector('p').textContent = error;
+            } else if (code) {
+                console.log('✓✓✓ Codice trovato, emettiamo evento oauth-code-received');
+                await emit('oauth-code-received', { code: code });
+                console.log('✓✓✓ Evento oauth-code-received emesso');
+                
+                // Chiudi questa finestra dopo un breve delay
+                setTimeout(async () => {
+                    try {
+                        console.log('Chiudendo finestra OAuth...');
+                        await appWindow.close();
+                        console.log('✓✓✓ Finestra OAuth chiusa');
+                    } catch (e) {
+                        console.error('Errore chiusura finestra:', e);
+                    }
+                }, 1000);
+            } else {
+                console.log('✗ Nessun codice trovato');
+                document.querySelector('h2').textContent = 'Nessun codice trovato';
+                document.querySelector('p').textContent = 'Chiudi questa finestra e riprova.';
+            }
+        }).catch(async (e) => {
+            console.error('Errore nel controllo label:', e);
+            // Fallback: emetti comunque l'evento se c'è un codice
+            if (code) {
+                await emit('oauth-code-received', { code: code });
+                setTimeout(async () => {
+                    try {
+                        await appWindow.close();
+                    } catch (e2) {
+                        console.error('Errore chiusura finestra:', e2);
+                    }
+                }, 1000);
+            }
+        });
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,95 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devPath": "http://localhost:1420",
+    "distDir": "../dist",
+    "withGlobalTauri": false
+  },
+  "package": {
+    "productName": "AUSER Gestione Operativa",
+    "version": "1.0.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "open": true
+      },
+      "window": {
+        "all": false,
+        "close": true,
+        "hide": true,
+        "show": true,
+        "maximize": true,
+        "minimize": true,
+        "unmaximize": true,
+        "create": true,
+        "setFocus": true
+      },
+      "http": {
+        "all": true,
+        "request": true,
+        "scope": ["https://**"]
+      }
+    },
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/YOUR_USERNAME/auser-tauri-app/releases/latest/download/updater.json"
+      ],
+      "dialog": true,
+      "pubkey": "YOUR_PUBLIC_KEY_HERE"
+    },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.auser.gestione-operativa",
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ]
+    },
+    "security": {
+      "csp": null,
+      "dangerousRemoteDomainIpcAccess": [
+        {
+          "domain": "https://login.microsoftonline.com",
+          "windows": ["oauth-auth"],
+          "enableTauriAPI": true
+        },
+        {
+          "domain": "https://login.microsoft.com",
+          "windows": ["oauth-auth"],
+          "enableTauriAPI": true
+        },
+        {
+          "domain": "https://account.microsoft.com",
+          "windows": ["oauth-auth"],
+          "enableTauriAPI": true
+        },
+        {
+          "domain": "https://astiauser.sharepoint.com",
+          "windows": ["calendario-online"],
+          "enableTauriAPI": true
+        }
+      ]
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "resizable": true,
+        "title": "AUSER Asti - Gestione Operativa",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1200,
+        "minHeight": 700
+      }
+    ]
+  }
+}
+

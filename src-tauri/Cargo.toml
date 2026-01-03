@@ -1,0 +1,32 @@
+[package]
+name = "auser-tauri-app"
+version = "1.0.0"
+description = "AUSER Asti - Gestione Operativa"
+authors = ["LP. Creation"]
+license = ""
+repository = ""
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+tauri = { version = "1.5", features = [ "window-unmaximize", "http-all", "window-maximize", "shell-open", "window-minimize", "window-show", "window-hide", "window-close", "window-create", "window-set-focus", "updater"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.11", features = ["json", "cookies"] }
+tokio = { version = "1", features = ["full"] }
+url = "2.5"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+oauth2 = { version = "4.4", features = ["reqwest"] }
+rand = "0.8"
+urlencoding = "2.1"
+
+[features]
+# This feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
+
