@@ -694,6 +694,74 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     
+    // Imposta il listener per il pulsante ELENCO SOCI
+    const elencoSociBtn = document.getElementById('btn-elenco-soci');
+    if (elencoSociBtn) {
+        elencoSociBtn.addEventListener('click', async () => {
+            if (isTauri()) {
+                try {
+                    // Crea una nuova finestra Tauri per ELENCO SOCI
+                    const { Window } = await import('@tauri-apps/api/window');
+                    
+                    const webview = await Window.create('elenco-soci', {
+                        url: 'ELENCOSOCI.html',
+                        title: 'Elenco Soci',
+                        width: 1400,
+                        height: 900,
+                        resizable: true,
+                        maximized: false,
+                        decorations: true,
+                        alwaysOnTop: false,
+                        center: true
+                    });
+                    
+                    await webview.setFocus();
+                } catch (error) {
+                    console.error('Errore nella creazione della finestra:', error);
+                    // Fallback: naviga nella stessa finestra
+                    window.location.href = 'ELENCOSOCI.html';
+                }
+            } else {
+                // In modalità browser, apri in una nuova scheda
+                window.open('ELENCOSOCI.html', '_blank');
+            }
+        });
+    }
+    
+    // Imposta il listener per il pulsante ELENCO OPERATORI
+    const elencoOperatoriBtn = document.getElementById('btn-elenco-operatori');
+    if (elencoOperatoriBtn) {
+        elencoOperatoriBtn.addEventListener('click', async () => {
+            if (isTauri()) {
+                try {
+                    // Crea una nuova finestra Tauri per ELENCO OPERATORI
+                    const { Window } = await import('@tauri-apps/api/window');
+                    
+                    const webview = await Window.create('elenco-operatori', {
+                        url: 'ELENCOOPERATORI.html',
+                        title: 'Elenco Operatori',
+                        width: 1400,
+                        height: 900,
+                        resizable: true,
+                        maximized: false,
+                        decorations: true,
+                        alwaysOnTop: false,
+                        center: true
+                    });
+                    
+                    await webview.setFocus();
+                } catch (error) {
+                    console.error('Errore nella creazione della finestra:', error);
+                    // Fallback: naviga nella stessa finestra
+                    window.location.href = 'ELENCOOPERATORI.html';
+                }
+            } else {
+                // In modalità browser, apri in una nuova scheda
+                window.open('ELENCOOPERATORI.html', '_blank');
+            }
+        });
+    }
+    
     // Aggiorna data e settimana
     updateDateInfo();
     

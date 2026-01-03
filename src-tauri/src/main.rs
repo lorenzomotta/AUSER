@@ -165,6 +165,22 @@ struct Tessera {
     descrizione: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct Tesserato {
+    id: u32, // ID interno SharePoint
+    idsocio: String,
+    nominativo: String,
+    codicefiscale: String,
+    numerotessera: String,
+    scadenzatessera: String,
+    telefono: String,
+    tipologiasocio: String,
+    operatore: String,
+    attivo: String,
+    disponibilita: String,
+    notaaggiuntiva: String,
+}
+
 // Comando per ottenere servizi del giorno
 #[tauri::command]
 async fn get_servizi_giorno() -> Result<Vec<Servizio>, String> {
@@ -822,6 +838,401 @@ async fn get_tessere_da_fare() -> Result<Vec<Tessera>, String> {
         Err("Client SharePoint non disponibile".to_string())
     }
 }
+
+// Comando per ottenere tutti i tesserati
+#[tauri::command]
+async fn get_all_tesserati() -> Result<Vec<Tesserato>, String> {
+    println!("=== get_all_tesserati chiamato ===");
+    
+    let mut client_guard = get_sharepoint_client().lock().await;
+    
+    if client_guard.is_none() {
+        println!("⚠️ Client SharePoint non presente, uso dati di esempio");
+        return Ok(vec![]);
+    }
+    
+    // Verifica autenticazione
+    if let Some(client) = client_guard.as_ref() {
+        let is_auth = client.is_authenticated();
+        println!("Stato autenticazione: {}", is_auth);
+        if !is_auth {
+            println!("⚠️ Client non autenticato, uso dati di esempio");
+            return Ok(vec![]);
+        }
+    }
+    
+    if let Some(client) = client_guard.as_mut() {
+        // Ottieni il nome della lista dal config (lista "tesserati")
+        let list_name = get_list_name("tesserati").await;
+        println!("📋 Usando lista: {}", list_name);
+        
+        // Recupera tutti gli elementi senza filtro
+        let items_result = client.get_list_items_raw(&list_name, None).await;
+        
+        let items = match items_result {
+            Ok(items) => {
+                println!("✓ Recuperati {} elementi dalla lista {}", items.len(), list_name);
+                items
+            }
+            Err(e) => {
+                eprintln!("✗ Errore nel recupero elementi: {}", e);
+                return Err(format!("Errore nel recupero elementi: {}", e));
+            }
+        };
+        
+        if items.is_empty() {
+            println!("⚠️ Nessun elemento recuperato dalla lista {}", list_name);
+            return Ok(vec![]);
+        }
+        
+        // Converti in Tesserato
+        let mut tesserati = Vec::new();
+        
+        // Log i campi del primo elemento per debug (solo una volta)
+        let mut fields_logged = false;
+        
+        // Contatori per statistiche operatori
+        let mut operatore_count = 0u32;
+        let mut operatore_total = 0u32;
+        
+        for item in items.iter() {
+            // Estrai l'id interno di SharePoint
+            let id = if let Some(id_val) = item.get("id") {
+                if let Some(id_str) = id_val.as_str() {
+                    id_str.parse::<u32>().ok().unwrap_or(0)
+                } else if let Some(id_num) = id_val.as_u64() {
+                    id_num as u32
+                } else {
+                    0
+                }
+            } else {
+                continue;
+            };
+            
+            if let Some(fields) = item.get("fields") {
+                // Helper per estrarre il valore di un campo
+                let get_field_value = |field_name: &str| -> String {
+                    if let Some(val) = fields.get(field_name) {
+                        if let Some(s) = val.as_str() {
+                            return s.to_string();
+                        }
+                        if val.is_null() {
+                            return String::new();
+                        }
+                        // Gestisci array (campi di scelta multipla)
+                        if let Some(arr) = val.as_array() {
+                            let values: Vec<String> = arr.iter()
+                                .filter_map(|v| {
+                                    // Ogni elemento dell'array può essere una stringa o un oggetto con "value"
+                                    if let Some(s) = v.as_str() {
+                                        Some(s.to_string())
+                                    } else if let Some(obj) = v.as_object() {
+                                        if let Some(value) = obj.get("value") {
+                                            value.as_str().map(|s| s.to_string())
+                                        } else if let Some(lookup_value) = obj.get("LookupValue") {
+                                            lookup_value.as_str().map(|s| s.to_string())
+                                        } else {
+                                            None
+                                        }
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect();
+                            if !values.is_empty() {
+                                return values.join(" - ");
+                            }
+                            return String::new();
+                        }
+                        // Gestisci oggetti annidati (es. {value: "..."} o {value: [...]})
+                        if let Some(obj) = val.as_object() {
+                            // Prova prima con "value" (può essere un array)
+                            if let Some(value) = obj.get("value") {
+                                if let Some(arr) = value.as_array() {
+                                    // È un array dentro un oggetto
+                                    let values: Vec<String> = arr.iter()
+                                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                        .collect();
+                                    if !values.is_empty() {
+                                        return values.join(" - ");
+                                    }
+                                } else if let Some(s) = value.as_str() {
+                                    return s.to_string();
+                                }
+                            }
+                            // Prova con "LookupValue" (per campi lookup multipli)
+                            if let Some(lookup_value) = obj.get("LookupValue") {
+                                if let Some(s) = lookup_value.as_str() {
+                                    return s.to_string();
+                                }
+                            }
+                        }
+                        val.to_string()
+                    } else {
+                        String::new()
+                    }
+                };
+                
+                // Estrai tutti i campi richiesti
+                // Prova varianti del nome per IDSOCIO
+                let idsocio_val = get_field_value("IDSOCIO");
+                let idsocio = if !idsocio_val.is_empty() {
+                    idsocio_val
+                } else {
+                    // Prova varie combinazioni di nomi
+                    let variants = vec![
+                        "ID_SOCIO", "IdSocio", "idSocio", "Id_Socio", "IDSOCIO",
+                        "SocioID", "SOCIO_ID", "Socio_Id", "socioId",
+                        "ID", "Id", "Title" // Alcuni potrebbero usare Title o ID generico
+                    ];
+                    
+                    let mut found_value = String::new();
+                    let mut found_key = String::new();
+                    
+                    for variant in variants {
+                        let val = get_field_value(variant);
+                        if !val.is_empty() && (found_value.is_empty() || variant == "IDSOCIO" || variant == "ID_SOCIO") {
+                            found_value = val;
+                            found_key = variant.to_string();
+                            break; // Usa il primo trovato
+                        }
+                    }
+                    
+                    if !found_value.is_empty() {
+                        // Solo log una volta ogni 10 elementi per non intasare i log
+                        if id % 10 == 0 {
+                            println!("✓ IDSOCIO trovato come '{}': '{}' (ID interno: {})", found_key, found_value, id);
+                        }
+                        found_value
+                            } else {
+                                // Log i campi disponibili solo per il primo elemento se non ancora fatto
+                                if !fields_logged {
+                                    if let Some(fields_obj) = fields.as_object() {
+                                        let mut all_keys: Vec<&String> = fields_obj.keys().collect();
+                                        all_keys.sort();
+                                        println!("⚠️ IDSOCIO non trovato nel primo elemento. Tutti i campi disponibili ({}): {:?}", all_keys.len(), all_keys);
+                                        // Cerca campi che contengono "SOCIO", "ID", o numeri
+                                        let matching_keys: Vec<&String> = all_keys.iter()
+                                            .filter(|k| {
+                                                let k_upper = k.to_uppercase();
+                                                k_upper.contains("SOCIO") || 
+                                                k_upper.contains("ID") || 
+                                                (k_upper.len() <= 10 && k.chars().any(|c| c.is_numeric()))
+                                            })
+                                            .cloned()
+                                            .collect();
+                                        if !matching_keys.is_empty() {
+                                            println!("  → Campi che potrebbero essere IDSOCIO: {:?}", matching_keys);
+                                        }
+                                    }
+                                    fields_logged = true;
+                                }
+                                // Usa l'ID interno di SharePoint come IDSOCIO se il campo non esiste
+                                id.to_string()
+                            }
+                };
+                let nominativo_socio = get_field_value("Nominativo_SOCIO");
+                let nominativo_socio_alt = get_field_value("NOMINATIVO_SOCIO");
+                let cognome = get_field_value("COGNOME");
+                let nome = get_field_value("NOME");
+                
+                // Costruisci il nominativo (prova Nominativo_SOCIO, poi COGNOME NOME)
+                let nominativo = if !nominativo_socio.is_empty() {
+                    nominativo_socio
+                } else if !nominativo_socio_alt.is_empty() {
+                    nominativo_socio_alt
+                } else if !cognome.is_empty() && !nome.is_empty() {
+                    format!("{} {}", cognome, nome)
+                } else if !cognome.is_empty() {
+                    cognome
+                } else if !nome.is_empty() {
+                    nome
+                } else {
+                    String::new()
+                };
+                
+                // Estrai Codice Fiscale (prova varianti)
+                // IMPORTANTE: "Codice Fiscale" con spazio è il nome corretto in SharePoint
+                // SharePoint usa spesso il nome interno con spazio codificato come "Codice_x0020_Fiscale"
+                let codicefiscale_variants = vec![
+                    "Codice Fiscale",  // Nome visualizzato in SharePoint (con spazio)
+                    "Codice_x0020_Fiscale",  // Nome interno SharePoint (spazio codificato)
+                    "Codice_x0020_fiscale",
+                    "CODICE FISCALE", 
+                    "CODICE_X0020_FISCALE",
+                    "CodiceFiscale",  // Senza spazio
+                    "CODICE_FISCALE", 
+                    "Codice_Fiscale",
+                    "Codice fiscale",
+                    "CF", "cf", "Cf", "C_F", "c_f",
+                    "FISCALECODE", "FiscaleCode", "fiscaleCode",
+                    "CODICEFISCALE", "codicefiscale"
+                ];
+                
+                let mut codicefiscale_final = String::new();
+                let mut codicefiscale_found_key = String::new();
+                
+                for variant in codicefiscale_variants {
+                    let val = get_field_value(variant);
+                    if !val.is_empty() {
+                        codicefiscale_final = val;
+                        codicefiscale_found_key = variant.to_string();
+                        break;
+                    }
+                }
+                
+                // Log per debug (solo per il primo elemento se non ancora fatto)
+                if !fields_logged {
+                    if !codicefiscale_final.is_empty() {
+                        println!("✓ Codice Fiscale trovato come '{}': '{}' (ID interno: {})", codicefiscale_found_key, codicefiscale_final, id);
+                    } else {
+                        // Log TUTTI i campi disponibili per capire qual è il nome corretto
+                        if let Some(fields_obj) = fields.as_object() {
+                            let mut all_keys: Vec<&String> = fields_obj.keys().collect();
+                            all_keys.sort();
+                            println!("⚠️ Codice Fiscale non trovato (ID interno: {}). TUTTI i campi disponibili ({}):", id, all_keys.len());
+                            for key in &all_keys {
+                                if let Some(val) = fields_obj.get(*key) {
+                                    let val_str = if let Some(s) = val.as_str() {
+                                        format!("'{}'", s)
+                                    } else if val.is_null() {
+                                        "null".to_string()
+                                    } else if val.is_array() {
+                                        format!("[array di {} elementi]", val.as_array().map(|a| a.len()).unwrap_or(0))
+                                    } else {
+                                        format!("{:?}", val)
+                                    };
+                                    println!("  - {}: {}", key, val_str.chars().take(100).collect::<String>());
+                                }
+                            }
+                            // Cerca campi che contengono "FISCALE", "CF", "CODICE"
+                            let matching_keys: Vec<&String> = all_keys.iter()
+                                .filter(|k| {
+                                    let k_upper = k.to_uppercase();
+                                    k_upper.contains("FISCALE") || 
+                                    k_upper.contains("CF") || 
+                                    k_upper.contains("CODICE")
+                                })
+                                .cloned()
+                                .collect();
+                            if !matching_keys.is_empty() {
+                                println!("  → Campi che potrebbero essere Codice Fiscale: {:?}", matching_keys);
+                            }
+                        }
+                    }
+                    fields_logged = true;
+                }
+                
+                let numerotessera = get_field_value("NUMEROTESSERA");
+                let scadenzatessera = get_field_value("SCADENZATESSERA");
+                let telefono = get_field_value("TELEFONO");
+                let tipologiasocio = get_field_value("TIPOLOGIASOCIO");
+                
+                // Prova varianti per OPERATORE
+                // NOTA: In SharePoint, un campo checkbox/boolean viene restituito come "true" o "false" (stringa)
+                // anche se visualizzato come "SI"/"NO" nell'interfaccia
+                let operatore = get_field_value("OPERATORE");
+                let operatore_final = if !operatore.is_empty() {
+                    operatore
+                } else {
+                    // Prova altre varianti
+                    let alt_op = get_field_value("Operatore");
+                    if !alt_op.is_empty() {
+                        alt_op
+                    } else {
+                        get_field_value("operatore")
+                    }
+                };
+                
+                // Se il campo è vuoto, potrebbe essere un campo boolean che non è ancora stato impostato
+                // In quel caso restituisce null o empty string
+                
+                // Prova varianti per ATTIVO
+                let attivo = get_field_value("ATTIVO");
+                let attivo_final = if !attivo.is_empty() {
+                    attivo
+                } else {
+                    // Prova altre varianti
+                    let alt_att = get_field_value("Attivo");
+                    if !alt_att.is_empty() {
+                        alt_att
+                    } else {
+                        let alt_att2 = get_field_value("attivo");
+                        if !alt_att2.is_empty() {
+                            alt_att2
+                        } else {
+                            get_field_value("STATO") // Alcuni usano STATO invece di ATTIVO
+                        }
+                    }
+                };
+                
+                // Log e statistiche per debug OPERATORE
+                operatore_total += 1;
+                let op_upper = operatore_final.trim().to_uppercase();
+                let is_operatore = op_upper == "TRUE" || op_upper == "SI" || op_upper == "SÌ" || 
+                                  op_upper == "S" || op_upper == "1" || op_upper == "YES" || op_upper == "Y";
+                
+                if is_operatore {
+                    operatore_count += 1;
+                    if operatore_count <= 3 {
+                        println!("✓ OPERATORE TROVATO - ID {}: OPERATORE='{}' (trovati finora: {}/{})", 
+                            id, operatore_final, operatore_count, operatore_total);
+                    }
+                }
+                
+                // Log dettagliato per i primi 10 elementi
+                if id <= 10 {
+                    println!("🔍 DEBUG elemento ID {}: OPERATORE='{}' (tipo: str, lunghezza: {}, isOperatore: {}), ATTIVO='{}'", 
+                        id, operatore_final, operatore_final.len(), is_operatore, attivo_final);
+                }
+                
+                let disponibilita = get_field_value("DISPONIBILITA");
+                let notaaggiuntiva = get_field_value("NOTAAGGIUNTIVA");
+                
+                tesserati.push(Tesserato {
+                    id,
+                    idsocio,
+                    nominativo,
+                    codicefiscale: codicefiscale_final,
+                    numerotessera,
+                    scadenzatessera,
+                    telefono,
+                    tipologiasocio,
+                    operatore: operatore_final,
+                    attivo: attivo_final,
+                    disponibilita,
+                    notaaggiuntiva,
+                });
+            }
+        }
+        
+        println!("✓ Convertiti {} elementi in Tesserato (su {} totali recuperati)", tesserati.len(), items.len());
+        println!("📊 STATISTICHE OPERATORI: Trovati {}/{} tesserati con operatore = true/si", operatore_count, operatore_total);
+        
+        // Log di tutti i valori unici del campo operatore per capire cosa c'è
+        use std::collections::HashSet;
+        let mut valori_operatore: HashSet<String> = HashSet::new();
+        for tesserato in &tesserati {
+            if !tesserato.operatore.trim().is_empty() {
+                valori_operatore.insert(tesserato.operatore.trim().to_uppercase());
+            }
+        }
+        println!("📋 Valori unici del campo OPERATORE trovati: {:?}", valori_operatore);
+        
+        if operatore_count == 0 {
+            println!("⚠️ ATTENZIONE: Nessun operatore trovato! Verifica i valori del campo OPERATORE in SharePoint.");
+        } else if operatore_count != 2 {
+            println!("⚠️ ATTENZIONE: Trovati {} operatori invece di 2.", operatore_count);
+            println!("   Nota: Se il campo OPERATORE è una checkbox in SharePoint, i valori 'true'/'false' sono normali.");
+            println!("   Verifica in SharePoint quali record hanno effettivamente la checkbox OPERATORE selezionata.");
+        }
+        
+        Ok(tesserati)
+    } else {
+        Err("Client SharePoint non disponibile".to_string())
+    }
+}
+
 // Comando per ottenere un servizio completo per ID
 #[tauri::command]
 async fn get_servizio_completo(servizio_id: u32) -> Result<ServizioCompleto, String> {
@@ -1777,6 +2188,7 @@ fn main() {
             get_prossimi_servizi,
             get_servizi_inseriti_oggi,
             get_tessere_da_fare,
+            get_all_tesserati,
             get_servizio_completo,
             get_all_servizi_completi,
             stampa_servizio,

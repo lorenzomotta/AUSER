@@ -1,0 +1,471 @@
+/* Reset e base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #d8d6d3;
+    padding: 20px;
+    margin: 0;
+    padding-bottom: 80px; /* Spazio per il footer fisso */
+}
+
+.soci-container {
+    max-width: 1600px;
+    margin: 0 auto;
+    background-color: transparent;
+    padding: 20px;
+}
+
+.page-header-wrapper {
+    text-align: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 3px solid #9ea09e;
+}
+
+.page-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.page-title {
+    font-size: 32px;
+    font-weight: bold;
+    color: #8b4513;
+    display: inline-block;
+    margin: 0;
+    padding: 0;
+}
+
+.btn-icon-search,
+.btn-icon-close {
+    background-color: transparent;
+    border: 2px solid #8b4513;
+    border-radius: 5px;
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    font-size: 20px;
+    line-height: 1;
+    width: 40px;
+    height: 40px;
+}
+
+.btn-icon-search:hover {
+    background-color: #8b4513;
+    color: white;
+}
+
+.btn-icon-search:hover .icon-search {
+    filter: brightness(0) invert(1);
+}
+
+.btn-icon-close {
+    margin-left: 0;
+    padding: 8px 10px;
+    border-left: none;
+    border-radius: 0 5px 5px 0;
+    height: 42px; /* Allineato all'altezza dell'input (padding + border) */
+}
+
+.btn-icon-close:hover {
+    background-color: #d32f2f;
+    border-color: #d32f2f;
+    border-left: 2px solid #d32f2f;
+    color: white;
+}
+
+.btn-icon-close:hover .icon-close {
+    filter: brightness(0) invert(1);
+}
+
+.icon-search,
+.icon-close {
+    display: inline-block;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.search-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+}
+
+.search-input {
+    padding: 10px 15px;
+    font-size: 16px;
+    border: 2px solid #8b4513;
+    border-right: none;
+    border-radius: 5px 0 0 5px;
+    width: 400px;
+    max-width: calc(100vw - 200px);
+    background-color: #fff;
+    color: #333;
+    font-family: inherit;
+    height: 42px;
+    box-sizing: border-box;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+}
+
+.search-input::placeholder {
+    color: #999;
+    font-style: italic;
+}
+
+/* Container scrollabile con tutti i soci */
+.soci-container-scrollabile {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 3px 0;
+    margin-bottom: 80px; /* Spazio per il footer fisso */
+}
+
+/* Blocco socio singolo */
+.socio-block {
+    margin-bottom: 8px;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #e8dcc6;
+}
+
+.socio-block:nth-child(even) {
+    background-color: #d4c4a8;
+}
+
+.socio-block:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.soci-lista-loading {
+    padding: 20px;
+    text-align: center;
+    color: #666;
+    font-style: italic;
+}
+
+.soci-lista-empty {
+    padding: 20px;
+    text-align: center;
+    color: #999;
+    font-style: italic;
+}
+
+/* Sezioni del form socio */
+.socio-form-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.socio-form-section {
+    padding: 2px;
+    background-color: transparent;
+}
+
+.socio-form-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+/* Stili per i campi */
+.socio-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.socio-form-group label {
+    font-size: 11px;
+    font-weight: bold;
+    color: #333;
+    white-space: nowrap;
+    margin-bottom: 0px;
+}
+
+.socio-form-group input,
+.socio-form-group textarea {
+    padding: 4px 6px;
+    border: 1px solid #999;
+    border-radius: 3px;
+    font-size: 13px;
+    background-color: #fff;
+    font-family: inherit;
+    color: #333;
+}
+
+.socio-form-group textarea {
+    resize: vertical;
+    min-height: 35px;
+}
+
+.socio-form-group input[readonly],
+.socio-form-group textarea[readonly],
+.socio-form-group input[disabled],
+.socio-form-group textarea[disabled] {
+    background-color: #f5f5f5;
+    cursor: default;
+    pointer-events: none;
+    user-select: text; /* Permette di selezionare il testo per copiarlo */
+}
+
+/* Assicura che tutti gli input e textarea siano in sola lettura */
+.socio-form-group input:not([type="checkbox"]),
+.socio-form-group textarea {
+    pointer-events: auto; /* Ripristina per permettere selezione testo */
+}
+
+.socio-form-group input[type="checkbox"] {
+    pointer-events: none; /* Disabilita completamente le checkbox */
+}
+
+/* Container per checkbox */
+.socio-checkbox-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    height: 31px; /* Allineato all'altezza degli altri input */
+    width: 100%;
+}
+
+.socio-checkbox-container input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: default;
+    margin: 0;
+    padding: 0;
+    border: 2px solid #999;
+    border-radius: 3px;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-color: #fff;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.socio-checkbox-container input[type="checkbox"]:checked {
+    background-color: #4CAF50;
+    border-color: #4CAF50;
+}
+
+.socio-checkbox-container input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.socio-checkbox-container input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+    opacity: 0.8;
+    background-color: #f5f5f5;
+}
+
+.socio-checkbox-container input[type="checkbox"]:disabled:checked {
+    background-color: #4CAF50;
+    opacity: 0.8;
+}
+
+/* Dimensioni dei campi */
+.socio-form-group-small {
+    flex: 0 0 100px;
+    min-width: 100px;
+}
+
+.socio-form-group-medium {
+    flex: 0 0 150px;
+    min-width: 150px;
+}
+
+.socio-form-group-large {
+    flex: 1 1 200px;
+    min-width: 200px;
+}
+
+.socio-form-group-xlarge {
+    flex: 2 1 300px;
+    min-width: 300px;
+}
+
+/* Campi specifici */
+.socio-form-group-idsocio {
+    flex: 0 0 70px;
+    min-width: 70px;
+}
+
+.socio-form-group-nominativo {
+    flex: 1 1 220px;
+    min-width: 180px;
+}
+
+.socio-form-group-codicefiscale {
+    flex: 0 0 140px;
+    min-width: 140px;
+}
+
+.socio-form-group-numerotessera {
+    flex: 0 0 120px;
+}
+
+.socio-form-group-scadenzatessera {
+    flex: 0 0 130px;
+}
+
+.socio-form-group-telefono {
+    flex: 0 0 140px;
+}
+
+.socio-form-group-tipologiasocio {
+    flex: 0 0 120px;
+    min-width: 120px;
+}
+
+.socio-form-group-operatore {
+    flex: 0 0 120px;
+    min-width: 120px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-right: -15px; /* Riduce lo spazio a destra */
+}
+
+.socio-form-group-operatore label {
+    text-align: center;
+    width: 100%;
+}
+
+.socio-form-group-attivo {
+    flex: 0 0 100px;
+    min-width: 100px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-left: -15px; /* Riduce lo spazio a sinistra */
+}
+
+.socio-form-group-attivo label {
+    text-align: center;
+    width: 100%;
+}
+
+.socio-form-group-disponibilita {
+    flex: 0 0 150px;
+}
+
+.socio-form-group-nota {
+    flex: 1 1 auto;
+    min-width: 300px;
+}
+
+/* Pulsanti azione */
+.socio-form-actions {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    align-self: flex-end;
+    padding-top: 0px;
+}
+
+.socio-form-actions .btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: bold;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s;
+}
+
+.btn-anagrafica {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.btn-anagrafica:hover {
+    background-color: #45a049;
+}
+
+.btn-servizi {
+    background-color: #2196F3;
+    color: white;
+}
+
+.btn-servizi:hover {
+    background-color: #0b7dda;
+}
+
+/* Footer */
+.soci-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: #8b4513;
+    padding: 15px;
+    text-align: center;
+    box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+    z-index: 1000;
+}
+
+.soci-footer .btn-chiudi {
+    padding: 10px 30px;
+    font-size: 16px;
+    font-weight: bold;
+    background-color: #d32f2f;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.soci-footer .btn-chiudi:hover {
+    background-color: #b71c1c;
+}
+
+/* Scrollbar personalizzata */
+.soci-container-scrollabile::-webkit-scrollbar {
+    width: 12px;
+}
+
+.soci-container-scrollabile::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 6px;
+}
+
+.soci-container-scrollabile::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 6px;
+}
+
+.soci-container-scrollabile::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
