@@ -55,6 +55,54 @@ function getFieldAny(row, names) {
     return '';
 }
 
+function valoreCampoRow(row, key) {
+    if (!row || key == null || row[key] === undefined || row[key] === null) return '';
+    return String(row[key]).trim();
+}
+
+function trovaChiaveRow(row, predicates) {
+    if (!row || typeof row !== 'object') return null;
+    const keys = Object.keys(row);
+    for (const p of predicates) {
+        const exact = keys.find(k => k.toLowerCase() === p.toLowerCase());
+        if (exact) return exact;
+    }
+    for (const p of predicates) {
+        const partial = keys.find(k => k.toLowerCase().includes(p.toLowerCase()));
+        if (partial) return partial;
+    }
+    return null;
+}
+
+function buildTempoDaRow(row) {
+    const tempo = formatTimeIso(getFieldAny(row, ['Tempo', 'TEMPO', 'TEMPO_ORE', 'Tempo_Ore']));
+    if (tempo) return tempo;
+    const ore = getFieldAny(row, ['Tempo_Ore', 'TEMPO_ORE']);
+    const minuti = getFieldAny(row, ['Tempo_Minuti', 'TEMPO_MINUTI']);
+    const oreNum = parseInt(ore, 10) || 0;
+    const minNum = parseInt(minuti, 10) || 0;
+    if (oreNum > 0 || minNum > 0) {
+        return `${String(oreNum).padStart(2, '0')}:${String(minNum).padStart(2, '0')}`;
+    }
+    return '';
+}
+
+function leggiCampiFineServizioDaRow(row) {
+    const kKm = trovaChiaveRow(row, ['km', 'chilometr']);
+    const kTempo = trovaChiaveRow(row, ['tempo']);
+    const kNote = trovaChiaveRow(row, [
+        'notefineservizio', 'note_fine_servizio', 'notafineservizio', 'note fine'
+    ]);
+    return {
+        km: kKm ? valoreCampoRow(row, kKm) : '',
+        tempo: kTempo ? formatTimeIso(row[kTempo]) : buildTempoDaRow(row),
+        note_fine_servizio: kNote ? valoreCampoRow(row, kNote) : '',
+        _colKm: kKm || 'Km',
+        _colTempo: kTempo || 'Tempo',
+        _colNote: kNote || 'NoteFineServizio'
+    };
+}
+
 function formatDateItalian(raw) {
     const s = String(raw || '').trim();
     if (!s) return '';
@@ -387,7 +435,7 @@ function rowToServizioCompleto(row) {
     const incassato = getFieldAny(row, ['Incassato', 'INCASSATO']);
     const donazioni = getFieldAny(row, ['Donazioni', 'DONAZIONI']);
 
-    return {
+    const base = {
         id: String(id),
         idColonna: trovaColonnaRow(row, colonneIdServizio()),
         _colKm: trovaColonnaRow(row, ['Km', 'KM']),
@@ -412,7 +460,7 @@ function rowToServizioCompleto(row) {
         operatore_2: getFieldAny(row, ['Oper2', 'OPER2']),
         mezzo_usato: '',
         mezzo: getFieldAny(row, ['Mezzo', 'MEZZO']),
-        tempo: formatTimeIso(getFieldAny(row, ['Tempo', 'TEMPO', 'TEMPO_ORE', 'Tempo_Ore'])),
+        tempo: buildTempoDaRow(row),
         km: getFieldAny(row, ['Km', 'KM']),
         tipo_pagamento: getFieldAny(row, ['TipoPagamento', 'TIPOPAGAMENTO']),
         data_bonifico: formatDateItalian(getFieldAny(row, ['Bonifico_Data', 'DATABONIFICO'])),
@@ -425,6 +473,16 @@ function rowToServizioCompleto(row) {
             'NoteFineServizio', 'NOTAFINESERVIZIO', 'NOTE_FINE_SERVIZIO', 'NotaFineServizio'
         ]),
         archivia: getFieldAny(row, ['Archiviazione', 'ARCHIVIAZIONE'])
+    };
+    const fine = leggiCampiFineServizioDaRow(row);
+    return {
+        ...base,
+        km: fine.km || base.km,
+        tempo: fine.tempo || base.tempo,
+        note_fine_servizio: fine.note_fine_servizio || base.note_fine_servizio,
+        _colKm: fine._colKm || base._colKm,
+        _colTempo: fine._colTempo || base._colTempo,
+        _colNote: fine._colNote || base._colNote
     };
 }
 
@@ -578,6 +636,36 @@ async function ricaricaServizioDaSupabase(servizio) {
     if (!servizio?.id || !supabaseClient) return servizio;
 
     const table = tabella('servizi');
+    const id = String(servizio.id).trim();
+    const idNum = parseInt(id, 10);
+
+    const filtriOr = [
+        `idservizio.eq.${id}`,
+        `IdServizio.eq.${id}`,
+        `IDSERVIZIO.eq.${id}`
+    ];
+    if (!Number.isNaN(idNum)) {
+        filtriOr.push(`idservizio.eq.${idNum}`, `IdServizio.eq.${idNum}`, `IDSERVIZIO.eq.${idNum}`);
+    }
+
+    const { data: righeOr, error: errOr } = await supabaseClient
+        .from(table)
+        .select('*')
+        .or([...new Set(filtriOr)].join(','))
+        .limit(1);
+
+    if (!errOr && righeOr?.length) {
+        const completo = rowToServizioCompleto(righeOr[0]);
+        if (completo) {
+            aggiornaServizioInCache(completo);
+            if (calendar) {
+                const ev = calendar.getEventById(String(completo.id));
+                if (ev) ev.setExtendedProp('servizio', completo);
+            }
+            return completo;
+        }
+    }
+
     const idCols = [...new Set([
         servizio.idColonna,
         ...colonneIdServizio()
@@ -589,14 +677,14 @@ async function ricaricaServizioDaSupabase(servizio) {
                 .from(table)
                 .select('*')
                 .eq(idCol, idVal)
-                .maybeSingle();
+                .limit(1);
 
             if (error) {
                 console.warn('Ricarica servizio fallita:', idCol, error.message);
                 continue;
             }
-            if (data) {
-                const completo = rowToServizioCompleto(data);
+            if (data?.length) {
+                const completo = rowToServizioCompleto(data[0]);
                 if (completo) {
                     aggiornaServizioInCache(completo);
                     if (calendar) {
@@ -608,6 +696,20 @@ async function ricaricaServizioDaSupabase(servizio) {
             }
         }
     }
+
+    const dataPrelievo = parseDataItaliana(servizio.data_prelievo);
+    if (dataPrelievo) {
+        const anno = dataPrelievo.getFullYear();
+        delete serviziPerAnnoCache[anno];
+        const lista = await fetchServiziAnno(anno, true);
+        const trovato = lista.find(s => String(s.id) === id);
+        if (trovato) {
+            aggiornaServizioInCache(trovato);
+            return trovato;
+        }
+    }
+
+    console.warn('Servizio non ricaricato da Supabase, id=', id, errOr?.message || '');
     return servizio;
 }
 
