@@ -15,6 +15,27 @@ FOR SELECT
 TO authenticated
 USING (true);
 
+-- 2b) Servizi: operatori con permesso Calendario possono aggiornare
+DROP POLICY IF EXISTS "operatori_aggiornano_servizi" ON public."Servizi_supa";
+CREATE POLICY "operatori_aggiornano_servizi"
+ON public."Servizi_supa"
+FOR UPDATE
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.user_permissions up
+    WHERE up.user_id = auth.uid()
+    AND (up.is_admin = true OR up."Calendario" = true)
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.user_permissions up
+    WHERE up.user_id = auth.uid()
+    AND (up.is_admin = true OR up."Calendario" = true)
+  )
+);
+
 -- 3) Automezzi: solo utenti autenticati
 DROP POLICY IF EXISTS "operatori_leggono_automezzi" ON public."Automezzi_Supa";
 CREATE POLICY "operatori_leggono_automezzi"

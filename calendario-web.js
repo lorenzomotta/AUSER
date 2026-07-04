@@ -20,6 +20,7 @@ const serviziById = new Map();
 let vistaCorrente = 'dayGridMonth';
 let loadRequestId = 0;
 let calendarioInizializzato = false;
+let servizioCorrente = null;
 
 // ─── Utility ───────────────────────────────────────────────────────────────
 
@@ -526,6 +527,34 @@ async function aggiornaEventiCalendario() {
     }
 }
 
+function normalizzaTempoPerSupabase(tempoStr) {
+    const s = String(tempoStr || '').trim();
+    if (!s) return null;
+    const match = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (!match) return s;
+    const h = String(parseInt(match[1], 10)).padStart(2, '0');
+    const m = match[2];
+    const sec = match[3] || '00';
+    return `${h}:${m}:${sec}`;
+}
+
+function invalidaCacheServizio(servizio) {
+    if (!servizio?.data_prelievo) return;
+    const data = parseDataItaliana(servizio.data_prelievo);
+    if (data) delete serviziPerAnnoCache[data.getFullYear()];
+}
+
+function aggiornaServizioInCache(servizioAggiornato) {
+    if (!servizioAggiornato?.id) return;
+    serviziById.set(String(servizioAggiornato.id), servizioAggiornato);
+    Object.keys(serviziPerAnnoCache).forEach(anno => {
+        const lista = serviziPerAnnoCache[anno];
+        if (!Array.isArray(lista)) return;
+        const idx = lista.findIndex(s => String(s.id) === String(servizioAggiornato.id));
+        if (idx >= 0) lista[idx] = { ...lista[idx], ...servizioAggiornato };
+    });
+}
+
 function creaCampoDettaglio(label, value, classe = '') {
     return `<div class="dettaglio-field ${classe}">
         <label>${escapeHtml(label)}</label>
@@ -546,6 +575,7 @@ function apriModalServizio(servizio) {
     const title = document.getElementById('modal-servizio-title');
     if (!modal || !body) return;
 
+    servizioCorrente = servizio;
     const mezzo = costruisciStringaMezzo(servizio);
     if (title) title.textContent = `SERVIZIO ${servizio.id || ''} — ${servizio.socio_trasportato || ''}`;
 
@@ -601,10 +631,107 @@ function apriModalServizio(servizio) {
 }
 
 function chiudiModalServizio() {
+    chiudiModalCompila();
     const modal = document.getElementById('modal-servizio');
     if (!modal) return;
     modal.style.display = 'none';
     modal.setAttribute('aria-hidden', 'true');
+    servizioCorrente = null;
+}
+
+function mostraErroreCompila(msg) {
+    const el = document.getElementById('modal-compila-errore');
+    if (!el) return;
+    if (msg) {
+        el.textContent = msg;
+        el.hidden = false;
+    } else {
+        el.textContent = '';
+        el.hidden = true;
+    }
+}
+
+function apriModalCompila() {
+    if (!servizioCorrente?.id) return;
+
+    const modal = document.getElementById('modal-compila-servizio');
+    const info = document.getElementById('modal-compila-info');
+    const kmInput = document.getElementById('compila-km');
+    const tempoInput = document.getElementById('compila-tempo');
+    const noteInput = document.getElementById('compila-note');
+    if (!modal || !kmInput || !tempoInput || !noteInput) return;
+
+    const s = servizioCorrente;
+    if (info) {
+        info.textContent = `Servizio ${s.id} — ${s.socio_trasportato || ''} del ${s.data_prelievo || ''}`;
+    }
+    kmInput.value = s.km || '';
+    tempoInput.value = formatTimeIso(s.tempo) || '';
+    noteInput.value = s.note_fine_servizio || '';
+    mostraErroreCompila('');
+
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+    kmInput.focus();
+}
+
+function chiudiModalCompila() {
+    const modal = document.getElementById('modal-compila-servizio');
+    if (!modal) return;
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
+    mostraErroreCompila('');
+}
+
+async function salvaDatiFineServizio() {
+    if (!servizioCorrente?.id) return;
+
+    const btn = document.getElementById('btn-salva-compila');
+    const km = document.getElementById('compila-km')?.value.trim() ?? '';
+    const tempoRaw = document.getElementById('compila-tempo')?.value.trim() ?? '';
+    const note = document.getElementById('compila-note')?.value.trim() ?? '';
+
+    if (tempoRaw && !/^\d{1,2}:\d{2}(:\d{2})?$/.test(tempoRaw)) {
+        mostraErroreCompila('Formato TEMPO non valido. Usa ore:minuti, es. 01:30');
+        return;
+    }
+
+    mostraErroreCompila('');
+    if (btn) btn.disabled = true;
+
+    const payload = {
+        Km: km,
+        NoteFineServizio: note
+    };
+    const tempoNorm = normalizzaTempoPerSupabase(tempoRaw);
+    if (tempoNorm !== null) payload.Tempo = tempoNorm;
+
+    try {
+        const { error } = await supabaseClient
+            .from(tabella('servizi'))
+            .update(payload)
+            .eq('idservizio', servizioCorrente.id);
+
+        if (error) throw error;
+
+        const aggiornato = {
+            ...servizioCorrente,
+            km,
+            tempo: tempoRaw ? formatTimeIso(tempoNorm || tempoRaw) : '',
+            note_fine_servizio: note
+        };
+        servizioCorrente = aggiornato;
+        aggiornaServizioInCache(aggiornato);
+        invalidaCacheServizio(aggiornato);
+
+        chiudiModalCompila();
+        apriModalServizio(aggiornato);
+    } catch (err) {
+        console.error('Errore salvataggio fine servizio:', err);
+        mostraErroreCompila(err.message || 'Errore nel salvataggio. Riprova.');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 }
 
 function initCalendario() {
@@ -662,14 +789,29 @@ function setupEventListenersCalendario() {
     document.getElementById('btn-logout')?.addEventListener('click', gestisciLogout);
     document.getElementById('btn-close-modal')?.addEventListener('click', chiudiModalServizio);
     document.getElementById('btn-chiudi-modal')?.addEventListener('click', chiudiModalServizio);
+    document.getElementById('btn-compila-fine-servizio')?.addEventListener('click', apriModalCompila);
+    document.getElementById('btn-close-compila')?.addEventListener('click', chiudiModalCompila);
+    document.getElementById('btn-annulla-compila')?.addEventListener('click', chiudiModalCompila);
+    document.getElementById('btn-salva-compila')?.addEventListener('click', salvaDatiFineServizio);
 
     const modal = document.getElementById('modal-servizio');
     modal?.addEventListener('click', (e) => {
         if (e.target === modal) chiudiModalServizio();
     });
 
+    const modalCompila = document.getElementById('modal-compila-servizio');
+    modalCompila?.addEventListener('click', (e) => {
+        if (e.target === modalCompila) chiudiModalCompila();
+    });
+
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') chiudiModalServizio();
+        if (e.key !== 'Escape') return;
+        const compilaAperto = document.getElementById('modal-compila-servizio');
+        if (compilaAperto && compilaAperto.style.display === 'flex') {
+            chiudiModalCompila();
+            return;
+        }
+        chiudiModalServizio();
     });
 }
 

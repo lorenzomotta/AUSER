@@ -71,8 +71,41 @@
                 <button type="button" class="modal-close-btn" id="btn-close-modal" aria-label="Chiudi">&times;</button>
             </div>
             <div class="modal-servizio-body" id="modal-servizio-body"></div>
-            <div class="modal-servizio-footer">
+            <div class="modal-servizio-footer modal-servizio-footer-actions">
+                <button type="button" class="btn btn-compila-modal" id="btn-compila-fine-servizio">COMPILA KM / TEMPO / NOTE</button>
                 <button type="button" class="btn btn-chiudi-modal" id="btn-chiudi-modal">CHIUDI</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-compila-servizio" class="modal-compila-overlay" style="display: none;" aria-hidden="true">
+        <div class="modal-compila-content" role="dialog" aria-labelledby="modal-compila-title">
+            <div class="modal-compila-header">
+                <h2 id="modal-compila-title">DATI FINE SERVIZIO</h2>
+                <button type="button" class="modal-close-btn" id="btn-close-compila" aria-label="Chiudi">&times;</button>
+            </div>
+            <div class="modal-compila-body">
+                <p id="modal-compila-info" class="modal-compila-info"></p>
+                <div class="modal-compila-field">
+                    <label for="compila-km">KM</label>
+                    <input type="text" id="compila-km" class="modal-compila-input" inputmode="decimal"
+                        placeholder="Es. 45" autocomplete="off">
+                </div>
+                <div class="modal-compila-field">
+                    <label for="compila-tempo">TEMPO (ore:minuti)</label>
+                    <input type="text" id="compila-tempo" class="modal-compila-input"
+                        placeholder="Es. 01:30" autocomplete="off">
+                </div>
+                <div class="modal-compila-field">
+                    <label for="compila-note">NOTE FINE SERVIZIO</label>
+                    <textarea id="compila-note" class="modal-compila-textarea" rows="4"
+                        placeholder="Note aggiuntive a fine servizio"></textarea>
+                </div>
+                <p id="modal-compila-errore" class="modal-compila-errore" role="alert" hidden></p>
+            </div>
+            <div class="modal-compila-footer">
+                <button type="button" class="btn btn-annulla-compila" id="btn-annulla-compila">ANNULLA</button>
+                <button type="button" class="btn btn-salva-compila" id="btn-salva-compila">SALVA</button>
             </div>
         </div>
     </div>
