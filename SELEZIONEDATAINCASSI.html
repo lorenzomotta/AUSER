@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seleziona data incassi - AUSER Asti</title>
+    <link rel="stylesheet" href="selezionedataincassi.css">
+</head>
+<body>
+    <div class="selezione-container">
+        <div class="selezione-card">
+            <h1 class="selezione-titolo">INCASSI GIORNALIERI</h1>
+            <p class="selezione-descrizione">Seleziona la data per visualizzare i servizi incassati.</p>
+
+            <label class="selezione-label" for="input-data">Data incasso</label>
+            <input type="date" id="input-data" class="selezione-input-data" required>
+
+            <div class="selezione-azioni">
+                <button type="button" class="btn btn-chiudi" id="btn-chiudi">ANNULLA</button>
+                <button type="button" class="btn btn-conferma" id="btn-visualizza">VISUALIZZA REPORT</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="selezionedataincassi.js"></script>
+</body>
+</html>

@@ -1,0 +1,305 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #e8e6e3;
+    color: #222;
+}
+
+.report-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 12px 16px 24px;
+}
+
+/* Header schermo */
+.report-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.print-only {
+    display: none;
+}
+
+.header-actions-left {
+    display: flex;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
+.report-title {
+    flex: 1;
+    text-align: center;
+    font-size: 1.6rem;
+    font-weight: bold;
+    color: #4a4a4a;
+    letter-spacing: 0.02em;
+}
+
+.header-date-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.report-data {
+    font-size: 1.35rem;
+    font-weight: bold;
+    color: #111;
+    min-width: 110px;
+    text-align: center;
+}
+
+.btn {
+    padding: 10px 22px;
+    font-size: 14px;
+    font-weight: bold;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-chiudi {
+    background-color: #e67e22;
+    color: #fff;
+}
+
+.btn-chiudi:hover {
+    background-color: #d35400;
+}
+
+.btn-stampa {
+    background-color: #27ae60;
+    color: #fff;
+}
+
+.btn-stampa:hover {
+    background-color: #1e8449;
+}
+
+.btn-nav-giorno {
+    width: 36px;
+    height: 36px;
+    border: 2px solid #888;
+    border-radius: 4px;
+    background: #f5f5f5;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #333;
+}
+
+.btn-nav-giorno:hover {
+    background: #ddd;
+}
+
+.report-loading,
+.report-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: #555;
+    font-size: 1rem;
+}
+
+/* Blocco servizio — griglia 6 colonne condivisa tra riga 1 e riga 2 */
+.servizio-report {
+    margin-bottom: 0;
+    border-bottom: 2px solid #333;
+    padding: 10px 0 12px;
+}
+
+.servizio-report:last-child {
+    border-bottom: none;
+}
+
+.report-grid {
+    display: grid;
+    grid-template-columns: 72px 1.4fr 100px 72px 1fr 1.4fr;
+    gap: 8px 10px;
+    align-items: end;
+}
+
+/* TRASPORTATO = larghezza IDSERV + OPERATORE */
+.report-field.col-span-2 {
+    grid-column: span 2;
+}
+
+/* DATA + ORA = colonne 3 e 4 */
+.report-field.col-data-ora {
+    grid-column: span 2;
+}
+
+.report-field {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.report-field label {
+    font-size: 10px;
+    font-weight: bold;
+    color: #666;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+    letter-spacing: 0.02em;
+}
+
+.report-field .field-value {
+    border: 1px solid #999;
+    background: #fff;
+    padding: 6px 8px;
+    font-size: 13px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.report-field .field-value.trasportato {
+    color: #1565c0;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.report-field .field-value.operatore {
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.report-field-duo {
+    display: grid;
+    grid-template-columns: 100px 72px;
+    gap: 10px;
+}
+
+/* Stampa A4 orizzontale */
+@page {
+    size: A4 landscape;
+    margin: 10mm 12mm;
+}
+
+@media print {
+    body {
+        background: #fff;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .no-print {
+        display: none !important;
+    }
+
+    .report-loading {
+        display: none !important;
+    }
+
+    .print-only {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+        border-bottom: 2px solid #333;
+    }
+
+    .print-only .report-title {
+        font-size: 16pt;
+        text-align: left;
+        flex: 1;
+    }
+
+    .print-only .report-data {
+        font-size: 14pt;
+    }
+
+    .report-container {
+        max-width: none;
+        width: 100%;
+        padding: 0;
+    }
+
+    .servizio-report {
+        padding: 6px 0;
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    /* Stessa griglia 6 colonne dello schermo — forzata in stampa */
+    .report-grid {
+        display: grid !important;
+        grid-template-columns: 52pt 1.35fr 72pt 52pt 0.95fr 1.35fr !important;
+        gap: 3pt 6pt !important;
+        align-items: end;
+        width: 100%;
+    }
+
+    .report-field.col-span-2 {
+        grid-column: span 2 !important;
+    }
+
+    .report-field.col-data-ora {
+        grid-column: span 2 !important;
+    }
+
+    .report-field {
+        display: flex !important;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .report-field label {
+        font-size: 7pt;
+    }
+
+    .report-field .field-value {
+        font-size: 9pt;
+        min-height: 20pt;
+        padding: 2pt 4pt;
+        border: 1px solid #666;
+        background: #fff;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .report-field .field-value.trasportato {
+        color: #1565c0 !important;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+
+    .report-field .field-value.operatore {
+        text-transform: uppercase;
+        font-weight: 600;
+    }
+
+    .report-field-duo {
+        display: grid !important;
+        grid-template-columns: 72pt 52pt !important;
+        gap: 6pt !important;
+        width: 100%;
+    }
+}
+
+@media screen and (max-width: 1100px) {
+    .report-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .report-field.col-span-2,
+    .report-field.col-data-ora {
+        grid-column: span 2;
+    }
+}

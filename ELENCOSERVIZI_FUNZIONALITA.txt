@@ -1,0 +1,342 @@
+================================================================================
+  ELENCO SERVIZI — Guida alle funzionalità
+  Applicazione AUSER TAURI
+  File collegati: ELENCOSERVIZI.html | elencoservizi.css | elencoservizi.js
+================================================================================
+
+1. COS'È ELENCO SERVIZI
+--------------------------------------------------------------------------------
+Elenco Servizi è una finestra dell'applicazione che permette di consultare,
+filtrare e cercare i servizi di trasporto registrati dall'associazione.
+I dati vengono letti dal database Supabase (tabella servizi configurata in
+config.json).
+
+Si apre dalla schermata principale (index.html) premendo il pulsante
+"ELENCO SERVIZI" nella barra laterale. In ambiente Tauri si apre in una
+finestra separata (1400 x 900 pixel); nel browser si apre in una nuova scheda.
+
+
+2. CARICAMENTO DATI
+--------------------------------------------------------------------------------
+All'apertura della pagina:
+  1. Vengono caricati gli automezzi da Supabase (per mostrare "MEZZO USATO").
+  2. Vengono caricati i servizi dell'ANNO CORRENTE tramite il backend Rust
+     (comando get_all_servizi_completi).
+  3. Vengono caricati tesserati e operatori (per la ricerca avanzata).
+  4. I servizi vengono ordinati dal backend per DATA PRELIEVO (decrescente)
+     e ORA PRELIEVO (decrescente): i più recenti in alto.
+
+Vista predefinita al primo caricamento:
+  - Solo servizi dell'anno corrente (campo Prelievo_Data).
+  - Solo servizi con Archiviazione = false (non archiviati).
+  - Dopo il primo caricamento, se si cambiano i pulsanti anno, il filtro
+    Archiviazione NON viene più applicato (si vedono anche i servizi archiviati).
+
+Cache per periodo:
+  - I servizi scaricati per "anno corrente", "anno precedente" e "tutti gli anni"
+    restano in memoria (serviziAnnoCache) per non riscaricarli ogni volta.
+  - Per "tutti gli anni" il backend usa paginazione automatica (Supabase
+    restituisce max 1000 righe per richiesta; l'app ne fa più di una fino a
+    scaricare tutto l'archivio).
+
+Modalità demo:
+  - Se l'app non gira in ambiente Tauri, viene mostrato un servizio di esempio
+    (ASTUTI GUIDO) per visualizzare l'interfaccia senza database.
+
+
+3. INTESTAZIONE (HEADER)
+--------------------------------------------------------------------------------
+
+3.1 Parte sinistra
+  - CHIUDI
+      Chiude la finestra "elenco-servizi" in ambiente Tauri.
+      Se non è possibile, torna alla home (index.html).
+
+  - TUTTI
+      Rimuove TUTTI i filtri attivi (footer, ricerca avanzata, filtri rapidi
+      su trasportato/operatore) e ripristina l'elenco del periodo anno
+      attualmente selezionato (corrente / precedente / tutti gli anni).
+      NON cambia il periodo anno: solo i filtri aggiuntivi.
+
+3.2 Parte centrale — Filtro per anno
+  Tre pulsantini sopra al titolo:
+    • Anno corrente   → servizi con Prelievo_Data nell'anno in corso
+    • Anno precedente → servizi dell'anno scorso
+    • Tutti gli Anni  → intero archivio servizi
+
+  Il pulsante attivo è evidenziato (classe "active").
+  Il titolo cambia dinamicamente:
+    - ELENCO SERVIZI ANNO CORRENTE
+    - ELENCO SERVIZI ANNO 2025  (esempio anno precedente)
+    - ELENCO SERVIZI TUTTI GLI ANNI
+
+  Contatore accanto al titolo:
+    - (150)           → tutti i servizi del periodo selezionato
+    - (45 di 150)     → quando è attivo almeno un filtro (mostra filtrati/totali)
+
+  Avviso filtro:
+    - "(Attenzione visualizzazione filtrata)" compare quando è attivo almeno
+      uno tra: filtro trasportato, operatore, stato servizio, richiedente,
+      oppure ricerca avanzata.
+
+3.3 Parte destra
+  - RICERCA
+      Apre la modale "RICERCA AVANZATA" (vedi sezione 6).
+
+
+4. ELENCO SERVIZI (AREA CENTRALE SCORREVOLE)
+--------------------------------------------------------------------------------
+Ogni servizio è mostrato in un "blocco" (scheda) con campi in sola lettura.
+I blocchi sono divisi in 4 righe/sezioni.
+
+Campi visualizzati per ogni servizio:
+
+  Sezione 1 — Prelievo
+    IDSERVIZIO, IDSOCIO, DATA PRELIEVO, O.S.C. (ora sotto casa / inizio),
+    COMUNE DI PRELIEVO, LUOGO DI PRELIEVO, RICHIEDENTE, TIPO SERVIZIO,
+    CARROZZINA, TIPO DI PAGAMENTO
+
+  Sezione 2 — Destinazione
+    TRASPORTATO (con pulsante FILTRA / TUTTI),
+    O.A.D. (ora arrivo destinazione), COMUNE DI DESTINAZIONE,
+    LUOGO DI DESTINAZIONE, MOTIVAZIONE DEL SERVIZIO, STATO INCASSO
+
+  Sezione 3 — Operatore e chiusura
+    OPERATORE (con pulsante FILTRA / TUTTI), MEZZO USATO (marca/modelo +
+    numero automezzo da tabella automezzi), TEMPO, KM, DATA BONIFICO,
+    PAGAMENTO, STATO DEL SERVIZIO
+    Pulsanti: STAMPA, MODIFICA, COMPLETA
+
+  Sezione 4 — Note
+    NOTE PRELIEVO, NOTE ARRIVO, NOTE FINE SERVIZIO
+
+Mezzo usato:
+  - Il campo MEZZO nel servizio contiene il riferimento all'automezzo.
+  - L'app cerca l'automezzo corrispondente e mostra una stringa tipo:
+    "FIAT PANDA (3)".
+
+Filtri rapidi su ogni scheda:
+  - FILTRA accanto a TRASPORTATO: mostra solo i servizi con lo stesso nominativo
+    trasportato. Il pulsante diventa "TUTTI" per togliere il filtro.
+  - FILTRA accanto a OPERATORE: stesso comportamento per l'operatore del servizio.
+
+
+5. PAGINAZIONE (FOOTER — CENTRO)
+--------------------------------------------------------------------------------
+L'elenco è diviso in pagine da 50 servizi.
+
+Barra di paginazione:
+  - Pulsante "← Precedente"
+  - Testo: es. "Pagina 2 di 8 · servizi 51-100 di 380"
+  - Pulsante "Successiva →"
+
+Comportamento:
+  - Cambiando pagina, l'area elenco torna in cima.
+  - Applicando filtri o ricerca, si torna alla pagina 1.
+
+
+6. RICERCA AVANZATA (MODALE)
+--------------------------------------------------------------------------------
+Si apre con il pulsante RICERCA in alto a destra.
+
+Campi disponibili:
+  - IDSERVIZIO        → corrispondenza esatta
+  - IDSOCIO           → corrispondenza esatta
+  - DATA DA / DATA A  → intervallo date prelievo (calendario)
+  - NOMINATIVO        → testo parziale sul trasportato, con autocomplete
+                        (suggerimenti dai tesserati, max 10; frecce su/giù + Invio)
+  - STATO INCASSO     → INCASSATO, DA INCASSARE, GRATIS, ANNULLATO
+  - TIPO DI PAGAMENTO → valori ricavati dai servizi del periodo corrente
+  - TIPO DI SERVIZIO  → Standard, Sollevatore
+  - CARROZZINA        → AUSER, SOCIO
+  - RICHIEDENTE       → SOCIO, COMUNE, ALTRI
+  - OPERATORE         → elenco operatori (soci con flag Operatore = true)
+
+Pulsanti modale:
+  - ANNULLA / X  → chiude senza applicare
+  - RICERCA      → applica i filtri e chiude la modale
+
+I filtri ricerca si combinano con i filtri footer e con FILTRA trasportato/operatore.
+
+
+7. FILTRI FOOTER
+--------------------------------------------------------------------------------
+
+7.1 Parte sinistra — Stato del servizio
+  - DA ESEGUIRE  → StatoServizio = "DA ESEGUIRE"
+  - ESEGUITI     → StatoServizio = "ESEGUITO"
+  - ANNULLATI    → StatoServizio = "ANNULLATO"
+
+  Cliccando di nuovo lo stesso pulsante attivo, il filtro si disattiva.
+  Il pulsante attivo è evidenziato.
+
+7.2 Parte destra — Richiedente
+  - SOCIO   → richiedente = SOCIO
+  - COMUNE  → richiedente = COMUNE
+  - ALTRI   → tutto ciò che non è SOCIO né COMUNE (valori diversi o vuoti)
+
+  Stesso comportamento toggle del filtro stato.
+
+
+8. COMBINAZIONE DEI FILTRI
+--------------------------------------------------------------------------------
+Ordine logico:
+  1. Periodo anno (corrente / precedente / tutti) → definisce serviziOriginali
+  2. Filtro Archiviazione → solo al primo load su anno corrente
+  3. Filtri applicati da applyAllFilters() sulla lista del periodo:
+       - Trasportato (rapido da scheda)
+       - Operatore (rapido da scheda)
+       - Stato servizio (footer)
+       - Richiedente (footer)
+       - Tutti i campi ricerca avanzata
+
+Il pulsante TUTTI (header sinistra) azzera i filtri del punto 3 ma mantiene
+il periodo anno selezionato.
+
+Esempi:
+  - Anno corrente + ESEGUITI + SOCIO → servizi eseguiti richiesti dal socio
+  - Tutti gli anni + FILTRA operatore "ROSSI MARIA" → tutti i servizi di quell'operatore
+  - Ricerca DATA DA 01/01/2025 + DA INCASSARE → servizi nel periodo con quello stato
+
+
+9. PULSANTI AZIONE SU OGNI SERVIZIO
+--------------------------------------------------------------------------------
+  - STAMPA
+      Chiama il backend stampa_servizio (ancora da implementare completamente).
+      Attualmente mostra un messaggio di conferma.
+
+  - MODIFICA
+      Apre la modale "MODIFICA SERVIZIO" con tutti i campi del servizio
+      selezionato, modificabili. Il click è gestito per ogni riga dell'elenco
+      (event delegation sul pulsante MODIFICA della scheda).
+
+      All'apertura:
+        - Se possibile, ricarica il servizio da Supabase (get_servizio_completo)
+          per avere dati aggiornati.
+        - In alternativa usa i dati già presenti in memoria (serviziOriginali).
+
+      Pulsanti modale:
+        - SALVA   → salva le modifiche su Supabase (update_servizio_completo),
+                    aggiorna la cache locale e ridisegna l'elenco senza chiudere
+                    la pagina.
+        - ANNULLA / X / clic fuori / Esc → chiude senza salvare.
+
+      Campi modificabili nel popup:
+        IDSERVIZIO (solo lettura), IDSOCIO, DATA PRELIEVO, ORA PRELIEVO (O.S.C.),
+        COMUNE/LUOGO PRELIEVO, TRASPORTATO, RICHIEDENTE, TIPO SERVIZIO,
+        CARROZZINA, MOTIVAZIONE, DATA DESTINAZIONE (O.A.D.), COMUNE/LUOGO
+        DESTINAZIONE, STATO INCASSO, TIPO PAGAMENTO, DONAZIONE/PAGAMENTO,
+        OPERATORE (dropdown operatori), OPERATORE 2, MEZZO USATO (dropdown
+        automezzi), TEMPO, KM, DATA BONIFICO, DATA INCASSO/RICEVUTA,
+        STATO SERVIZIO, ARCHIVIA (SI/NO), NOTE PRELIEVO, NOTE ARRIVO,
+        NOTE FINE SERVIZIO.
+
+      Menu a tendina dove utile:
+        - Richiedente, Tipo servizio, Carrozzina, Stato incasso, Tipo pagamento,
+          Operatore, Mezzo, Stato servizio, Archivia.
+
+  - COMPLETA
+      Chiama completa_servizio (in sviluppo). Mostra conferma e torna alla home.
+
+  Nota: i listener globali su btn-stampa/completa nell'HTML principale fanno
+  riferimento a elementi del vecchio form dettaglio; sui blocchi elenco i pulsanti
+  STAMPA e COMPLETA per riga sono ancora parziali/in sviluppo. MODIFICA è
+  invece pienamente operativo per ogni scheda servizio.
+
+
+10. MODALE MODIFICA SERVIZIO
+--------------------------------------------------------------------------------
+Si apre cliccando MODIFICA su una scheda servizio.
+
+Struttura:
+  - Overlay a schermo intero (z-index superiore alla modale ricerca)
+  - Header con titolo "MODIFICA SERVIZIO {id}" e pulsante chiudi (X)
+  - Corpo con griglia di campi (modifica-form-grid)
+  - Footer con ANNULLA e SALVA
+
+Comportamento SALVA:
+  1. Raccoglie i valori dal form (raccogliPayloadModifica).
+  2. Invoca update_servizio_completo con payload completo.
+  3. Rilegge il servizio aggiornato (get_servizio_completo).
+  4. Aggiorna serviziOriginali, serviziCache e serviziAnnoCache.
+  5. Ridisegna la pagina corrente dell'elenco (renderServiziView).
+  6. Chiude la modale.
+
+Modalità demo (senza Tauri):
+  - Il salvataggio aggiorna solo la cache locale in memoria, senza database.
+
+Mappatura campi → Supabase (backend Rust):
+  - Prelievo_Data, IdSocio, Trasportato, Prelievo_Ora, Prelievo_Comune,
+    Prelievo_Indirizzo, Carrozzina, Richiedente, Motivazione,
+    Destinazione_Data, Destinazione_Comune, Destinazione_Indirizzo,
+    Incassato, Oper2, Mezzo, Tempo, Km, TipoPagamento, Bonifico_Data,
+    Ricevuta_Data, StatoServizio, Prelievo_Note, Destinazione_Note,
+    NoteFineServizio, Donazioni (da importo €), IdOperatore (da nome
+    operatore), Sollevatore/Standard (da tipo servizio), Archiviazione.
+
+
+11. BACKEND E DATI SUPABASE
+--------------------------------------------------------------------------------
+Comando principale: get_all_servizi_completi(anno, tuttiAnni)
+
+  - tuttiAnni = true  → scarica tutta la tabella servizi (con paginazione)
+  - tuttiAnni = false → filtra per anno su Prelievo_Data (gte/lte in Supabase)
+
+Altri comandi collegati:
+  - get_all_tesserati        → nominativi operatori e autocomplete ricerca
+  - get_all_automezzi        → descrizione mezzo usato e dropdown modifica
+  - get_servizio_completo    → dettaglio singolo servizio (apertura modale modifica)
+  - update_servizio_completo → salvataggio completo campi servizio (PATCH Supabase)
+  - stampa_servizio          → stampa (TODO)
+  - modifica_servizio        → comando legacy (non usato dalla modale)
+  - completa_servizio        → completamento (TODO)
+
+Campo archiviazione in Supabase:
+  - Nome colonna: Archiviazione (non "Archivia")
+  - Mappato nel frontend come servizio.archivia
+
+Ordinamento servizi (backend):
+  - Data prelievo decrescente, poi ora prelievo decrescente.
+
+Cache nominativi operatori:
+  - IdOperatore → NominativoSocio risolto tramite tabella tesserati.
+  - In salvataggio: il nome operatore viene riconvertito in IdOperatore.
+
+
+12. SICUREZZA E DETTAGLI TECNICI
+--------------------------------------------------------------------------------
+  - I valori nei blocchi servizio usano escape dove necessario.
+  - I valori nella modale modifica usano escapeHtmlModifica in generazione HTML.
+  - I flag booleani accettano true/false, SI/NO, 1/0, ecc.
+  - I campi nell'elenco principale restano readonly: la modifica avviene solo
+    tramite la modale dedicata.
+  - PAGE_SIZE = 50 servizi per pagina.
+  - Filtri lato frontend sulla cache: veloce ma richiede che i servizi siano
+    già stati scaricati per il periodo selezionato.
+  - servizioInModifica: riferimento al servizio aperto in modifica (per demo).
+
+
+13. FILE DEL MODULO
+--------------------------------------------------------------------------------
+  ELENCOSERVIZI.html   → struttura pagina, modale ricerca, modale modifica,
+                         footer filtri
+  elencoservizi.css    → stili grafici, layout header/footer, modali
+  elencoservizi.js     → logica: caricamento, filtri, paginazione, ricerca,
+                         modale modifica e salvataggio
+
+Backend collegato:
+  src-tauri/src/main.rs     → get_all_servizi_completi, get_servizio_completo,
+                              update_servizio_completo, ServizioCompleto
+  src-tauri/src/supabase.rs → lettura/scrittura servizi, automezzi, tesserati
+
+
+14. FUNZIONALITÀ NON ANCORA IMPLEMENTATE (O PARZIALI)
+--------------------------------------------------------------------------------
+  - Stampa servizio (logica reale di stampa documento)
+  - Completa servizio (aggiornamento stato su Supabase)
+  - Pulsanti STAMPA e COMPLETA per ogni riga dell'elenco (integrazione
+    completa per singolo servizio selezionato)
+
+================================================================================
+  Fine documento — aggiornato alle funzionalità attuali del modulo Elenco Servizi
+================================================================================

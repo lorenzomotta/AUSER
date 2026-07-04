@@ -24,6 +24,164 @@ function isTauri() {
 
 // Cache globale per i tesserati (prima del filtro)
 let allTesserati = [];
+const PAGE_SIZE = 50;
+let currentPage = 1;
+let searchDebounceTimer = null;
+let filterScaduteOnly = false;
+let showArchiviatiOnly = false;
+
+// Converte un valore campo (stringa, booleano o numero) in testo
+function normalizeFieldValue(value) {
+    if (value === undefined || value === null) return '';
+    if (typeof value === 'boolean') return value ? 'true' : 'false';
+    return String(value).trim();
+}
+
+// Verifica se un flag (Operatore, Attivo, ...) è "vero"
+function isTruthyFlag(value) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    const s = normalizeFieldValue(value).toUpperCase();
+    if (s === '' || s === 'FALSE' || s === 'NO' || s === '0') return false;
+    return s === 'TRUE' || s === 'SI' || s === 'SÌ' || s === 'S' || s === '1' ||
+           s === 'YES' || s === 'Y' || s === 'ATTIVO';
+}
+
+// Verifica se la scadenza tessera (dd/mm/yyyy) è precedente a oggi
+function parseItalianDate(dateStr) {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    const parts = dateStr.trim().split('/');
+    if (parts.length !== 3) return null;
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const year = parseInt(parts[2], 10);
+    if (Number.isNaN(day) || Number.isNaN(month) || Number.isNaN(year)) return null;
+    const date = new Date(year, month, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) {
+        return null;
+    }
+    return date;
+}
+
+function isTesseraScaduta(scadenzatessera) {
+    const scadenza = parseItalianDate(scadenzatessera);
+    if (!scadenza) return false;
+    const oggi = new Date();
+    oggi.setHours(0, 0, 0, 0);
+    scadenza.setHours(0, 0, 0, 0);
+    return scadenza < oggi;
+}
+
+// Apre la maschera anagrafica per inserire un nuovo socio
+async function openNuovoSocioAnagrafica() {
+    const url = 'ANAGRAFICASOCI.html?nuovo=1';
+    const title = 'Nuovo socio — AUSER';
+
+    if (!isTauri()) {
+        window.open(url, '_blank');
+        return;
+    }
+
+    try {
+        const { WebviewWindow } = await import('@tauri-apps/api/window');
+        const label = 'anagrafica-socio-nuovo';
+
+        const existing = WebviewWindow.getByLabel(label);
+        if (existing) {
+            try {
+                await existing.show();
+                await existing.setFocus();
+                return;
+            } catch (err) {
+                console.warn('Finestra nuovo socio non riutilizzabile, ne creo una nuova:', err);
+                try {
+                    await existing.close();
+                } catch (_) { /* etichetta potrebbe essere già libera */ }
+            }
+        }
+
+        const webview = new WebviewWindow(label, {
+            url,
+            title,
+            width: 1100,
+            height: 540,
+            resizable: true,
+            maximized: false,
+            decorations: true,
+            center: true
+        });
+
+        webview.setFocus().catch((err) => {
+            console.warn('setFocus nuovo socio:', err);
+        });
+    } catch (error) {
+        console.error('Errore apertura nuovo socio:', error);
+        alert(`Impossibile aprire l'anagrafica nuovo socio: ${error.message || error}`);
+    }
+}
+
+// Apre la maschera anagrafica del socio in una nuova finestra Tauri
+async function openAnagraficaSocio(idsocio, nominativo) {
+    if (!idsocio) {
+        alert('ID socio non disponibile');
+        return;
+    }
+
+    const url = `ANAGRAFICASOCI.html?idsocio=${encodeURIComponent(idsocio)}`;
+    const title = nominativo
+        ? `Anagrafica — ${nominativo}`
+        : `Anagrafica socio ${idsocio}`;
+
+    if (!isTauri()) {
+        window.open(url, '_blank');
+        return;
+    }
+
+    try {
+        const { WebviewWindow } = await import('@tauri-apps/api/window');
+        const label = `anagrafica-socio-${idsocio}`;
+
+        const existing = WebviewWindow.getByLabel(label);
+        if (existing) {
+            try {
+                await existing.show();
+                await existing.setFocus();
+                return;
+            } catch (err) {
+                console.warn('Finestra anagrafica esistente non riutilizzabile, ne creo una nuova:', err);
+                try {
+                    await existing.close();
+                } catch (_) { /* etichetta potrebbe essere già libera */ }
+            }
+        }
+
+        const webview = new WebviewWindow(label, {
+            url,
+            title,
+            width: 1100,
+            height: 540,
+            resizable: true,
+            maximized: false,
+            decorations: true,
+            center: true
+        });
+
+        // setFocus può fallire anche se la finestra si è aperta correttamente
+        webview.setFocus().catch((err) => {
+            console.warn('setFocus anagrafica:', err);
+        });
+    } catch (error) {
+        console.error('Errore apertura anagrafica:', error);
+        alert(`Impossibile aprire l'anagrafica: ${error.message || error}`);
+    }
+}
+
+// Ordina per nominativo (A→Z, regole italiane)
+function sortByNominativo(list) {
+    return [...list].sort((a, b) =>
+        (a.nominativo || '').localeCompare(b.nominativo || '', 'it', { sensitivity: 'base' })
+    );
+}
 
 // Carica tutti i tesserati e popola la lista
 async function loadAllTesserati() {
@@ -51,16 +209,25 @@ async function loadAllTesserati() {
             tipologiasocio: 'ORDINARIO',
             operatore: 'OPERATORE TEST',
             attivo: 'SI',
+            archivia: 'false',
             disponibilita: 'AUTISTA',
             notaaggiuntiva: 'Note aggiuntive per questo socio'
         };
         allTesserati = [tesseratoDemo];
-        populateListaSoci([tesseratoDemo]);
+        updateArchiviatiButtonUI();
+        updateTessereScaduteUI();
+        currentPage = 1;
+        renderSociView();
         return;
     }
     
     try {
-        console.log('Chiamata a get_all_tesserati...');
+        console.log('Chiamata a get_all_tesserati (Supabase)...');
+        try {
+            await invoke('init_supabase_from_config');
+        } catch (initErr) {
+            console.warn('Init Supabase:', initErr);
+        }
         const tesserati = await invoke('get_all_tesserati');
         console.log('Risposta ricevuta:', tesserati);
         console.log(`Tipo: ${typeof tesserati}, È array: ${Array.isArray(tesserati)}`);
@@ -72,21 +239,12 @@ async function loadAllTesserati() {
             return;
         }
         
-        // Log del primo elemento completo per debug
-        if (tesserati.length > 0) {
-            console.log('🔍 DEBUG - Primo tesserato completo:', tesserati[0]);
-            console.log('🔍 DEBUG - Chiavi del primo tesserato:', Object.keys(tesserati[0]));
-            console.log('🔍 DEBUG - Codice fiscale primo elemento:', tesserati[0].codicefiscale);
-        }
-        
-        // SALVA la copia completa PRIMA di popolare
-        allTesserati = tesserati || [];
-        
-        // Aggiorna il conteggio nel titolo
-        updateSociCount(tesserati.length);
-        
-        console.log(`Popolamento container con ${tesserati.length} tesserati`);
-        populateListaSoci(tesserati);
+        allTesserati = sortByNominativo(tesserati);
+        updateArchiviatiButtonUI();
+        updateTessereScaduteUI();
+        updateSociCount(getSociNonArchiviati().length);
+        currentPage = 1;
+        renderSociView();
     } catch (error) {
         console.error('Errore nel caricamento tesserati:', error);
         console.error('Stack trace:', error.stack);
@@ -95,134 +253,294 @@ async function loadAllTesserati() {
     }
 }
 
-// Popola la lista dei soci con i dati
-function populateListaSoci(tesserati) {
+function isArchiviato(tesserato) {
+    return isTruthyFlag(tesserato.archivia);
+}
+
+function getSociArchiviati(list = allTesserati) {
+    return list.filter(t => isArchiviato(t));
+}
+
+function getSociNonArchiviati(list = allTesserati) {
+    return list.filter(t => !isArchiviato(t));
+}
+
+function getBaseListForView() {
+    return showArchiviatiOnly ? getSociArchiviati() : getSociNonArchiviati();
+}
+
+function updateArchiviatiButtonUI() {
+    const btn = document.getElementById('btn-mostra-archiviati');
+    if (!btn) return;
+
+    const archiviatiCount = getSociArchiviati().length;
+    btn.classList.toggle('active', showArchiviatiOnly);
+    btn.textContent = showArchiviatiOnly ? 'Mostra Attivi' : 'Mostra Archiviati';
+    btn.disabled = archiviatiCount === 0 && !showArchiviatiOnly;
+    btn.title = showArchiviatiOnly
+        ? 'Torna ai soci non archiviati'
+        : archiviatiCount === 0
+            ? 'Nessun socio archiviato'
+            : `Mostra ${archiviatiCount} soci archiviati`;
+}
+
+function toggleMostraArchiviati() {
+    if (!showArchiviatiOnly && getSociArchiviati().length === 0) return;
+
+    showArchiviatiOnly = !showArchiviatiOnly;
+    if (showArchiviatiOnly) {
+        filterScaduteOnly = false;
+    }
+
+    updateArchiviatiButtonUI();
+    updateTessereScaduteUI();
+    currentPage = 1;
+    renderSociView();
+}
+
+function countTessereScadute() {
+    return getSociNonArchiviati().filter(t => isTesseraScaduta(t.scadenzatessera)).length;
+}
+
+function updateTessereScaduteUI() {
+    const count = countTessereScadute();
+    const countEl = document.getElementById('tessere-scadute-count');
+    const btn = document.getElementById('btn-filter-scadute');
+
+    if (countEl) {
+        countEl.textContent = count;
+    }
+
+    if (count === 0) {
+        filterScaduteOnly = false;
+    }
+
+    if (btn) {
+        btn.disabled = count === 0 || showArchiviatiOnly;
+        btn.classList.toggle('active', filterScaduteOnly && count > 0 && !showArchiviatiOnly);
+        btn.title = count === 0
+            ? 'Nessuna tessera scaduta'
+            : filterScaduteOnly
+                ? 'Mostra tutti i soci non archiviati'
+                : 'Mostra solo tessere scadute';
+    }
+}
+
+function toggleFilterScadute() {
+    if (countTessereScadute() === 0) return;
+    filterScaduteOnly = !filterScaduteOnly;
+    updateTessereScaduteUI();
+    currentPage = 1;
+    renderSociView();
+}
+
+function getSearchTerm() {
+    const searchInput = document.getElementById('search-input');
+    return searchInput ? searchInput.value.trim() : '';
+}
+
+function getDisplayedTesserati() {
+    let list = getBaseListForView();
+
+    if (filterScaduteOnly && !showArchiviatiOnly) {
+        list = list.filter(t => isTesseraScaduta(t.scadenzatessera));
+    }
+
+    const searchTerm = getSearchTerm();
+    if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        list = list.filter(t => (t.nominativo || '').toLowerCase().includes(searchLower));
+    }
+
+    return list;
+}
+
+function getTotalPages(totalItems) {
+    return Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+}
+
+function renderSociView() {
     const containerBody = document.getElementById('soci-container-body');
-    if (!containerBody) {
-        console.error('Container soci non trovato');
+    if (!containerBody) return;
+
+    const displayed = getDisplayedTesserati();
+    const totalPages = getTotalPages(displayed.length);
+
+    if (currentPage > totalPages) {
+        currentPage = totalPages;
+    }
+    if (currentPage < 1) {
+        currentPage = 1;
+    }
+
+    const searchTerm = getSearchTerm();
+    updateSociCount(displayed.length, searchTerm, filterScaduteOnly, showArchiviatiOnly);
+
+    if (displayed.length === 0) {
+        let emptyMsg = 'Nessun tesserato trovato';
+        if (showArchiviatiOnly && searchTerm) {
+            emptyMsg = `Nessun socio archiviato trovato per: "${escapeHtml(searchTerm)}"`;
+        } else if (showArchiviatiOnly) {
+            emptyMsg = 'Nessun socio archiviato';
+        } else if (filterScaduteOnly && searchTerm) {
+            emptyMsg = `Nessun socio con tessera scaduta trovato per: "${escapeHtml(searchTerm)}"`;
+        } else if (filterScaduteOnly) {
+            emptyMsg = 'Nessun socio con tessera scaduta';
+        } else if (searchTerm) {
+            emptyMsg = `Nessun socio trovato per: "${escapeHtml(searchTerm)}"`;
+        }
+        containerBody.innerHTML = `<div class="soci-lista-empty">${emptyMsg}</div>`;
+        updatePaginationBar(0, 1, 1);
+        updateArchiviatiButtonUI();
         return;
     }
-    
-    // Svuota il container
+
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const pageItems = displayed.slice(start, start + PAGE_SIZE);
+    renderSocioBlocks(pageItems);
+    updatePaginationBar(displayed.length, currentPage, totalPages);
+    updateArchiviatiButtonUI();
+}
+
+function goToPage(page) {
+    const totalPages = getTotalPages(getDisplayedTesserati().length);
+    const nextPage = Math.min(Math.max(1, page), totalPages);
+    if (nextPage === currentPage) return;
+    currentPage = nextPage;
+    renderSociView();
+    const containerBody = document.getElementById('soci-container-body');
+    if (containerBody) {
+        containerBody.scrollTop = 0;
+    }
+}
+
+function updatePaginationBar(totalItems, page, totalPages) {
+    const bar = document.getElementById('soci-pagination-bar');
+    if (!bar) return;
+
+    if (totalItems === 0) {
+        bar.innerHTML = '';
+        return;
+    }
+
+    const start = (page - 1) * PAGE_SIZE + 1;
+    const end = Math.min(page * PAGE_SIZE, totalItems);
+
+    bar.innerHTML = `
+        <button type="button" class="btn-pagination" id="btn-page-prev" ${page <= 1 ? 'disabled' : ''}>← Precedente</button>
+        <span class="soci-pagination-info">Pagina ${page} di ${totalPages} · soci ${start}-${end} di ${totalItems}</span>
+        <button type="button" class="btn-pagination" id="btn-page-next" ${page >= totalPages ? 'disabled' : ''}>Successiva →</button>
+    `;
+
+    const btnPrev = document.getElementById('btn-page-prev');
+    const btnNext = document.getElementById('btn-page-next');
+    if (btnPrev) btnPrev.addEventListener('click', () => goToPage(page - 1));
+    if (btnNext) btnNext.addEventListener('click', () => goToPage(page + 1));
+}
+
+// Crea il blocco HTML di un singolo socio
+function createSocioBlock(tesserato) {
+    const isOperatore = isTruthyFlag(tesserato.operatore);
+    const isAttivo = isTruthyFlag(tesserato.attivo);
+    const isArchivia = isTruthyFlag(tesserato.archivia);
+    const tesseraScaduta = isTesseraScaduta(tesserato.scadenzatessera);
+    const scadenzaGroupClass = tesseraScaduta
+        ? 'socio-form-group socio-form-group-scadenzatessera scadenza-scaduta'
+        : 'socio-form-group socio-form-group-scadenzatessera';
+    const scadenzaWarning = tesseraScaduta
+        ? '<span class="tessera-scaduta-label">TESSERA SCADUTA!!</span>'
+        : '';
+
+    const socioBlock = document.createElement('div');
+    socioBlock.className = 'socio-block';
+    socioBlock.dataset.socioId = tesserato.id || '';
+
+    socioBlock.innerHTML = `
+        <div class="socio-form-sections">
+            <div class="socio-form-section">
+                <div class="socio-form-row">
+                    <div class="socio-form-group socio-form-group-idsocio">
+                        <label>IDSOCIO</label>
+                        <input type="text" value="${escapeHtml(tesserato.idsocio || '')}" readonly>
+                    </div>
+                    <div class="socio-form-group socio-form-group-nominativo">
+                        <label>NOMINATIVO</label>
+                        <input type="text" value="${escapeHtml(tesserato.nominativo || '')}" readonly>
+                    </div>
+                    <div class="socio-form-group socio-form-group-codicefiscale">
+                        <label>COD. FISC.</label>
+                        <input type="text" value="${escapeHtml(tesserato.codicefiscale || '')}" readonly>
+                    </div>
+                    <div class="socio-form-group socio-form-group-tipologiasocio">
+                        <label>TIPOLOGIA SOCIO</label>
+                        <input type="text" value="${escapeHtml(tesserato.tipologiasocio || '')}" readonly>
+                    </div>
+                    <div class="socio-form-group socio-form-group-operatore">
+                        <label>OPERATORE</label>
+                        <div class="socio-checkbox-container">
+                            <input type="checkbox" ${isOperatore ? 'checked' : ''} disabled>
+                        </div>
+                    </div>
+                    <div class="socio-form-group socio-form-group-attivo">
+                        <label>ATTIVO</label>
+                        <div class="socio-checkbox-container">
+                            <input type="checkbox" ${isAttivo ? 'checked' : ''} disabled>
+                        </div>
+                    </div>
+                    <div class="socio-form-group socio-form-group-disponibilita">
+                        <label>DISPONIBILITA</label>
+                        <input type="text" value="${escapeHtml(tesserato.disponibilita || '')}" readonly>
+                    </div>
+                    <div class="socio-form-group socio-form-group-telefono">
+                        <label>TELEFONO</label>
+                        <input type="text" value="${escapeHtml(tesserato.telefono || '')}" readonly>
+                    </div>
+                    <div class="socio-form-group socio-form-group-numerotessera">
+                        <label>NUMERO TESSERA</label>
+                        <input type="text" value="${escapeHtml(tesserato.numerotessera || '')}" readonly>
+                    </div>
+                    <div class="${scadenzaGroupClass}">
+                        <label>SCADENZA TESSERA</label>
+                        <input type="text" value="${escapeHtml(tesserato.scadenzatessera || '')}" readonly>
+                        ${scadenzaWarning}
+                    </div>
+                </div>
+            </div>
+            <div class="socio-form-section">
+                <div class="socio-form-row">
+                    <div class="socio-form-group socio-form-group-nota">
+                        <label>NOTA AGGIUNTIVA</label>
+                        <textarea readonly>${escapeHtml(tesserato.notaaggiuntiva || '')}</textarea>
+                    </div>
+                    <div class="socio-form-group socio-form-group-archivia">
+                        <label>ARCHIVIA</label>
+                        <div class="socio-checkbox-container">
+                            <input type="checkbox" ${isArchivia ? 'checked' : ''} disabled>
+                        </div>
+                    </div>
+                    <div class="socio-form-actions">
+                        <button class="btn btn-anagrafica" data-socio-id="${tesserato.id || ''}" data-idsocio="${escapeHtml(tesserato.idsocio || '')}">ANAGRAFICA</button>
+                        <button class="btn btn-servizi" data-socio-id="${tesserato.id || ''}" data-idsocio="${escapeHtml(tesserato.idsocio || '')}">SERVIZI</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    return socioBlock;
+}
+
+// Renderizza solo la pagina corrente (max PAGE_SIZE soci)
+function renderSocioBlocks(tesserati) {
+    const containerBody = document.getElementById('soci-container-body');
+    if (!containerBody) return;
+
+    const fragment = document.createDocumentFragment();
+    for (const tesserato of tesserati) {
+        fragment.appendChild(createSocioBlock(tesserato));
+    }
     containerBody.innerHTML = '';
-    
-    tesserati.forEach((tesserato, index) => {
-        // Crea un blocco per ogni socio
-        const socioBlock = document.createElement('div');
-        socioBlock.className = 'socio-block';
-        socioBlock.dataset.socioId = tesserato.id || '';
-        
-        // Crea la struttura del form per questo socio
-        const formSections = document.createElement('div');
-        formSections.className = 'socio-form-sections';
-        
-        // Determina se OPERATORE è selezionato
-        // I valori arrivano come stringhe "true" o "false" da SharePoint
-        const operatoreValue = (tesserato.operatore || '').toString().trim();
-        const operatoreUpper = operatoreValue.toUpperCase();
-        const isOperatore = operatoreValue !== '' && 
-            (operatoreUpper === 'TRUE' || operatoreUpper === 'SI' || operatoreUpper === 'SÌ' || 
-             operatoreUpper === 'S' || operatoreUpper === '1' || operatoreUpper === 'YES' || 
-             operatoreUpper === 'Y') &&
-            operatoreUpper !== 'FALSE' && operatoreUpper !== 'NO' && operatoreUpper !== '0';
-        
-        // Log per debug (solo primi 5 elementi)
-        if (index < 5) {
-            console.log(`[DEBUG] Elemento ${index + 1} - ID: ${tesserato.id}, OPERATORE: "${operatoreValue}" (isOperatore: ${isOperatore}), ATTIVO: "${tesserato.attivo}"`);
-        }
-        
-        // Determina se ATTIVO è selezionato
-        // I valori arrivano come stringhe "true" o "false" da SharePoint
-        const attivoValue = (tesserato.attivo || '').toString().trim().toUpperCase();
-        const isAttivo = attivoValue !== '' && 
-            (attivoValue === 'TRUE' || attivoValue === 'SI' || attivoValue === 'SÌ' || 
-             attivoValue === 'S' || attivoValue === '1' || attivoValue === 'YES' || 
-             attivoValue === 'Y' || attivoValue === 'ATTIVO') &&
-            attivoValue !== 'FALSE' && attivoValue !== 'NO' && attivoValue !== '0';
-        
-        // Prima riga: IDSOCIO, NOMINATIVO, COD. FISC., TIPOLOGIASOCIO, OPERATORE, ATTIVO, DISPONIBILITA, TELEFONO, NUMEROTESSERA, SCADENZATESSERA
-        const formSection1 = document.createElement('div');
-        formSection1.className = 'socio-form-section';
-        const formRow1 = document.createElement('div');
-        formRow1.className = 'socio-form-row';
-        
-        formRow1.innerHTML = `
-            <div class="socio-form-group socio-form-group-idsocio">
-                <label>IDSOCIO</label>
-                <input type="text" value="${escapeHtml(tesserato.idsocio || '')}" readonly>
-            </div>
-            <div class="socio-form-group socio-form-group-nominativo">
-                <label>NOMINATIVO</label>
-                <input type="text" value="${escapeHtml(tesserato.nominativo || '')}" readonly>
-            </div>
-            <div class="socio-form-group socio-form-group-codicefiscale">
-                <label>COD. FISC.</label>
-                <input type="text" value="${escapeHtml(tesserato.codicefiscale || '')}" readonly>
-            </div>
-            <div class="socio-form-group socio-form-group-tipologiasocio">
-                <label>TIPOLOGIA SOCIO</label>
-                <input type="text" value="${escapeHtml(tesserato.tipologiasocio || '')}" readonly>
-            </div>
-            <div class="socio-form-group socio-form-group-operatore">
-                <label>OPERATORE</label>
-                <div class="socio-checkbox-container">
-                    <input type="checkbox" ${isOperatore ? 'checked' : ''} disabled>
-                </div>
-            </div>
-            <div class="socio-form-group socio-form-group-attivo">
-                <label>ATTIVO</label>
-                <div class="socio-checkbox-container">
-                    <input type="checkbox" ${isAttivo ? 'checked' : ''} disabled>
-                </div>
-            </div>
-            <div class="socio-form-group socio-form-group-disponibilita">
-                <label>DISPONIBILITA</label>
-                <input type="text" value="${escapeHtml(tesserato.disponibilita || '')}" readonly>
-            </div>
-            <div class="socio-form-group socio-form-group-telefono">
-                <label>TELEFONO</label>
-                <input type="text" value="${escapeHtml(tesserato.telefono || '')}" readonly>
-            </div>
-            <div class="socio-form-group socio-form-group-numerotessera">
-                <label>NUMERO TESSERA</label>
-                <input type="text" value="${escapeHtml(tesserato.numerotessera || '')}" readonly>
-            </div>
-            <div class="socio-form-group socio-form-group-scadenzatessera">
-                <label>SCADENZA TESSERA</label>
-                <input type="text" value="${escapeHtml(tesserato.scadenzatessera || '')}" readonly>
-            </div>
-        `;
-        
-        formSection1.appendChild(formRow1);
-        
-        // Seconda riga: NOTAAGGIUNTIVA e pulsanti ANAGRAFICA e SERVIZI
-        const formSection2 = document.createElement('div');
-        formSection2.className = 'socio-form-section';
-        const formRow2 = document.createElement('div');
-        formRow2.className = 'socio-form-row';
-        
-        formRow2.innerHTML = `
-            <div class="socio-form-group socio-form-group-nota">
-                <label>NOTA AGGIUNTIVA</label>
-                <textarea readonly>${escapeHtml(tesserato.notaaggiuntiva || '')}</textarea>
-            </div>
-            <div class="socio-form-actions">
-                <button class="btn btn-anagrafica" data-socio-id="${tesserato.id || ''}" data-idsocio="${escapeHtml(tesserato.idsocio || '')}">ANAGRAFICA</button>
-                <button class="btn btn-servizi" data-socio-id="${tesserato.id || ''}" data-idsocio="${escapeHtml(tesserato.idsocio || '')}">SERVIZI</button>
-            </div>
-        `;
-        
-        formSection2.appendChild(formRow2);
-        
-        // Aggiungi tutte le sezioni
-        formSections.appendChild(formSection1);
-        formSections.appendChild(formSection2);
-        
-        socioBlock.appendChild(formSections);
-        containerBody.appendChild(socioBlock);
-    });
-    
-    console.log(`✓ Aggiunti ${tesserati.length} blocchi socio`);
+    containerBody.appendChild(fragment);
 }
 
 // Funzione helper per escape HTML (evita XSS)
@@ -234,17 +552,24 @@ function escapeHtml(text) {
 }
 
 // Funzione per aggiornare il conteggio visualizzato
-function updateSociCount(count) {
+function updateSociCount(count, searchTerm = '', scaduteFilter = false, archiviatiView = false) {
     const countElement = document.getElementById('soci-count');
     if (countElement) {
-        countElement.textContent = `(${count})`;
+        if (archiviatiView && !searchTerm) {
+            countElement.textContent = `(${count} archiviati)`;
+        } else if (scaduteFilter && !searchTerm) {
+            countElement.textContent = `(${count} scadute)`;
+        } else if (searchTerm || scaduteFilter || archiviatiView) {
+            countElement.textContent = `(${count} trovati)`;
+        } else {
+            countElement.textContent = `(${count})`;
+        }
     }
 }
 
-// Funzione per filtrare i tesserati per nominativo
+// Funzione per filtrare i tesserati per nominativo (usata solo se serve isolatamente)
 function filterTesseratiByNominativo(searchTerm) {
     if (!searchTerm || searchTerm.trim() === '') {
-        // Se il campo è vuoto, mostra tutti
         return allTesserati;
     }
     
@@ -256,30 +581,15 @@ function filterTesseratiByNominativo(searchTerm) {
     });
 }
 
-// Funzione per gestire la ricerca in tempo reale
+// Funzione per gestire la ricerca in tempo reale (con debounce)
 function handleSearch() {
-    const searchInput = document.getElementById('search-input');
-    const containerBody = document.getElementById('soci-container-body');
-    
-    if (!searchInput || !containerBody) {
-        return;
+    if (searchDebounceTimer) {
+        clearTimeout(searchDebounceTimer);
     }
-    
-    const searchTerm = searchInput.value;
-    const filteredTesserati = filterTesseratiByNominativo(searchTerm);
-    
-    console.log(`Ricerca: "${searchTerm}" - Trovati ${filteredTesserati.length} risultati su ${allTesserati.length} totali`);
-    
-    // Aggiorna il conteggio nel titolo
-    updateSociCount(filteredTesserati.length);
-    
-    // Ripopola la lista con i risultati filtrati
-    populateListaSoci(filteredTesserati);
-    
-    // Mostra messaggio se non ci sono risultati
-    if (filteredTesserati.length === 0 && searchTerm.trim() !== '') {
-        containerBody.innerHTML = '<div class="soci-lista-empty">Nessun socio trovato per: "' + escapeHtml(searchTerm) + '"</div>';
-    }
+    searchDebounceTimer = setTimeout(() => {
+        currentPage = 1;
+        renderSociView();
+    }, 250);
 }
 
 // Funzione per mostrare la casella di ricerca
@@ -316,12 +626,56 @@ function hideSearch() {
             searchInput.value = '';
         }
         
-        // Aggiorna il conteggio nel titolo
-        updateSociCount(allTesserati.length);
-        
-        // Ripristina tutti i tesserati
-        console.log('Ricerca cancellata - Ripristino di tutti i tesserati');
-        populateListaSoci(allTesserati);
+        currentPage = 1;
+        renderSociView();
+    }
+}
+
+function applySocioUpdateFromAnagrafica(data) {
+    if (!data || data.idsocio == null || data.idsocio === '') return;
+
+    const idsocio = String(data.idsocio);
+    const index = allTesserati.findIndex(t => String(t.idsocio) === idsocio);
+
+    if (index < 0) {
+        loadAllTesserati();
+        return;
+    }
+
+    const prev = allTesserati[index];
+    const updated = {
+        ...prev,
+        nominativo: data.nominativo ?? prev.nominativo,
+        codicefiscale: data.codicefiscale ?? prev.codicefiscale,
+        tipologiasocio: data.tipologiasocio ?? prev.tipologiasocio,
+        telefono: data.telefono ?? prev.telefono,
+        notaaggiuntiva: data.notaaggiuntiva ?? prev.notaaggiuntiva,
+        disponibilita: data.disponibilita ?? prev.disponibilita,
+        operatore: data.operatore,
+        attivo: data.attivo,
+        archivia: data.archivia
+    };
+
+    allTesserati[index] = updated;
+
+    if (data.nominativo && data.nominativo !== prev.nominativo) {
+        allTesserati = sortByNominativo(allTesserati);
+    }
+
+    updateArchiviatiButtonUI();
+    updateTessereScaduteUI();
+    renderSociView();
+}
+
+async function setupSocioAnagraficaListener() {
+    if (!isTauri()) return;
+    try {
+        const { listen } = await import('@tauri-apps/api/event');
+        await listen('socio-anagrafica-saved', (event) => {
+            applySocioUpdateFromAnagrafica(event.payload);
+        });
+    } catch (err) {
+        console.warn('Listener aggiornamento anagrafica:', err);
     }
 }
 
@@ -331,6 +685,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Inizializza Tauri
     await initTauri();
+    await setupSocioAnagraficaListener();
     
     // Carica tutti i tesserati e popola la lista
     await loadAllTesserati();
@@ -346,6 +701,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btnHideSearch) {
         btnHideSearch.addEventListener('click', hideSearch);
     }
+
+    const btnFilterScadute = document.getElementById('btn-filter-scadute');
+    if (btnFilterScadute) {
+        btnFilterScadute.addEventListener('click', toggleFilterScadute);
+    }
+
+    const btnMostraArchiviati = document.getElementById('btn-mostra-archiviati');
+    if (btnMostraArchiviati) {
+        btnMostraArchiviati.addEventListener('click', toggleMostraArchiviati);
+    }
+
+    document.getElementById('btn-nuovo-socio')?.addEventListener('click', openNuovoSocioAnagrafica);
     
     // Event listener per la ricerca in tempo reale
     const searchInput = document.getElementById('search-input');
@@ -372,11 +739,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         containerBody.addEventListener('click', (e) => {
             if (e.target.classList.contains('btn-anagrafica')) {
                 e.stopPropagation();
-                const socioId = e.target.getAttribute('data-socio-id');
                 const idsocio = e.target.getAttribute('data-idsocio');
-                console.log('Pulsante ANAGRAFICA cliccato per socio ID:', socioId, 'IDSOCIO:', idsocio);
-                // TODO: Implementare apertura anagrafica
-                alert(`Apertura anagrafica per socio ID: ${idsocio} (funzionalità in sviluppo)`);
+                const blocco = e.target.closest('.socio-block');
+                const nominativoEl = blocco?.querySelector('.socio-form-group-nominativo input');
+                const nominativo = nominativoEl?.value?.trim() || '';
+                console.log('Pulsante ANAGRAFICA cliccato, IDSOCIO:', idsocio);
+                openAnagraficaSocio(idsocio, nominativo);
             } else if (e.target.classList.contains('btn-servizi')) {
                 e.stopPropagation();
                 const socioId = e.target.getAttribute('data-socio-id');

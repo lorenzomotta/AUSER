@@ -1,0 +1,382 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #e8e6e3;
+    color: #222;
+}
+
+.report-container {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 10px 12px 20px;
+}
+
+
+.report-page-header {
+    margin-bottom: 12px;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    grid-column: 3;
+    justify-self: end;
+}
+
+.report-range {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #111;
+    white-space: nowrap;
+}
+
+/* Navigazione settimane — 3 colonne uguali */
+.settimana-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+    margin-bottom: 10px;
+}
+
+.btn-nav-settimana {
+    padding: 12px 8px;
+    font-size: 13px;
+    font-weight: bold;
+    border: 2px solid #555;
+    cursor: pointer;
+    color: #fff;
+    text-transform: uppercase;
+}
+
+.btn-sett-prec {
+    background-color: #5dade2;
+}
+
+.btn-sett-prec:hover {
+    background-color: #3498db;
+}
+
+.btn-sett-corr {
+    background-color: #27ae60;
+}
+
+.btn-sett-corr:hover {
+    background-color: #1e8449;
+}
+
+.btn-sett-succ {
+    background-color: #2e86c1;
+}
+
+.btn-sett-succ:hover {
+    background-color: #21618c;
+}
+
+/* Header — titolo centrato sotto "Settimana corrente" */
+.report-header {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-chiudi {
+    grid-column: 1;
+    justify-self: start;
+}
+
+.report-title {
+    grid-column: 2;
+    text-align: center;
+    justify-self: center;
+    width: 100%;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #333;
+    letter-spacing: 0.03em;
+    margin: 0;
+}
+
+.btn {
+    padding: 10px 22px;
+    font-size: 14px;
+    font-weight: bold;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+.btn-chiudi {
+    background-color: #e67e22;
+    color: #fff;
+}
+
+.btn-chiudi:hover {
+    background-color: #d35400;
+}
+
+.btn-stampa {
+    background-color: #27ae60;
+    color: #fff;
+}
+
+.btn-stampa:hover {
+    background-color: #1e8449;
+}
+
+.report-loading {
+    text-align: center;
+    padding: 24px;
+    color: #555;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    background: #fff;
+    border: 1px solid #999;
+}
+
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    min-width: 1100px;
+}
+
+.report-table th,
+.report-table td {
+    border: 1px solid #888;
+    vertical-align: top;
+    padding: 0;
+}
+
+/* Intestazione colonne */
+.report-table thead th {
+    background: #f0f0f0;
+    font-weight: bold;
+    text-align: center;
+}
+
+.th-settimana {
+    width: 130px;
+    min-width: 130px;
+}
+
+.th-giorno {
+    width: auto;
+}
+
+.th-label {
+    display: block;
+    font-size: 11px;
+    font-weight: bold;
+    color: #444;
+    padding: 6px 4px 4px;
+    text-transform: uppercase;
+    background: #e0e0e0;
+    border-bottom: 1px solid #888;
+}
+
+.th-value {
+    display: block;
+    font-size: 12px;
+    font-weight: normal;
+    padding: 6px 4px;
+    background: #fff;
+    min-height: 28px;
+}
+
+.th-settimana .th-value {
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.th-giorno .th-value {
+    font-weight: bold;
+}
+
+/* Colonna operatore */
+.op-cell {
+    background: #fafafa;
+    width: 130px;
+    min-width: 130px;
+}
+
+.op-nome {
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    padding: 6px 8px;
+    background: #e8e8e8;
+    border-bottom: 1px solid #bbb;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+}
+
+.op-tel {
+    font-size: 12px;
+    padding: 6px 8px;
+    min-height: 32px;
+    background: #fff;
+    color: #111;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+/* Celle servizi */
+.day-cell {
+    font-size: 11px;
+    padding: 5px 6px;
+    min-height: 68px;
+    background: #fff;
+    line-height: 1.35;
+}
+
+.day-cell .servizio-item {
+    display: block;
+    margin-bottom: 3px;
+    word-break: break-word;
+}
+
+.day-cell .servizio-item:last-child {
+    margin-bottom: 0;
+}
+
+/* Stampa A4 orizzontale */
+@page {
+    size: A4 landscape;
+    margin: 8mm 10mm;
+}
+
+@media print {
+    body {
+        background: #fff;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .no-print {
+        display: none !important;
+    }
+
+    .report-loading {
+        display: none !important;
+    }
+
+    .report-page-header {
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+        border-bottom: 2px solid #333;
+    }
+
+    .report-header {
+        grid-template-columns: 1fr 1fr 1fr;
+    }
+
+    .report-title {
+        font-size: 14pt;
+        grid-column: 2;
+    }
+
+    .header-right {
+        grid-column: 3;
+    }
+
+    .report-range {
+        font-size: 11pt;
+    }
+
+    .report-container {
+        padding: 0;
+    }
+
+    .table-wrapper {
+        overflow: visible;
+        border: none;
+    }
+
+    .report-table {
+        min-width: 0;
+        width: 100%;
+        font-size: 8pt;
+    }
+
+    .th-settimana,
+    .op-cell {
+        width: 11%;
+    }
+
+    .th-label {
+        font-size: 7pt;
+        padding: 3px 2px;
+    }
+
+    .th-value {
+        font-size: 8pt;
+        padding: 3px 2px;
+        min-height: auto;
+    }
+
+    .th-giorno .th-value,
+    .th-settimana .th-value {
+        font-weight: bold;
+    }
+
+    .op-nome {
+        font-size: 7.5pt;
+        padding: 3px 4px;
+        min-height: auto;
+    }
+
+    .op-tel {
+        font-size: 7.5pt;
+        padding: 3px 4px;
+        min-height: auto;
+    }
+
+    .day-cell {
+        font-size: 7.5pt;
+        padding: 3px 4px;
+        min-height: 48px;
+        page-break-inside: avoid;
+    }
+
+    tr {
+        page-break-inside: avoid;
+    }
+}
+
+@media screen and (max-width: 900px) {
+    .settimana-nav {
+        grid-template-columns: 1fr;
+    }
+
+    .report-header {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .btn-chiudi,
+    .report-title,
+    .header-right {
+        grid-column: 1;
+        justify-self: stretch;
+    }
+
+    .header-right {
+        justify-content: space-between;
+    }
+
+    .report-title {
+        text-align: center;
+    }
+}

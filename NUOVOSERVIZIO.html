@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nuovo Servizio - AUSER Asti</title>
+    <link rel="stylesheet" href="nuovoservizio.css">
+</head>
+<body>
+    <div class="ns-container">
+        <header class="ns-header">
+            <div class="ns-header-left">
+                <button type="button" class="btn btn-chiudi" id="btn-chiudi">CHIUDI</button>
+            </div>
+            <h1 class="ns-title">NUOVO SERVIZIO</h1>
+            <div class="ns-header-right">
+                <button type="button" class="btn btn-annulla" id="btn-annulla">ANNULLA</button>
+                <button type="button" class="btn btn-salva" id="btn-salva">SALVA</button>
+            </div>
+        </header>
+
+        <div id="ns-loading" class="ns-loading">Caricamento dati...</div>
+
+        <div id="ns-errori" class="ns-errori-box" style="display: none;" role="alert">
+            <strong>Attenzione: uno o più campi obbligatori non sono compilati:</strong>
+            <ul id="ns-errori-lista"></ul>
+        </div>
+
+        <form id="form-nuovo-servizio" class="ns-form" novalidate>
+            <!-- Passo 1: selezione trasportato + residenza affiancate -->
+            <section class="ns-section ns-section-trasportato">
+                <div class="ns-trasportato-duo">
+                    <div class="ns-col-selezione">
+                        <div class="ns-trasportato-header">
+                            <h2 class="ns-section-title">1. Seleziona il trasportato</h2>
+                        </div>
+                        <p class="ns-section-hint">Digita il nome del socio: mentre scrivi vedrai i suggerimenti.</p>
+
+                        <div class="ns-row-selezione">
+                            <div class="ns-field ns-field-idsocio">
+                                <label for="ns-idsocio">IDSOCIO</label>
+                                <input type="text" id="ns-idsocio" class="ns-input ns-input-idsocio" readonly tabindex="-1" maxlength="6">
+                            </div>
+                            <div class="ns-field ns-field-trasportato">
+                                <label for="ns-trasportato">TRASPORTATO <span class="required">*</span></label>
+                                <div class="ns-autocomplete-wrapper">
+                                    <input type="text" id="ns-trasportato" class="ns-input" autocomplete="off"
+                                        placeholder="Digita per cercare il socio...">
+                                    <div id="ns-trasportato-suggestions" class="ns-autocomplete-suggestions"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ns-tesseramento-riga">
+                            <div class="ns-tesseramento-info" id="ns-tesseramento-info"></div>
+                            <span id="ns-tessera-badge" class="ns-tessera-badge" style="display: none;"></span>
+                        </div>
+                    </div>
+
+                    <div class="ns-col-residenza" id="ns-trasportato-dettaglio">
+                        <h3 class="ns-dettaglio-titolo">Residenza del trasportato</h3>
+                        <div class="ns-residenza-grid">
+                            <div class="ns-field ns-res-comune">
+                                <label>COMUNE</label>
+                                <input type="text" id="ns-res-comune" class="ns-input" readonly tabindex="-1">
+                            </div>
+                            <div class="ns-field ns-field-provincia">
+                                <label>PROV.</label>
+                                <input type="text" id="ns-res-provincia" class="ns-input" readonly tabindex="-1">
+                            </div>
+                            <div class="ns-field ns-res-telefono">
+                                <label>TELEFONO</label>
+                                <input type="text" id="ns-res-telefono" class="ns-input" readonly tabindex="-1">
+                            </div>
+                            <div class="ns-field ns-res-indirizzo">
+                                <label>INDIRIZZO</label>
+                                <input type="text" id="ns-res-indirizzo" class="ns-input" readonly tabindex="-1">
+                            </div>
+                            <div class="ns-field ns-field-civico">
+                                <label>CIVICO</label>
+                                <input type="text" id="ns-res-civico" class="ns-input" readonly tabindex="-1">
+                            </div>
+                            <div class="ns-field ns-field-cap">
+                                <label>CAP</label>
+                                <input type="text" id="ns-res-cap" class="ns-input" readonly tabindex="-1">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="ns-field ns-field-note-aggiuntive">
+                    <div class="ns-label-nota-aggiuntive">
+                        <label for="ns-nota-aggiuntiva">NOTE AGGIUNTIVE</label>
+                        <button type="button" id="btn-modifica-nota-aggiuntiva" class="ns-btn-icona-modifica"
+                            title="Modifica note aggiuntive" disabled aria-label="Modifica note aggiuntive">
+                            <svg class="ns-icona-matita" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                                <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.83H5v-.92l9.06-9.06.92.92L5.92 20.08zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
+                            </svg>
+                            <svg class="ns-icona-spunta" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                                <path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <textarea id="ns-nota-aggiuntiva" class="ns-input ns-textarea" rows="2" readonly tabindex="-1"
+                        placeholder="Seleziona un trasportato per visualizzare le note aggiuntive del socio."></textarea>
+                </div>
+            </section>
+
+            <!-- Prelievo -->
+            <section class="ns-section">
+                <div class="ns-section-header">
+                    <h2 class="ns-section-title">2. Dati prelievo</h2>
+                    <button type="button" class="btn btn-prelievo-da-casa" id="btn-prelievo-da-casa">
+                        PRELIEVO DA CASA TRASPORTATO
+                    </button>
+                </div>
+                <div class="ns-grid ns-grid-prelievo">
+                    <div class="ns-field ns-field-data-prelievo">
+                        <label for="ns-data-prelievo">DATA PRELIEVO <span class="required">*</span></label>
+                        <input type="date" id="ns-data-prelievo" class="ns-input ns-input-data" required>
+                    </div>
+                    <div class="ns-field ns-field-ora-prelievo">
+                        <label for="ns-ora-inizio">ORA SOTTO CASA <span class="required">*</span></label>
+                        <input type="time" id="ns-ora-inizio" class="ns-input">
+                    </div>
+                    <div class="ns-field ns-field-comune-prelievo">
+                        <label for="ns-comune-prelievo">COMUNE DI PRELIEVO <span class="required">*</span></label>
+                        <input type="text" id="ns-comune-prelievo" class="ns-input">
+                    </div>
+                    <div class="ns-field ns-field-luogo-prelievo">
+                        <label for="ns-luogo-prelievo">LUOGO DI PRELIEVO <span class="required">*</span></label>
+                        <input type="text" id="ns-luogo-prelievo" class="ns-input">
+                    </div>
+                    <div class="ns-field ns-field-note-prelievo">
+                        <label for="ns-note-prelievo">NOTE PRELIEVO</label>
+                        <textarea id="ns-note-prelievo" class="ns-input ns-textarea" rows="2"></textarea>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Destinazione -->
+            <section class="ns-section">
+                <div class="ns-section-header">
+                    <h2 class="ns-section-title">3. Dati destinazione</h2>
+                    <button type="button" class="btn btn-prelievo-da-casa" id="btn-destinazione-casa-trasportato">
+                        DESTINAZIONE CASA TRASPORTATO
+                    </button>
+                </div>
+                <div class="ns-grid ns-grid-destinazione">
+                    <div class="ns-field ns-field-data-destinazione">
+                        <label for="ns-ora-arrivo">DATA DESTINAZIONE</label>
+                        <input type="date" id="ns-ora-arrivo" class="ns-input ns-input-data">
+                    </div>
+                    <div class="ns-field ns-field-comune-destinazione">
+                        <label for="ns-comune-destinazione">COMUNE DI DESTINAZIONE <span class="required">*</span></label>
+                        <input type="text" id="ns-comune-destinazione" class="ns-input">
+                    </div>
+                    <div class="ns-field ns-field-luogo-destinazione">
+                        <label for="ns-luogo-destinazione">LUOGO DI DESTINAZIONE <span class="required">*</span></label>
+                        <input type="text" id="ns-luogo-destinazione" class="ns-input">
+                    </div>
+                    <div class="ns-field ns-field-note-arrivo">
+                        <label for="ns-note-arrivo">NOTE ARRIVO</label>
+                        <textarea id="ns-note-arrivo" class="ns-input ns-textarea" rows="2"></textarea>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Servizio -->
+            <section class="ns-section">
+                <h2 class="ns-section-title">4. Dati servizio</h2>
+                <div class="ns-grid">
+                    <div class="ns-field">
+                        <label for="ns-richiedente">RICHIEDENTE <span class="required">*</span></label>
+                        <select id="ns-richiedente" class="ns-input">
+                            <option value="">— Seleziona —</option>
+                        </select>
+                    </div>
+                    <div class="ns-field">
+                        <label for="ns-tipo-servizio">TIPO SERVIZIO <span class="required">*</span></label>
+                        <select id="ns-tipo-servizio" class="ns-input">
+                            <option value="">— Seleziona —</option>
+                            <option value="STANDARD">STANDARD</option>
+                            <option value="SOLLEVATORE">SOLLEVATORE</option>
+                        </select>
+                    </div>
+                    <div class="ns-field">
+                        <label for="ns-carrozzina">CARROZZINA</label>
+                        <select id="ns-carrozzina" class="ns-input">
+                            <option value="">— Nessuna —</option>
+                            <option value="AUSER">AUSER</option>
+                            <option value="SOCIO">SOCIO</option>
+                        </select>
+                    </div>
+                    <div class="ns-field">
+                        <label for="ns-stato-servizio">STATO DEL SERVIZIO <span class="required">*</span></label>
+                        <select id="ns-stato-servizio" class="ns-input">
+                            <option value="DA ESEGUIRE">DA ESEGUIRE</option>
+                            <option value="ESEGUITO">ESEGUITO</option>
+                            <option value="ANNULLATO">ANNULLATO</option>
+                        </select>
+                    </div>
+                    <div class="ns-field span-4">
+                        <label for="ns-motivazione">MOTIVAZIONE DEL SERVIZIO</label>
+                        <div class="ns-autocomplete-wrapper">
+                            <input type="text" id="ns-motivazione" class="ns-input" autocomplete="off"
+                                placeholder="Digita per cercare una motivazione già usata...">
+                            <div id="ns-motivazione-suggestions" class="ns-autocomplete-suggestions"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Operatore e mezzo -->
+            <section class="ns-section">
+                <h2 class="ns-section-title">5. Operatore e mezzo</h2>
+                <div class="ns-grid ns-grid-operatore">
+                    <div class="ns-field ns-field-operatore">
+                        <label for="ns-operatore">OPERATORE <span class="required">*</span></label>
+                        <select id="ns-operatore" class="ns-input">
+                            <option value="">— Seleziona operatore —</option>
+                        </select>
+                    </div>
+                    <div class="ns-field ns-field-mezzo">
+                        <label for="ns-mezzo">MEZZO USATO</label>
+                        <select id="ns-mezzo" class="ns-input">
+                            <option value="">— Nessuno —</option>
+                        </select>
+                    </div>
+                    <div class="ns-field ns-field-dotazioni">
+                        <label for="ns-dotazioni">DOTAZIONI</label>
+                        <input type="text" id="ns-dotazioni" class="ns-input" readonly tabindex="-1"
+                            placeholder="Seleziona un mezzo">
+                    </div>
+                </div>
+                <div class="ns-field ns-field-note-mezzo">
+                    <div class="ns-label-nota-aggiuntive">
+                        <label for="ns-note-mezzo">NOTE MEZZO</label>
+                        <button type="button" id="btn-modifica-note-mezzo" class="ns-btn-icona-modifica"
+                            title="Modifica note mezzo" disabled aria-label="Modifica note mezzo">
+                            <svg class="ns-icona-matita" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                                <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.83H5v-.92l9.06-9.06.92.92L5.92 20.08zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
+                            </svg>
+                            <svg class="ns-icona-spunta" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                                <path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <textarea id="ns-note-mezzo" class="ns-input ns-textarea" rows="2" readonly tabindex="-1"
+                        placeholder="Seleziona un mezzo per visualizzare le note."></textarea>
+                </div>
+            </section>
+
+            <!-- Pagamento e incasso -->
+            <section class="ns-section ns-section-pagamento">
+                <div class="ns-pagamento-layout">
+                    <h2 class="ns-section-title ns-pagamento-title">6. Pagamento e incasso</h2>
+                    <div class="ns-pagamento-quick-btns" aria-label="Importi rapidi donazione">
+                        <button type="button" class="ns-btn-importo" id="btn-pagamento-gratis">GRATIS</button>
+                        <button type="button" class="ns-btn-importo" id="btn-pagamento-10">10 €.</button>
+                        <button type="button" class="ns-btn-importo" id="btn-pagamento-15">15 €.</button>
+                        <button type="button" class="ns-btn-importo" id="btn-pagamento-libero">LIBERO</button>
+                    </div>
+                    <div class="ns-grid ns-grid-pagamento">
+                    <div class="ns-field ns-field-stato-incasso">
+                        <label for="ns-stato-incasso">STATO INCASSO</label>
+                        <select id="ns-stato-incasso" class="ns-input">
+                            <option value="DA INCASSARE">DA INCASSARE</option>
+                            <option value="INCASSATO">INCASSATO</option>
+                            <option value="GRATIS">GRATIS</option>
+                            <option value="ANNULLATO">ANNULLATO</option>
+                        </select>
+                    </div>
+                    <div class="ns-field ns-field-tipo-pagamento">
+                        <label for="ns-tipo-pagamento">TIPO DI PAGAMENTO</label>
+                        <select id="ns-tipo-pagamento" class="ns-input">
+                            <option value="">— Nessuno —</option>
+                        </select>
+                    </div>
+                    <div class="ns-field ns-field-donazione">
+                        <label for="ns-pagamento">DONAZIONE / PAGAMENTO</label>
+                        <input type="text" id="ns-pagamento" class="ns-input" placeholder="es. 0,00 €">
+                    </div>
+                    <div class="ns-field ns-field-numero-ricevuta">
+                        <label for="ns-numero-ricevuta">NUMERO RICEVUTA</label>
+                        <input type="text" id="ns-numero-ricevuta" class="ns-input" placeholder="es. 1234">
+                    </div>
+                    <div class="ns-field ns-field-data-ricevuta">
+                        <label for="ns-data-ricevuta">DATA RICEVUTA</label>
+                        <input type="date" id="ns-data-ricevuta" class="ns-input ns-input-data">
+                    </div>
+                    <div class="ns-field ns-field-data-bonifico">
+                        <label for="ns-data-bonifico">DATA INCASSO</label>
+                        <input type="date" id="ns-data-bonifico" class="ns-input ns-input-data">
+                    </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Note finali -->
+            <section class="ns-section">
+                <h2 class="ns-section-title">7. Note e archiviazione</h2>
+                <div class="ns-grid">
+                    <div class="ns-field span-4">
+                        <label for="ns-note-fine-servizio">NOTE FINE SERVIZIO</label>
+                        <textarea id="ns-note-fine-servizio" class="ns-input ns-textarea" rows="3"></textarea>
+                    </div>
+                    <div class="ns-field">
+                        <label for="ns-archivia">ARCHIVIA</label>
+                        <select id="ns-archivia" class="ns-input">
+                            <option value="NO">NO</option>
+                            <option value="SI">SI</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+        </form>
+    </div>
+
+    <div id="ns-dialog-avviso" class="ns-dialog-overlay" hidden aria-hidden="true">
+        <div class="ns-dialog" role="dialog" aria-modal="true" aria-labelledby="ns-dialog-avviso-messaggio">
+            <p id="ns-dialog-avviso-messaggio" class="ns-dialog-messaggio"></p>
+            <div class="ns-dialog-actions">
+                <button type="button" id="ns-dialog-avviso-ok" class="ns-dialog-btn ns-dialog-btn-si">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ns-dialog-sino" class="ns-dialog-overlay" hidden aria-hidden="true">
+        <div class="ns-dialog" role="dialog" aria-modal="true" aria-labelledby="ns-dialog-sino-messaggio">
+            <p id="ns-dialog-sino-messaggio" class="ns-dialog-messaggio"></p>
+            <div class="ns-dialog-actions">
+                <button type="button" id="ns-dialog-sino-si" class="ns-dialog-btn ns-dialog-btn-si">SÌ</button>
+                <button type="button" id="ns-dialog-sino-no" class="ns-dialog-btn ns-dialog-btn-no">NO</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="nuovoservizio.js"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INCASSI GIORNALIERI - AUSER Asti</title>
+    <link rel="stylesheet" href="riepilogoincassi.css">
+</head>
+<body>
+    <div class="report-container">
+        <header class="report-header no-print">
+            <button type="button" class="btn btn-chiudi" id="btn-chiudi">CHIUDI</button>
+            <h1 class="report-title">
+                RIEPILOGO SERVIZI INCASSATI IN DATA
+                <span class="report-data" id="report-data-label">--/--/----</span>
+            </h1>
+            <div class="header-right">
+                <div class="header-date-nav">
+                    <button type="button" class="btn-nav-giorno" id="btn-giorno-prev" title="Giorno precedente" aria-label="Giorno precedente">&lsaquo;</button>
+                    <button type="button" class="btn-nav-giorno" id="btn-giorno-next" title="Giorno successivo" aria-label="Giorno successivo">&rsaquo;</button>
+                </div>
+                <button type="button" class="btn btn-stampa" id="btn-stampa">STAMPA</button>
+            </div>
+        </header>
+
+        <header class="report-header print-only">
+            <h1 class="report-title">
+                RIEPILOGO SERVIZI INCASSATI IN DATA
+                <span class="report-data" id="report-data-label-print">--/--/----</span>
+            </h1>
+        </header>
+
+        <div id="report-loading" class="report-loading">Caricamento servizi...</div>
+        <div id="report-empty" class="report-empty" style="display: none;">Nessun incasso per questa data.</div>
+
+        <div id="report-servizi" class="report-servizi"></div>
+
+        <footer class="report-footer">
+            <span class="totale-label">TOTALE INCASSO DELLA GIORNATA</span>
+            <span class="totale-valore" id="totale-incasso">0,00 €</span>
+        </footer>
+
+        <div class="report-pagina print-only" id="report-pagina">Pagina 1 di 1</div>
+    </div>
+
+    <script src="riepilogoincassi.js"></script>
+</body>
+</html>

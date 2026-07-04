@@ -22,40 +22,99 @@ function isTauri() {
             window.__TAURI_IPC__ !== undefined);
 }
 
+// Converte un valore campo (stringa, booleano o numero) in testo
+function normalizeFieldValue(value) {
+    if (value === undefined || value === null) return '';
+    if (typeof value === 'boolean') return value ? 'true' : 'false';
+    return String(value).trim();
+}
+
+// Verifica se un flag (Operatore, Attivo, ...) è "vero"
+function isTruthyFlag(value) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    const s = normalizeFieldValue(value).toUpperCase();
+    if (s === '' || s === 'FALSE' || s === 'NO' || s === '0') return false;
+    return s === 'TRUE' || s === 'SI' || s === 'SÌ' || s === 'S' || s === '1' ||
+           s === 'YES' || s === 'Y' || s === 'ATTIVO';
+}
+
 // Funzione helper per verificare se un tesserato è operatore
 function isOperatore(tesserato) {
-    if (!tesserato || tesserato.operatore === undefined || tesserato.operatore === null) {
-        return false;
+    if (!tesserato) return false;
+    return isTruthyFlag(tesserato.operatore);
+}
+
+// Funzione helper per verificare se un tesserato è attivo
+function isAttivo(tesserato) {
+    if (!tesserato) return false;
+    return isTruthyFlag(tesserato.attivo);
+}
+
+// Apre la maschera anagrafica del socio/operatore in una nuova finestra Tauri
+async function openAnagraficaSocio(idsocio, nominativo) {
+    if (!idsocio) {
+        alert('ID socio non disponibile');
+        return;
     }
-    
-    const operatoreValue = (tesserato.operatore || '').toString().trim();
-    
-    // Se è vuoto, non è operatore
-    if (operatoreValue === '') {
-        return false;
+
+    const url = `ANAGRAFICASOCI.html?idsocio=${encodeURIComponent(idsocio)}`;
+    const title = nominativo
+        ? `Anagrafica — ${nominativo}`
+        : `Anagrafica socio ${idsocio}`;
+
+    if (!isTauri()) {
+        window.open(url, '_blank');
+        return;
     }
-    
-    const operatoreUpper = operatoreValue.toUpperCase();
-    
-    // Verifica che sia uno dei valori positivi
-    const isPositive = operatoreUpper === 'TRUE' || 
-                       operatoreUpper === 'SI' || 
-                       operatoreUpper === 'SÌ' || 
-                       operatoreUpper === 'S' || 
-                       operatoreUpper === '1' || 
-                       operatoreUpper === 'YES' || 
-                       operatoreUpper === 'Y';
-    
-    // Verifica che NON sia uno dei valori negativi
-    const isNegative = operatoreUpper === 'FALSE' || 
-                       operatoreUpper === 'NO' || 
-                       operatoreUpper === '0';
-    
-    return isPositive && !isNegative;
+
+    try {
+        const { WebviewWindow } = await import('@tauri-apps/api/window');
+        const label = `anagrafica-socio-${idsocio}`;
+
+        const existing = WebviewWindow.getByLabel(label);
+        if (existing) {
+            try {
+                await existing.show();
+                await existing.setFocus();
+                return;
+            } catch (err) {
+                console.warn('Finestra anagrafica esistente non riutilizzabile, ne creo una nuova:', err);
+                try {
+                    await existing.close();
+                } catch (_) { /* etichetta potrebbe essere già libera */ }
+            }
+        }
+
+        const webview = new WebviewWindow(label, {
+            url,
+            title,
+            width: 1100,
+            height: 540,
+            resizable: true,
+            maximized: false,
+            decorations: true,
+            center: true
+        });
+
+        webview.setFocus().catch((err) => {
+            console.warn('setFocus anagrafica:', err);
+        });
+    } catch (error) {
+        console.error('Errore apertura anagrafica:', error);
+        alert(`Impossibile aprire l'anagrafica: ${error.message || error}`);
+    }
 }
 
 // Cache globale per gli operatori (prima del filtro di ricerca)
 let allOperatori = [];
+
+// Ordina per nominativo (A→Z, regole italiane)
+function sortByNominativo(list) {
+    return [...list].sort((a, b) =>
+        (a.nominativo || '').localeCompare(b.nominativo || '', 'it', { sensitivity: 'base' })
+    );
+}
 
 // Carica tutti i tesserati, filtra solo quelli con operatore = "SI" e popola la lista
 async function loadAllOperatori() {
@@ -92,7 +151,12 @@ async function loadAllOperatori() {
     }
     
     try {
-        console.log('Chiamata a get_all_tesserati...');
+        console.log('Chiamata a get_all_tesserati (Supabase)...');
+        try {
+            await invoke('init_supabase_from_config');
+        } catch (initErr) {
+            console.warn('Init Supabase:', initErr);
+        }
         const tesserati = await invoke('get_all_tesserati');
         console.log('Risposta ricevuta:', tesserati);
         console.log(`Tipo: ${typeof tesserati}, È array: ${Array.isArray(tesserati)}`);
@@ -145,14 +209,14 @@ async function loadAllOperatori() {
             console.log('🔍 DEBUG - Codice fiscale primo elemento:', operatori[0].codicefiscale);
         }
         
-        // SALVA la copia completa degli operatori PRIMA di popolare
-        allOperatori = operatori || [];
+        // SALVA la copia completa degli operatori PRIMA di popolare (ordine alfabetico)
+        allOperatori = sortByNominativo(operatori);
         
         // Aggiorna il conteggio nel titolo
-        updateOperatoriCount(operatori.length);
+        updateOperatoriCount(allOperatori.length);
         
-        console.log(`Popolamento container con ${operatori.length} operatori`);
-        populateListaOperatori(operatori);
+        console.log(`Popolamento container con ${allOperatori.length} operatori`);
+        populateListaOperatori(allOperatori);
     } catch (error) {
         console.error('Errore nel caricamento operatori:', error);
         console.error('Stack trace:', error.stack);
@@ -182,23 +246,14 @@ function populateListaOperatori(operatori) {
         const formSections = document.createElement('div');
         formSections.className = 'socio-form-sections';
         
-        // Determina se OPERATORE è selezionato (usa la stessa funzione isOperatore per coerenza)
-        // Dovrebbe essere sempre true visto che siamo già filtrati, ma usiamo la funzione per sicurezza
+        // Determina se OPERATORE e ATTIVO sono selezionati
         const isOperatoreChecked = isOperatore(operatore);
-        const operatoreValue = (operatore.operatore || '').toString().trim();
+        const isAttivoChecked = isAttivo(operatore);
         
         // Log per debug (solo primi 5 elementi)
         if (index < 5) {
-            console.log(`[DEBUG] Elemento ${index + 1} - ID: ${operatore.id}, OPERATORE: "${operatoreValue}" (isOperatore: ${isOperatoreChecked}), ATTIVO: "${operatore.attivo}"`);
+            console.log(`[DEBUG] Elemento ${index + 1} - ID: ${operatore.id}, OPERATORE: ${JSON.stringify(operatore.operatore)} (checked: ${isOperatoreChecked}), ATTIVO: ${JSON.stringify(operatore.attivo)} (checked: ${isAttivoChecked})`);
         }
-        
-        // Determina se ATTIVO è selezionato
-        const attivoValue = (operatore.attivo || '').toString().trim().toUpperCase();
-        const isAttivo = attivoValue !== '' && 
-            (attivoValue === 'TRUE' || attivoValue === 'SI' || attivoValue === 'SÌ' || 
-             attivoValue === 'S' || attivoValue === '1' || attivoValue === 'YES' || 
-             attivoValue === 'Y' || attivoValue === 'ATTIVO') &&
-            attivoValue !== 'FALSE' && attivoValue !== 'NO' && attivoValue !== '0';
         
         // Prima riga: IDSOCIO, NOMINATIVO, COD. FISC., TIPOLOGIASOCIO, OPERATORE, ATTIVO, DISPONIBILITA, TELEFONO, NUMEROTESSERA, SCADENZATESSERA
         const formSection1 = document.createElement('div');
@@ -232,7 +287,7 @@ function populateListaOperatori(operatori) {
             <div class="socio-form-group socio-form-group-attivo">
                 <label>ATTIVO</label>
                 <div class="socio-checkbox-container">
-                    <input type="checkbox" ${isAttivo ? 'checked' : ''} disabled>
+                    <input type="checkbox" ${isAttivoChecked ? 'checked' : ''} disabled>
                 </div>
             </div>
             <div class="socio-form-group socio-form-group-disponibilita">
@@ -311,10 +366,12 @@ function filterOperatoriByNominativo(searchTerm) {
     
     const searchLower = searchTerm.trim().toLowerCase();
     
-    return allOperatori.filter(operatore => {
-        const nominativo = (operatore.nominativo || '').toLowerCase();
-        return nominativo.includes(searchLower);
-    });
+    return sortByNominativo(
+        allOperatori.filter(operatore => {
+            const nominativo = (operatore.nominativo || '').toLowerCase();
+            return nominativo.includes(searchLower);
+        })
+    );
 }
 
 // Funzione per gestire la ricerca in tempo reale
@@ -386,12 +443,92 @@ function hideSearch() {
     }
 }
 
+function refreshOperatoriView() {
+    const searchInput = document.getElementById('search-input');
+    const searchTerm = searchInput ? searchInput.value.trim() : '';
+
+    if (searchTerm) {
+        handleSearch();
+        return;
+    }
+
+    updateOperatoriCount(allOperatori.length);
+    const containerBody = document.getElementById('soci-container-body');
+    if (!containerBody) return;
+
+    if (allOperatori.length === 0) {
+        containerBody.innerHTML = '<div class="soci-lista-empty">Nessun operatore trovato</div>';
+        return;
+    }
+
+    populateListaOperatori(allOperatori);
+}
+
+function applyOperatoreUpdateFromAnagrafica(data) {
+    if (!data || data.idsocio == null || data.idsocio === '') return;
+
+    const idsocio = String(data.idsocio);
+    const isNowOperatore = isTruthyFlag(data.operatore);
+    const index = allOperatori.findIndex(t => String(t.idsocio) === idsocio);
+
+    if (!isNowOperatore) {
+        if (index >= 0) {
+            allOperatori.splice(index, 1);
+            refreshOperatoriView();
+        }
+        return;
+    }
+
+    const prev = index >= 0 ? allOperatori[index] : {};
+    const updated = {
+        ...prev,
+        id: data.id || prev.id || 0,
+        idsocio,
+        nominativo: data.nominativo ?? prev.nominativo ?? '',
+        codicefiscale: data.codicefiscale ?? prev.codicefiscale ?? '',
+        tipologiasocio: data.tipologiasocio ?? prev.tipologiasocio ?? '',
+        telefono: data.telefono ?? prev.telefono ?? '',
+        notaaggiuntiva: data.notaaggiuntiva ?? prev.notaaggiuntiva ?? '',
+        disponibilita: data.disponibilita ?? prev.disponibilita ?? '',
+        numerotessera: prev.numerotessera ?? '',
+        scadenzatessera: prev.scadenzatessera ?? '',
+        operatore: data.operatore,
+        attivo: data.attivo,
+        archivia: data.archivia
+    };
+
+    if (index >= 0) {
+        allOperatori[index] = updated;
+    } else {
+        allOperatori.push(updated);
+    }
+
+    if (data.nominativo && data.nominativo !== prev.nominativo) {
+        allOperatori = sortByNominativo(allOperatori);
+    }
+
+    refreshOperatoriView();
+}
+
+async function setupSocioAnagraficaListener() {
+    if (!isTauri()) return;
+    try {
+        const { listen } = await import('@tauri-apps/api/event');
+        await listen('socio-anagrafica-saved', (event) => {
+            applyOperatoreUpdateFromAnagrafica(event.payload);
+        });
+    } catch (err) {
+        console.warn('Listener aggiornamento anagrafica:', err);
+    }
+}
+
 // Event listeners
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('=== ELENCOOPERATORI.html caricato ===');
     
     // Inizializza Tauri
     await initTauri();
+    await setupSocioAnagraficaListener();
     
     // Carica tutti gli operatori e popola la lista
     await loadAllOperatori();
@@ -433,11 +570,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         containerBody.addEventListener('click', (e) => {
             if (e.target.classList.contains('btn-anagrafica')) {
                 e.stopPropagation();
-                const socioId = e.target.getAttribute('data-socio-id');
                 const idsocio = e.target.getAttribute('data-idsocio');
-                console.log('Pulsante ANAGRAFICA cliccato per operatore ID:', socioId, 'IDSOCIO:', idsocio);
-                // TODO: Implementare apertura anagrafica
-                alert(`Apertura anagrafica per operatore ID: ${idsocio} (funzionalità in sviluppo)`);
+                const blocco = e.target.closest('.socio-block');
+                const nominativoEl = blocco?.querySelector('.socio-form-group-nominativo input');
+                const nominativo = nominativoEl?.value?.trim() || '';
+                console.log('Pulsante ANAGRAFICA cliccato, IDSOCIO:', idsocio);
+                openAnagraficaSocio(idsocio, nominativo);
             } else if (e.target.classList.contains('btn-servizi')) {
                 e.stopPropagation();
                 const socioId = e.target.getAttribute('data-socio-id');

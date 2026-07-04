@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anagrafica Socio - AUSER Asti</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="anagraficasoci.css">
+</head>
+<body>
+    <div class="anagrafica-container">
+        <header class="anagrafica-header">
+            <div class="header-left">
+                <h1 class="page-title">ANAGRAFICA SOCIO</h1>
+                <span class="socio-subtitle" id="socio-subtitle">Caricamento...</span>
+            </div>
+            <div class="header-right">
+                <span class="save-status" id="save-status" aria-live="polite"></span>
+                <button type="button" class="btn btn-modifica" id="btn-modifica-anagrafica">MODIFICA</button>
+                <button type="button" class="btn btn-salva" id="btn-salva-anagrafica" hidden>SALVA</button>
+                <button type="button" class="btn btn-annulla-anagrafica" id="btn-annulla-anagrafica" hidden>ANNULLA</button>
+                <button type="button" class="btn btn-chiudi" id="btn-chiudi">CHIUDI</button>
+            </div>
+        </header>
+
+        <main class="anagrafica-main" id="anagrafica-main">
+            <div class="loading-message" id="loading-message">Caricamento dati socio...</div>
+
+            <section class="anagrafica-section" id="section-anagrafica" style="display: none;">
+                <div class="section-bar">
+                    <h2 class="section-title">Dati anagrafici</h2>
+                    <div class="inline-flags">
+                        <label class="flag-item"><input type="checkbox" id="field-operatore"><span>Operatore</span></label>
+                        <label class="flag-item"><input type="checkbox" id="field-attivo"><span>Attivo</span></label>
+                        <span class="flags-sep">|</span>
+                        <label class="flag-item"><input type="checkbox" id="field-disp-autista" value="AUTISTA"><span>Autista</span></label>
+                        <label class="flag-item"><input type="checkbox" id="field-disp-centralista" value="CENTRALISTA"><span>Centralista</span></label>
+                        <label class="flag-item flag-archivia"><input type="checkbox" id="field-archivia"><span>Archiviato</span></label>
+                    </div>
+                </div>
+
+                <form id="form-anagrafica" class="anagrafica-form" autocomplete="off">
+                    <input type="hidden" id="field-row-id" name="row_id">
+
+                    <div class="anagrafica-rows">
+                        <!-- Riga 1: ID, Nominativo, Tipologia, CF, Sesso, nascita -->
+                        <div class="form-row-line row-anagrafica">
+                            <div class="form-group field-xs">
+                                <label for="field-idsocio">ID</label>
+                                <input type="text" id="field-idsocio" class="form-control" readonly>
+                            </div>
+                            <div class="form-group field-nominativo">
+                                <label for="field-nominativo">NOMINATIVO</label>
+                                <input type="text" id="field-nominativo" class="form-control" required>
+                            </div>
+                            <div class="form-group field-tipologia">
+                                <label for="field-tipologiasocio">TIPOLOGIA</label>
+                                <input type="text" id="field-tipologiasocio" class="form-control">
+                            </div>
+                            <div class="form-group field-cf">
+                                <label for="field-codicefiscale">COD. FISCALE</label>
+                                <input type="text" id="field-codicefiscale" class="form-control" maxlength="16">
+                            </div>
+                            <div class="form-group field-xs">
+                                <label for="field-sesso">SESSO</label>
+                                <select id="field-sesso" class="form-control">
+                                    <option value="">—</option>
+                                    <option value="M">M</option>
+                                    <option value="F">F</option>
+                                </select>
+                            </div>
+                            <div class="form-group field-nasc-comune">
+                                <label for="field-nascita-comune">COMUNE NASCITA</label>
+                                <input type="text" id="field-nascita-comune" class="form-control">
+                            </div>
+                            <div class="form-group field-data">
+                                <label for="field-nascita-data">DATA NASC.</label>
+                                <input type="date" id="field-nascita-data" class="form-control">
+                            </div>
+                        </div>
+
+                        <!-- Riga 2: residenza + telefono -->
+                        <div class="form-row-line row-residenza">
+                            <div class="form-group field-indirizzo">
+                                <label for="field-residenza-indirizzo">INDIRIZZO</label>
+                                <input type="text" id="field-residenza-indirizzo" class="form-control">
+                            </div>
+                            <div class="form-group field-xs">
+                                <label for="field-residenza-civico">CIV.</label>
+                                <input type="text" id="field-residenza-civico" class="form-control">
+                            </div>
+                            <div class="form-group field-cap">
+                                <label for="field-residenza-cap">CAP</label>
+                                <input type="text" id="field-residenza-cap" class="form-control" maxlength="5" inputmode="numeric">
+                            </div>
+                            <div class="form-group field-comune">
+                                <label for="field-residenza-comune">COMUNE</label>
+                                <input type="text" id="field-residenza-comune" class="form-control">
+                            </div>
+                            <div class="form-group field-xs">
+                                <label for="field-residenza-provincia">PR.</label>
+                                <input type="text" id="field-residenza-provincia" class="form-control" maxlength="2">
+                            </div>
+                            <div class="form-group field-tel">
+                                <label for="field-telefono">TELEFONO</label>
+                                <input type="text" id="field-telefono" class="form-control">
+                            </div>
+                        </div>
+
+                        <!-- Riga 3: nota a tutta larghezza -->
+                        <div class="form-row-line row-nota">
+                            <div class="form-group field-nota-full">
+                                <label for="field-nota">NOTA AGGIUNTIVA</label>
+                                <textarea id="field-nota" class="form-control nota-compact" rows="1"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </section>
+
+            <section class="anagrafica-section section-tesseramenti" id="section-tesseramenti" style="display: none;">
+                <div class="section-bar">
+                    <h2 class="section-title">Tesseramenti</h2>
+                    <button type="button" class="btn btn-nuovo-tesseramento" id="btn-nuovo-tesseramento">+ NUOVO</button>
+                </div>
+
+                <div class="tesseramenti-storico" id="tesseramenti-storico">
+                    <p class="storico-vuoto" id="storico-vuoto">Nessun tesseramento registrato.</p>
+                    <table class="storico-table" id="storico-table" style="display: none;">
+                        <thead>
+                            <tr>
+                                <th>Anno</th>
+                                <th>N. tessera</th>
+                                <th>Data</th>
+                                <th>Scadenza</th>
+                                <th>Tipologia</th>
+                                <th>Quota</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="storico-tbody"></tbody>
+                    </table>
+                </div>
+
+                <div class="tesseramento-editor" id="tesseramento-editor">
+                    <h3 class="editor-title" id="editor-title">Modifica tesseramento</h3>
+                    <form id="form-tesseramento" class="tesseramento-form">
+                        <input type="hidden" id="tess-id" value="">
+                        <div class="form-grid compact">
+                            <div class="form-group col-narrow">
+                                <label for="tess-anno">ANNO</label>
+                                <input type="number" id="tess-anno" class="form-control" min="1990" max="2100" required>
+                            </div>
+                            <div class="form-group col-span-2">
+                                <label for="tess-numero">N. TESSERA</label>
+                                <input type="text" id="tess-numero" class="form-control">
+                            </div>
+                            <div class="form-group col-narrow">
+                                <label for="tess-data">DATA</label>
+                                <input type="date" id="tess-data" class="form-control">
+                            </div>
+                            <div class="form-group col-narrow">
+                                <label for="tess-scadenza">SCADENZA</label>
+                                <input type="text" id="tess-scadenza" class="form-control" readonly>
+                            </div>
+                            <div class="form-group col-span-2 field-tess-tipologia">
+                                <label for="tess-tipologia">TIPOLOGIA</label>
+                                <input type="text" id="tess-tipologia" class="form-control">
+                            </div>
+                            <div class="form-group col-narrow">
+                                <label for="tess-quota">QUOTA €</label>
+                                <input type="text" id="tess-quota" class="form-control" inputmode="decimal">
+                            </div>
+                            <div class="form-group col-span-4">
+                                <label for="tess-note">NOTE</label>
+                                <input type="text" id="tess-note" class="form-control">
+                            </div>
+                            <div class="form-group col-span-2 editor-actions-cell">
+                                <button type="button" class="btn btn-annulla-tess" id="btn-annulla-tess">Annulla</button>
+                                <button type="submit" class="btn btn-salva-tess" id="btn-salva-tess">SALVA</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="anagraficasoci.js"></script>
+</body>
+</html>

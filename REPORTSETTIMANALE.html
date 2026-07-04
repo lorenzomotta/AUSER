@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report Settimanale - AUSER Asti</title>
+    <link rel="stylesheet" href="reportsettimanale.css">
+</head>
+<body>
+    <div class="report-container">
+        <div class="report-page-header">
+            <nav class="settimana-nav no-print">
+                <button type="button" class="btn-nav-settimana btn-sett-prec" id="btn-sett-prec">VEDI SETTIMANA PRECEDENTE</button>
+                <button type="button" class="btn-nav-settimana btn-sett-corr" id="btn-sett-corr">VEDI SETTIMANA CORRENTE</button>
+                <button type="button" class="btn-nav-settimana btn-sett-succ" id="btn-sett-succ">VEDI SETTIMANA SUCCESSIVA</button>
+            </nav>
+
+            <header class="report-header">
+                <button type="button" class="btn btn-chiudi no-print" id="btn-chiudi">CHIUDI</button>
+                <h1 class="report-title">REPORT SETTIMANALE</h1>
+                <div class="header-right">
+                    <span class="report-range" id="report-range-label"></span>
+                    <button type="button" class="btn btn-stampa no-print" id="btn-stampa">STAMPA</button>
+                </div>
+            </header>
+        </div>
+
+        <div id="report-loading" class="report-loading">Caricamento dati...</div>
+        <div class="table-wrapper">
+            <table class="report-table" id="report-table" aria-label="Report settimanale servizi per operatore">
+                <thead id="report-thead"></thead>
+                <tbody id="report-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="reportsettimanale.js"></script>
+</body>
+</html>

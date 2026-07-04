@@ -82,6 +82,7 @@
     "windows": [
       {
         "fullscreen": false,
+        "maximized": true,
         "resizable": true,
         "title": "AUSER Asti - Gestione Operativa",
         "width": 1400,

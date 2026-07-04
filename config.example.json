@@ -5,15 +5,31 @@
     "client_secret": "your-client-secret-here",
     "tenant_id": "your-tenant-id-here"
   },
+  "supabase": {
+    "url": "https://TUO-PROGETTO.supabase.co",
+    "anon_key": "your-anon-key-here",
+    "publishable_key": "sb_publishable_...",
+    "secret_key": "sb_secret_...",
+    "tables": {
+      "tesserati": "tesserati_supa",
+      "servizi": "Servizi_supa",
+      "automezzi": "Automezzi_Supa",
+      "dotazioni_mezzi": "DotazioniMezzi_supa",
+      "impostazioni": "Impostazioni_supa",
+      "motivazioni_trasporto": "Motivazioni_trasporto_supa",
+      "motorizzazioni": "Motorizzazioni_supa",
+      "richiedenti": "Richiedenti_supa",
+      "stato_del_servizio": "StatoDelServizio_supa",
+      "telefoni": "Telefoni_supa",
+      "tipo_pagamenti": "TipoPagamenti_supa",
+      "tipo_socio": "TipoSocio_supa",
+      "tratte": "Tratte_supa",
+      "user_permissions": "user_permissions",
+      "tesseramenti": "tesseramenti_supa"
+    }
+  },
   "github": {
     "username": "your-username",
     "repo": "auser-tauri-app"
-  },
-  "lists": {
-    "servizi_giorno": "ServiziDelGiorno",
-    "prossimi_servizi": "ProssimiServizi",
-    "servizi_inseriti_oggi": "ServiziInseritiOggi",
-    "tessere_da_fare": "TessereDaFare"
   }
 }
-

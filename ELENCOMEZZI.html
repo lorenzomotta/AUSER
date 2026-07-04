@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elenco Mezzi - AUSER Asti</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="elencomezzi.css">
+</head>
+<body>
+    <div class="container-fluid mezzi-container">
+        <div class="page-header-wrapper">
+            <button class="btn-header-nuovo-mezzo" id="btn-nuovo-mezzo" type="button">NUOVO MEZZO</button>
+            <div class="page-title-row">
+                <h1 class="page-title">ELENCO MEZZI <span id="mezzi-count" class="mezzi-count">(0)</span></h1>
+                <button class="btn-icon-search" id="btn-show-search" title="Cerca" type="button">
+                    <span class="icon-search">🔍</span>
+                </button>
+                <div class="search-container" id="search-container" style="display: none;">
+                    <input type="text" id="search-input" class="search-input" placeholder="Cerca per n., marca, modello, targa...">
+                    <button class="btn-icon-close" id="btn-hide-search" title="Chiudi ricerca" type="button">
+                        <span class="icon-close">✕</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="mezzi-container-scrollabile" id="mezzi-container-body">
+            <div class="mezzi-lista-loading">Caricamento mezzi...</div>
+        </div>
+    </div>
+
+    <div id="modal-nuovo-mezzo" class="mezzi-modal-overlay" hidden>
+        <div class="mezzi-modal" role="dialog" aria-labelledby="modal-nuovo-mezzo-title" aria-modal="true">
+            <div class="mezzi-modal-header">
+                <h2 id="modal-nuovo-mezzo-title">NUOVO MEZZO</h2>
+                <button type="button" class="mezzi-modal-close" id="btn-modal-nuovo-close" title="Chiudi">&times;</button>
+            </div>
+            <form id="form-nuovo-mezzo" class="mezzi-modal-body" autocomplete="off">
+                <div class="mezzi-modal-grid">
+                    <div class="mezzi-modal-row mezzi-modal-row-principale">
+                        <div class="mezzo-form-group mezzo-form-group-nr">
+                            <label for="modal-nr-automezzo">N. MEZZO</label>
+                            <input type="text" id="modal-nr-automezzo" data-field="nr_automezzo" required>
+                        </div>
+                        <div class="mezzo-form-group mezzo-form-group-marca">
+                            <label for="modal-marca">MARCA</label>
+                            <input type="text" id="modal-marca" data-field="marca">
+                        </div>
+                        <div class="mezzo-form-group mezzo-form-group-modello">
+                            <label for="modal-modello">MODELLO</label>
+                            <input type="text" id="modal-modello" data-field="modello">
+                        </div>
+                        <div class="mezzo-form-group mezzo-form-group-targa">
+                            <label for="modal-targa">TARGA</label>
+                            <input type="text" id="modal-targa" data-field="targa">
+                        </div>
+                        <div class="mezzo-form-group mezzo-form-group-dotazione">
+                            <label for="modal-dotazione">DOTAZ.</label>
+                            <input type="text" id="modal-dotazione" data-field="dotazione">
+                        </div>
+                    </div>
+                    <div class="mezzi-modal-row mezzi-modal-row-scadenze">
+                        <div class="mezzo-form-group mezzo-form-group-scadenza">
+                            <label for="modal-scadenza-ztl">SCAD. ZTL</label>
+                            <input type="text" id="modal-scadenza-ztl" data-field="scadenza_ztl" placeholder="gg/mm/aaaa">
+                        </div>
+                        <div class="mezzo-form-group mezzo-form-group-scadenza">
+                            <label for="modal-scadenza-assic">SCAD. ASSIC.</label>
+                            <input type="text" id="modal-scadenza-assic" data-field="scadenza_assicurazione" placeholder="gg/mm/aaaa">
+                        </div>
+                        <div class="mezzo-form-group mezzo-form-group-scadenza">
+                            <label for="modal-scadenza-bollo">SCAD. BOLLO</label>
+                            <input type="text" id="modal-scadenza-bollo" data-field="scadenza_bollo" placeholder="gg/mm/aaaa">
+                        </div>
+                        <div class="mezzo-form-group mezzo-form-group-inservizio">
+                            <label>IN SERV.</label>
+                            <div class="mezzo-checkbox-container">
+                                <input type="checkbox" id="modal-in-servizio" data-field="in_servizio" checked>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mezzo-form-group mezzo-form-group-nota mezzi-modal-nota">
+                    <label for="modal-note">NOTE</label>
+                    <textarea id="modal-note" data-field="note_mezzo" rows="3"></textarea>
+                </div>
+                <p id="modal-nuovo-mezzo-status" class="mezzi-modal-status" aria-live="polite"></p>
+            </form>
+            <div class="mezzi-modal-footer">
+                <button type="button" class="btn-modal-annulla" id="btn-modal-nuovo-annulla">ANNULLA</button>
+                <button type="button" class="btn-modal-salva" id="btn-modal-nuovo-salva">SALVA</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="mezzi-footer">
+        <button class="btn btn-chiudi" id="btn-chiudi" type="button">CHIUDI</button>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="elencomezzi.js"></script>
+</body>
+</html>

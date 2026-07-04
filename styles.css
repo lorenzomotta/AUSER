@@ -20,9 +20,10 @@ body {
     color: white;
     display: flex;
     flex-direction: column;
-    box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+    box-shadow: -2px 0 4px rgba(0,0,0,0.1);
     position: fixed;
-    left: 0;
+    right: 0;
+    left: auto;
     top: 0;
     height: 100vh;
     z-index: 1000;
@@ -122,7 +123,7 @@ body {
 .btn-sidebar-nav:hover {
     background-color: rgba(255, 255, 255, 0.2);
     border-color: rgba(255, 255, 255, 0.4);
-    transform: translateX(5px);
+    transform: translateX(-5px);
 }
 
 .sidebar-divider {
@@ -134,7 +135,8 @@ body {
 /* Main Wrapper - contiene header, content e footer */
 .main-wrapper {
     flex: 1;
-    margin-left: 250px;
+    margin-right: 250px;
+    margin-left: 0;
     display: flex;
     flex-direction: column;
     min-height: 100vh;
@@ -152,7 +154,8 @@ body {
 .btn-close-app-header {
     position: absolute;
     top: 15px;
-    right: 20px;
+    left: 20px;
+    right: auto;
     background-color: #dc3545;
     color: white;
     border: 2px solid white;
@@ -286,6 +289,124 @@ body {
 .services-column-orange .service-entry {
     background-color: rgba(255, 255, 255, 0.95);
     color: #333;
+}
+
+/* PROSSIMI SERVIZI — layout compatto, DATA / O.S.C. / O.A.D. sulla stessa riga */
+#prossimi-servizi {
+    padding: 6px;
+}
+
+#prossimi-servizi .service-entry {
+    padding: 4px 6px;
+    margin-bottom: 6px;
+}
+
+#prossimi-servizi .service-header {
+    margin-bottom: 2px;
+    gap: 6px;
+    align-items: center;
+}
+
+#prossimi-servizi .service-id {
+    padding: 2px 6px;
+    font-size: 11px;
+    height: 24px;
+    min-width: 44px;
+    width: 44px;
+}
+
+#prossimi-servizi .service-row {
+    margin-bottom: 2px;
+    gap: 4px;
+}
+
+#prossimi-servizi .service-row:has(.service-data-field) {
+    flex-wrap: nowrap;
+    align-items: center;
+}
+
+#prossimi-servizi .service-field-inline,
+#prossimi-servizi .service-nominativo,
+#prossimi-servizi .service-data-field {
+    gap: 4px;
+}
+
+#prossimi-servizi .service-field-inline label,
+#prossimi-servizi .service-data-field label,
+#prossimi-servizi .service-nominativo label {
+    font-size: 11px;
+}
+
+#prossimi-servizi .service-field-inline input,
+#prossimi-servizi .service-date-input {
+    padding: 2px 4px;
+    font-size: 11px;
+    line-height: 1.2;
+}
+
+#prossimi-servizi .service-date-input {
+    width: 72px;
+}
+
+#prossimi-servizi .service-ora-sotto-casa {
+    width: auto;
+    flex: 0 0 auto;
+}
+
+#prossimi-servizi .service-ora-sotto-casa input {
+    width: 40px;
+}
+
+#prossimi-servizi .service-row .service-field-inline.service-ora-destinazione {
+    margin-left: 0 !important;
+    max-width: none !important;
+    flex: 0 0 auto !important;
+    gap: 4px !important;
+}
+
+#prossimi-servizi .service-row .service-field-inline.service-ora-destinazione label {
+    font-size: 11px !important;
+}
+
+#prossimi-servizi .service-row .service-field-inline.service-ora-destinazione input {
+    width: 48px !important;
+    min-width: 40px !important;
+    max-width: 56px !important;
+    padding: 2px 4px !important;
+    font-size: 11px !important;
+}
+
+#prossimi-servizi .service-field-full {
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+#prossimi-servizi .service-field-full label {
+    display: inline;
+    margin-bottom: 0;
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+#prossimi-servizi .service-field-full input {
+    padding: 2px 4px;
+    font-size: 11px;
+    line-height: 1.2;
+}
+
+#prossimi-servizi .service-buttons {
+    margin-top: 3px;
+    gap: 4px;
+}
+
+#prossimi-servizi .btn-stampa,
+#prossimi-servizi .btn-modifica,
+#prossimi-servizi .btn-completa {
+    padding: 4px 8px;
+    font-size: 11px;
 }
 
 /* Rettangolo giallo per SERVIZI INSERITI OGGI */
@@ -604,6 +725,42 @@ body {
     color: #333;
 }
 
+/* TESSERE DA FARE — font e compattezza allineati a prossimi servizi */
+#tessere-da-fare {
+    padding: 6px;
+}
+
+#tessere-da-fare .card-entry {
+    padding: 4px 6px;
+    margin-bottom: 6px;
+    gap: 6px;
+}
+
+#tessere-da-fare .card-id {
+    font-size: 11px;
+    min-width: 44px;
+    line-height: 1.2;
+}
+
+#tessere-da-fare .card-description input {
+    padding: 2px 4px;
+    font-size: 11px;
+    line-height: 1.2;
+    border-radius: 2px;
+}
+
+#tessere-da-fare .btn-nuovo {
+    padding: 4px 8px;
+    font-size: 11px;
+}
+
+#tessere-da-fare .btn-arrow {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+    border-radius: 2px;
+}
+
 .cards-column-half {
     max-height: 150px;
     height: 150px;
@@ -700,12 +857,14 @@ body {
     }
     
     .main-wrapper {
-        margin-left: 200px;
+        margin-right: 200px;
+        margin-left: 0;
     }
     
     .footer-section {
         width: calc(100% - 200px);
-        margin-left: 200px;
+        margin-right: 200px;
+        margin-left: 0;
     }
 }
 

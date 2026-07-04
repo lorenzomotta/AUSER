@@ -239,32 +239,22 @@ document.getElementById('oauth-login-btn').addEventListener('click', async () =>
                 resizable: false,
                 decorations: true,
                 visible: true, // Assicurati che sia visibile
-                focus: false,  // NON portare in focus per non nascondere la finestra principale
+                focus: true,  // Porta la finestra OAuth in focus
             });
             
             // Aspetta un momento per assicurarsi che la finestra sia completamente creata
             await new Promise(resolve => setTimeout(resolve, 500));
             
-            // Assicurati che la finestra principale rimanga visibile e in primo piano
-            try {
-                const { appWindow } = await import('@tauri-apps/api/window');
-                await appWindow.show(); // Assicura che la finestra principale sia visibile
-                await appWindow.setFocus(); // Porta la finestra principale in primo piano
-                console.log('✓ Finestra principale mantenuta visibile e in focus');
-            } catch (e) {
-                console.log('Errore nel mostrare/focus finestra principale:', e);
-            }
-            
-            // Assicurati che la finestra OAuth sia visibile (ma NON in focus)
+            // Porta la finestra OAuth in primo piano
             try {
                 await authWindow.show();
-                console.log('✓ Finestra OAuth mostrata (senza focus)');
-                // NON chiamare setFocus() per non nascondere la finestra principale
+                await authWindow.setFocus(); // Porta la finestra OAuth in primo piano
+                console.log('✓ Finestra OAuth mostrata e portata in primo piano');
             } catch (e) {
-                console.log('show() non disponibile:', e);
+                console.log('Errore nel mostrare/focus finestra OAuth:', e);
             }
             
-            console.log('Finestra OAuth creata e mostrata (finestra principale rimane visibile)');
+            console.log('Finestra OAuth creata e portata in primo piano');
             
             // Monitora la navigazione della finestra OAuth per intercettare il codice
             // Quando Microsoft reindirizza, la finestra caricherà una pagina con ?code=...
@@ -657,19 +647,23 @@ window.addEventListener('DOMContentLoaded', async () => {
             return; // Reindirizzamento già in corso
         }
         
-        // Prova a inizializzare SharePoint da config.json
+        // Inizializza Supabase da config.json (SharePoint non più usato per i dati)
         try {
-            await invoke('init_sharepoint_from_config');
-            console.log('Client SharePoint inizializzato da config.json');
-            
-            // Ricontrolla autenticazione dopo l'inizializzazione
+            await invoke('init_supabase_from_config');
+            console.log('Client Supabase inizializzato da config.json');
+        } catch (error) {
+            console.log('config.json Supabase non trovato o errore:', error);
+        }
+
+        try {
             const isAuth = await invoke('check_authentication');
             if (isAuth) {
+                console.log('Supabase pronto — reindirizzamento a index.html');
                 window.location.href = 'index.html';
                 return;
             }
         } catch (error) {
-            console.log('config.json non trovato o errore nell\'inizializzazione:', error);
+            console.log('Errore check autenticazione Supabase:', error);
         }
     } else {
         console.log('💡 Modalità browser: l\'autenticazione OAuth funzionerà solo in modalità Tauri');

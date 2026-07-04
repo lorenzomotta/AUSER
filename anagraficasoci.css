@@ -1,0 +1,563 @@
+/* Anagrafica Socio — layout compatto */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #d8d6d3;
+    min-height: auto;
+    font-size: 13px;
+    overflow-y: auto;
+}
+
+.anagrafica-container {
+    max-width: 1280px;
+    width: 100%;
+    min-width: 0;
+    margin: 0 auto;
+    padding: 6px 10px 8px;
+}
+
+/* Header compatto */
+.anagrafica-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+    border-bottom: 2px solid #9ea09e;
+    flex-wrap: wrap;
+}
+
+.header-left {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.page-title {
+    font-size: 20px;
+    font-weight: bold;
+    color: #8b4513;
+    margin: 0;
+}
+
+.socio-subtitle {
+    font-size: 13px;
+    color: #555;
+    min-width: 0;
+    word-break: break-word;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.save-status {
+    font-size: 12px;
+    color: #2e7d32;
+    min-height: 1em;
+}
+
+.save-status.error {
+    color: #c62828;
+}
+
+.btn {
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: bold;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.btn-chiudi { background-color: #d32f2f; color: #fff; }
+.btn-chiudi:hover { background-color: #b71c1c; }
+.btn-modifica { background-color: #e65100; color: #fff; }
+.btn-modifica:hover { background-color: #bf360c; }
+.btn-salva, .btn-salva-tess { background-color: #2e7d32; color: #fff; }
+.btn-salva:hover, .btn-salva-tess:hover { background-color: #1b5e20; }
+.btn-salva:disabled, .btn-salva-tess:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-nuovo-tesseramento { background-color: #1565c0; color: #fff; }
+.btn-nuovo-tesseramento:hover { background-color: #0d47a1; }
+.btn-annulla-tess,
+.btn-annulla-anagrafica { background-color: #757575; color: #fff; }
+.btn-annulla-tess:hover,
+.btn-annulla-anagrafica:hover { background-color: #616161; }
+
+.loading-message {
+    text-align: center;
+    padding: 12px;
+    color: #666;
+}
+
+/* Sezioni */
+.anagrafica-section {
+    background: #f5f4f2;
+    border: 1px solid #bbb;
+    border-radius: 5px;
+    padding: 6px 8px 8px;
+    margin-bottom: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    min-width: 0;
+}
+
+.section-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 6px 10px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #ccc;
+}
+
+.section-bar .inline-flags {
+    flex: 1 1 280px;
+    justify-content: flex-end;
+    min-width: 0;
+}
+
+.section-title {
+    font-size: 14px;
+    font-weight: bold;
+    color: #5d4037;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+/* Righe form — flex wrap responsive */
+.anagrafica-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.form-row-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    align-items: flex-end;
+    min-width: 0;
+}
+
+.form-row-line .form-group {
+    flex: 1 1 110px;
+    min-width: 0;
+}
+
+/* Campi stretti */
+.row-anagrafica .field-xs,
+.row-residenza .field-xs {
+    flex: 0 1 52px;
+    min-width: 48px;
+    max-width: 68px;
+}
+
+.row-anagrafica .field-tipologia {
+    flex: 1 1 160px;
+    min-width: 130px;
+    max-width: 220px;
+}
+
+.row-anagrafica .field-nominativo {
+    flex: 2 1 200px;
+    min-width: min(100%, 160px);
+}
+
+.row-anagrafica .field-cf {
+    flex: 0 1 152px;
+    min-width: 148px;
+    max-width: 158px;
+}
+
+.row-anagrafica .field-nasc-comune {
+    flex: 1 1 130px;
+    min-width: min(100%, 110px);
+}
+
+.row-anagrafica .field-data {
+    flex: 0 1 108px;
+    min-width: 100px;
+    max-width: 118px;
+}
+
+/* Residenza */
+.row-residenza .field-indirizzo {
+    flex: 2 1 220px;
+    min-width: min(100%, 160px);
+}
+
+.row-residenza .field-cap {
+    flex: 0 1 60px;
+    min-width: 52px;
+    max-width: 72px;
+}
+
+.row-residenza .field-comune {
+    flex: 1 1 120px;
+    min-width: min(100%, 100px);
+}
+
+.row-residenza .field-tel {
+    flex: 1 1 120px;
+    min-width: min(100%, 100px);
+}
+
+/* Nota — riga intera */
+.row-nota {
+    display: block;
+}
+
+.row-nota .field-nota-full {
+    width: 100%;
+}
+
+.nota-compact {
+    min-height: 24px;
+    max-height: 48px;
+    resize: vertical;
+}
+
+.field-xs input,
+.field-xs select {
+    padding-left: 3px;
+    padding-right: 2px;
+    text-align: center;
+}
+
+.field-tipologia input,
+.field-tipologia select,
+.field-tess-tipologia input,
+.field-tess-tipologia select {
+    font-size: 12px;
+    padding-left: 4px;
+}
+
+.field-tipologia .tipologia-select,
+.field-tess-tipologia .tipologia-select {
+    width: 100%;
+    height: 28px;
+    box-sizing: border-box;
+    margin-bottom: 2px;
+    padding-right: 22px;
+    appearance: auto;
+    -webkit-appearance: menulist;
+    cursor: pointer;
+    overflow: visible;
+}
+
+.anagrafica-container.mode-editing .field-tipologia .tipologia-select {
+    background-color: #fff;
+}
+
+.anagrafica-container.mode-readonly .field-tipologia .tipologia-select {
+    display: none;
+}
+
+.anagrafica-container.mode-editing .field-tipologia input.tipologia-input-hidden,
+.field-tess-tipologia input.tipologia-input-hidden {
+    display: none;
+}
+
+#field-idsocio,
+#field-sesso,
+#field-residenza-civico,
+#field-residenza-provincia {
+    text-align: center;
+}
+
+#field-residenza-provincia {
+    text-transform: uppercase;
+}
+
+.field-data input[type="date"] {
+    font-size: 11px;
+    padding-left: 2px;
+    padding-right: 0;
+}
+
+#field-codicefiscale {
+    font-size: 11px;
+    letter-spacing: 0.02em;
+}
+
+/* Griglia compatta (sezione tesseramenti) */
+.form-grid.compact {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 4px 8px;
+    align-items: end;
+}
+
+.col-narrow { grid-column: span 1; }
+.col-span-2 { grid-column: span 2; }
+.col-span-3 { grid-column: span 3; }
+.col-span-4 { grid-column: span 4; }
+.col-full { grid-column: 1 / -1; }
+
+.grid-section-label {
+    font-size: 11px;
+    font-weight: bold;
+    color: #1565c0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 4px 0 0;
+    padding-top: 4px;
+    border-top: 1px dashed #bbb;
+}
+
+.form-group label {
+    display: block;
+    font-size: 10px;
+    font-weight: bold;
+    color: #555;
+    margin-bottom: 1px;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.form-control {
+    width: 100%;
+    min-width: 0;
+    padding: 2px 6px;
+    font-size: 13px;
+    line-height: 1.25;
+    border: 1px solid #aaa;
+    border-radius: 3px;
+    background: #fff;
+    min-height: 24px;
+}
+
+select.form-control {
+    padding: 2px 4px;
+    padding-right: 22px;
+    appearance: auto;
+    -webkit-appearance: menulist;
+    cursor: pointer;
+}
+
+textarea.form-control {
+    min-height: auto;
+    resize: vertical;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #8b4513;
+    box-shadow: 0 0 0 1px rgba(139, 69, 19, 0.2);
+}
+
+.form-control[readonly] {
+    background-color: #eceae7;
+    color: #555;
+}
+
+/* Flag inline nella barra sezione */
+.inline-flags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.flags-sep {
+    color: #bbb;
+    font-size: 12px;
+    user-select: none;
+}
+
+.flag-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: #333;
+    white-space: nowrap;
+}
+
+.flag-item input {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    margin: 0;
+}
+
+.flag-archivia span {
+    color: #c62828;
+}
+
+/* Modalità sola lettura */
+.anagrafica-container.mode-readonly .form-control:disabled,
+.anagrafica-container.mode-readonly .form-control[readonly]:not(#field-idsocio) {
+    background-color: #ebeae8;
+    color: #333;
+    cursor: default;
+    opacity: 1;
+}
+
+.anagrafica-container.mode-readonly .inline-flags {
+    opacity: 0.95;
+}
+
+.anagrafica-container.mode-readonly .flag-item {
+    cursor: default;
+}
+
+/* Tesseramenti */
+.tesseramenti-storico {
+    margin: 2px 0 4px;
+    overflow-x: auto;
+    max-height: 140px;
+    overflow-y: auto;
+}
+
+.storico-vuoto {
+    font-size: 12px;
+    color: #888;
+    font-style: italic;
+    padding: 4px 0;
+}
+
+.storico-table {
+    width: 100%;
+    min-width: 520px;
+    border-collapse: collapse;
+    font-size: 12px;
+    background: #fff;
+}
+
+.storico-table th,
+.storico-table td {
+    padding: 4px 8px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.storico-table th {
+    background: #8b4513;
+    color: #fff;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.storico-table tbody tr:hover {
+    background: #f0ebe6;
+}
+
+.storico-table tr.attivo {
+    background: #e8f5e9;
+    font-weight: 600;
+}
+
+.storico-table tr.scaduto td:nth-child(4) {
+    color: #c62828;
+    font-weight: bold;
+}
+
+.btn-modifica-tess {
+    padding: 2px 8px;
+    font-size: 11px;
+    background: #ff8f00;
+    color: #fff;
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+}
+
+.btn-modifica-tess:hover {
+    background: #ef6c00;
+}
+
+.tesseramento-editor {
+    display: none;
+    border-top: 1px dashed #bbb;
+    padding-top: 6px;
+    margin-top: 4px;
+}
+
+.editor-title {
+    font-size: 12px;
+    font-weight: bold;
+    color: #1565c0;
+    margin-bottom: 4px;
+}
+
+.editor-actions-cell {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-bottom: 1px;
+    grid-column: 1 / -1;
+}
+
+/* Finestre strette: campi principali a tutta larghezza */
+@media (max-width: 720px) {
+    .row-anagrafica .field-nominativo,
+    .row-anagrafica .field-cf,
+    .row-anagrafica .field-nasc-comune,
+    .row-residenza .field-indirizzo,
+    .row-residenza .field-comune,
+    .row-residenza .field-tel {
+        flex: 1 1 100%;
+        max-width: none;
+    }
+
+    .row-anagrafica .field-data {
+        flex: 1 1 calc(50% - 8px);
+        max-width: none;
+    }
+
+    .section-bar .inline-flags {
+        justify-content: flex-start;
+    }
+
+    .form-grid.compact .col-span-2,
+    .form-grid.compact .col-span-4 {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 480px) {
+    .page-title {
+        font-size: 17px;
+    }
+
+    .row-anagrafica .field-xs,
+    .row-anagrafica .field-tipologia,
+    .row-anagrafica .field-data,
+    .row-residenza .field-xs,
+    .row-residenza .field-cap {
+        flex: 1 1 calc(33.333% - 8px);
+        max-width: none;
+    }
+
+    .form-grid.compact .editor-actions-cell {
+        justify-content: stretch;
+    }
+
+    .form-grid.compact .editor-actions-cell .btn {
+        flex: 1;
+    }
+}

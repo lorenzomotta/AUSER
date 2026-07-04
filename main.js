@@ -461,142 +461,29 @@ window.updateServizioField = async function(id, field, value) {
     }
 };
 
-// Verifica autenticazione e reindirizza se necessario
-async function checkAuthAndRedirect() {
-    console.log('=== INIZIO CONTROLLO AUTENTICAZIONE ===');
-    
-    // Prima inizializza Tauri per avere accesso a invoke
+// Inizializza Tauri all'avvio (Supabase — SharePoint non più richiesto)
+async function initApp() {
+    console.log('=== INIZIALIZZAZIONE APP ===');
     const tauriReady = await initTauri();
     console.log('Tauri inizializzato:', tauriReady, 'invoke disponibile:', typeof invoke !== 'undefined');
-    
-    if (!tauriReady || !invoke) {
-        // In modalità browser/demo, non reindirizzare (per sviluppo)
-        console.log('Modalità demo: autenticazione saltata');
-        return true;
-    }
-    
-    try {
-        // Prova prima a inizializzare SharePoint da config.json
+
+    if (tauriReady && invoke) {
         try {
-            console.log('Tentativo di inizializzare SharePoint da config.json...');
-            await invoke('init_sharepoint_from_config');
-            console.log('✓ Client SharePoint inizializzato da config.json');
+            await invoke('init_supabase_from_config');
+            console.log('✓ Supabase inizializzato da config.json');
         } catch (error) {
-            console.log('✗ config.json non trovato o errore nell\'inizializzazione:', error);
+            console.warn('Init Supabase:', error);
         }
-        
-        // Verifica se l'utente è autenticato
-        console.log('Verifica stato autenticazione...');
-        const isAuthenticated = await invoke('check_authentication');
-        console.log('Stato autenticazione ricevuto:', isAuthenticated);
-        
-        if (!isAuthenticated) {
-            console.log('❌ Utente NON autenticato, reindirizzamento a auth.html');
-            window.location.href = 'auth.html';
-            return false;
-        }
-        
-        console.log('✓ Utente autenticato, procedo con il caricamento dati');
-        console.log('=== FINE CONTROLLO AUTENTICAZIONE ===');
-        return true;
-    } catch (error) {
-        console.error('❌ Errore nel controllo autenticazione:', error);
-        // In caso di errore, reindirizza comunque alla pagina di autenticazione
-        window.location.href = 'auth.html';
-        return false;
     }
+
+    return tauriReady;
 }
 
 // Event listener per chiusura applicazione
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('=== DOMContentLoaded index.html ===');
-    console.log('URL completa:', window.location.href);
-    console.log('Query string:', window.location.search);
     
-    // Se c'è un codice OAuth nella URL, gestiscilo
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-    
-    console.log('Codice nella URL:', code ? 'SÌ (' + code.substring(0, 20) + '...)' : 'NO');
-    
-    if (code) {
-        console.log('🔍🔍🔍 Codice OAuth trovato in index.html');
-        console.log('URL completa:', window.location.href);
-        console.log('Codice (primi 20 caratteri):', code.substring(0, 20));
-        
-        // Verifica se siamo nella finestra OAuth o nella finestra principale
-        try {
-            const { appWindow } = await import('@tauri-apps/api/window');
-            const { emit: emitEvent } = await import('@tauri-apps/api/event');
-            const currentWindow = appWindow;
-            
-            let currentLabel;
-            try {
-                currentLabel = await currentWindow.label();
-                console.log('Label finestra corrente:', currentLabel);
-            } catch (e) {
-                console.error('Errore nel recupero label:', e);
-                // Se non riusciamo a ottenere il label, proviamo comunque
-                currentLabel = 'unknown';
-            }
-            
-            if (currentLabel === 'oauth-auth') {
-                // Siamo nella finestra OAuth, emetti l'evento con il codice e chiudi la finestra
-                console.log('✓✓✓ Siamo nella finestra OAuth, emettiamo evento oauth-code-received');
-                
-                try {
-                    await emitEvent('oauth-code-received', { code: code });
-                    console.log('✓✓✓ Evento oauth-code-received emesso dalla finestra OAuth');
-                    
-                    // Chiudi questa finestra dopo un breve delay
-                    setTimeout(async () => {
-                        try {
-                            console.log('Chiudendo finestra OAuth...');
-                            await currentWindow.close();
-                            console.log('✓✓✓ Finestra OAuth chiusa');
-                        } catch (e) {
-                            console.error('Errore chiusura finestra:', e);
-                        }
-                    }, 1000);
-                } catch (e) {
-                    console.error('Errore nell\'emissione evento:', e);
-                    // Fallback: reindirizza a oauth-callback.html
-                    const params = new URLSearchParams(window.location.search);
-                    window.location.href = `oauth-callback.html?${params.toString()}`;
-                }
-                return;
-            } else {
-                // Siamo nella finestra principale, reindirizza a auth.html con il codice
-                console.log('Siamo nella finestra principale, reindirizziamo a auth.html con il codice');
-                const params = new URLSearchParams(window.location.search);
-                window.location.href = `auth.html?${params.toString()}`;
-                return;
-            }
-        } catch (error) {
-            console.error('Errore nel controllo finestra:', error);
-            // Fallback: reindirizza a auth.html
-            const params = new URLSearchParams(window.location.search);
-            window.location.href = `auth.html?${params.toString()}`;
-            return;
-        }
-    }
-    
-    // Verifica autenticazione prima di procedere
-    const isAuthenticated = await checkAuthAndRedirect();
-    
-    if (!isAuthenticated) {
-        // Se non autenticato, il reindirizzamento è già stato fatto
-        return;
-    }
-    
-    // Assicurati che Tauri sia inizializzato
-    if (!invoke) {
-        console.log('invoke non disponibile, inizializzo Tauri...');
-        await initTauri();
-    }
-    
-    // Tauri è già inizializzato in checkAuthAndRedirect
-    const tauriReady = isTauri() && invoke !== undefined;
+    const tauriReady = await initApp();
     console.log('Tauri ready per caricamento dati:', tauriReady, 'invoke:', typeof invoke);
     
     // Imposta il listener per il pulsante di chiusura (header o footer)
@@ -612,50 +499,147 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     
-    // Imposta il listener per il pulsante CALENDARIO ONLINE
-    const calendarioBtn = document.getElementById('btn-calendario-online');
+    // Imposta il listener per il pulsante CALENDARIO SERVIZI
+    const calendarioBtn = document.getElementById('btn-calendario-servizi');
     if (calendarioBtn) {
         calendarioBtn.addEventListener('click', async () => {
-            const url = 'https://astiauser.sharepoint.com/sites/CALENDARIOSERVIZISHARE';
             if (isTauri()) {
                 try {
-                    // Crea una nuova finestra Tauri a schermo intero
                     const { Window } = await import('@tauri-apps/api/window');
-                    
-                    // Crea una nuova finestra con l'URL SharePoint
-                    const webview = await Window.create('calendario-online', {
-                        url: url,
-                        title: 'Calendario Online - SharePoint',
-                        fullscreen: true,
+                    const webview = await Window.create('calendario-servizi', {
+                        url: 'CALENDARIO.html',
+                        title: 'Calendario Servizi',
+                        width: 1400,
+                        height: 900,
                         resizable: true,
                         maximized: true,
                         decorations: true,
                         alwaysOnTop: false,
-                        width: screen.width,
-                        height: screen.height
+                        center: true
                     });
-                    
-                    // Imposta la finestra a fullscreen e metti a fuoco
-                    await webview.setFullscreen(true);
                     await webview.setFocus();
                 } catch (error) {
-                    console.error('Errore nella creazione della finestra:', error);
-                    // Fallback: usa shell.open
-                    try {
-                        const { shell } = await import('@tauri-apps/api/shell');
-                        await shell.open(url);
-                    } catch (shellError) {
-                        console.error('Errore nell\'apertura del browser:', shellError);
-                        window.open(url, '_blank');
-                    }
+                    console.error('Errore nella creazione della finestra calendario:', error);
+                    window.location.href = 'CALENDARIO.html';
                 }
             } else {
-                // In modalità browser, usa window.open a schermo intero
-                const newWindow = window.open(url, '_blank', 'fullscreen=yes');
-                if (newWindow) {
-                    newWindow.moveTo(0, 0);
-                    newWindow.resizeTo(screen.width, screen.height);
+                window.open('CALENDARIO.html', '_blank');
+            }
+        });
+    }
+
+    // Imposta il listener per il pulsante NUOVO SERVIZIO
+    const nuovoServizioBtn = document.getElementById('btn-nuovo-servizio');
+    if (nuovoServizioBtn) {
+        nuovoServizioBtn.addEventListener('click', async () => {
+            if (isTauri()) {
+                try {
+                    const { Window } = await import('@tauri-apps/api/window');
+                    const webview = await Window.create('nuovo-servizio', {
+                        url: 'NUOVOSERVIZIO.html',
+                        title: 'Nuovo Servizio',
+                        width: 1400,
+                        height: 900,
+                        resizable: true,
+                        maximized: true,
+                        decorations: true,
+                        alwaysOnTop: false,
+                        center: true
+                    });
+                    await webview.setFocus();
+                } catch (error) {
+                    console.error('Errore apertura nuovo servizio:', error);
+                    window.location.href = 'NUOVOSERVIZIO.html';
                 }
+            } else {
+                window.open('NUOVOSERVIZIO.html', '_blank');
+            }
+        });
+    }
+
+    // Imposta il listener per il pulsante REPORT DEL GIORNO
+    const reportGiornoBtn = document.getElementById('btn-report-giorno');
+    if (reportGiornoBtn) {
+        reportGiornoBtn.addEventListener('click', async () => {
+            if (isTauri()) {
+                try {
+                    const { Window } = await import('@tauri-apps/api/window');
+                    const webview = await Window.create('report-giornaliero', {
+                        url: 'REPORTGIORNALIERO.html',
+                        title: 'Report Giornaliero',
+                        width: 1400,
+                        height: 900,
+                        resizable: true,
+                        maximized: true,
+                        decorations: true,
+                        alwaysOnTop: false,
+                        center: true
+                    });
+                    await webview.setFocus();
+                } catch (error) {
+                    console.error('Errore apertura report giornaliero:', error);
+                    window.location.href = 'REPORTGIORNALIERO.html';
+                }
+            } else {
+                window.open('REPORTGIORNALIERO.html', '_blank');
+            }
+        });
+    }
+
+    // Imposta il listener per il pulsante REPORT SETTIMANALE
+    const reportSettimanaleBtn = document.getElementById('btn-report-settimanale');
+    if (reportSettimanaleBtn) {
+        reportSettimanaleBtn.addEventListener('click', async () => {
+            if (isTauri()) {
+                try {
+                    const { Window } = await import('@tauri-apps/api/window');
+                    const webview = await Window.create('report-settimanale', {
+                        url: 'REPORTSETTIMANALE.html',
+                        title: 'Report Settimanale',
+                        width: 1400,
+                        height: 900,
+                        resizable: true,
+                        maximized: true,
+                        decorations: true,
+                        alwaysOnTop: false,
+                        center: true
+                    });
+                    await webview.setFocus();
+                } catch (error) {
+                    console.error('Errore apertura report settimanale:', error);
+                    window.location.href = 'REPORTSETTIMANALE.html';
+                }
+            } else {
+                window.open('REPORTSETTIMANALE.html', '_blank');
+            }
+        });
+    }
+
+    // Imposta il listener per il pulsante INCASSI GIORNALIERI
+    const riepilogoIncassiBtn = document.getElementById('btn-riepilogo-incassi');
+    if (riepilogoIncassiBtn) {
+        riepilogoIncassiBtn.addEventListener('click', async () => {
+            if (isTauri()) {
+                try {
+                    const { Window } = await import('@tauri-apps/api/window');
+                    const webview = await Window.create('selezione-data-incassi', {
+                        url: 'SELEZIONEDATAINCASSI.html',
+                        title: 'Seleziona data incassi',
+                        width: 480,
+                        height: 340,
+                        resizable: false,
+                        maximized: false,
+                        decorations: true,
+                        alwaysOnTop: false,
+                        center: true
+                    });
+                    await webview.setFocus();
+                } catch (error) {
+                    console.error('Errore apertura selezione data incassi:', error);
+                    window.location.href = 'SELEZIONEDATAINCASSI.html';
+                }
+            } else {
+                window.open('SELEZIONEDATAINCASSI.html', '_blank', 'width=480,height=340');
             }
         });
     }
@@ -758,6 +742,37 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 // In modalità browser, apri in una nuova scheda
                 window.open('ELENCOOPERATORI.html', '_blank');
+            }
+        });
+    }
+
+    // Imposta il listener per il pulsante ELENCO MEZZI
+    const elencoMezziBtn = document.getElementById('btn-elenco-mezzi');
+    if (elencoMezziBtn) {
+        elencoMezziBtn.addEventListener('click', async () => {
+            if (isTauri()) {
+                try {
+                    const { Window } = await import('@tauri-apps/api/window');
+
+                    const webview = await Window.create('elenco-mezzi', {
+                        url: 'ELENCOMEZZI.html',
+                        title: 'Elenco Mezzi',
+                        width: 1400,
+                        height: 900,
+                        resizable: true,
+                        maximized: false,
+                        decorations: true,
+                        alwaysOnTop: false,
+                        center: true
+                    });
+
+                    await webview.setFocus();
+                } catch (error) {
+                    console.error('Errore nella creazione della finestra:', error);
+                    window.location.href = 'ELENCOMEZZI.html';
+                }
+            } else {
+                window.open('ELENCOMEZZI.html', '_blank');
             }
         });
     }

@@ -1,0 +1,261 @@
+================================================================================
+  ELENCO SOCI — Guida alle funzionalità
+  Applicazione AUSER TAURI
+  File collegati: ELENCOSOCI.html | elencosoci.css | elencosoci.js
+  Modulo collegato: ANAGRAFICASOCI.html | anagraficasoci.css | anagraficasoci.js
+================================================================================
+
+1. COS'È ELENCO SOCI
+--------------------------------------------------------------------------------
+Elenco Soci è una finestra dell'applicazione che permette di consultare l'elenco
+dei tesserati (soci) dell'associazione. I dati vengono letti dal database
+Supabase (tabella tesserati configurata in config.json).
+
+Si apre dalla schermata principale (index.html) premendo il pulsante
+"ELENCO SOCI" nella barra laterale. In ambiente Tauri si apre in una finestra
+separata (1400 x 900 pixel); nel browser si apre in una nuova scheda.
+
+Da questa schermata si possono:
+  - Consultare e filtrare i soci (sola lettura).
+  - Aprire l'anagrafica completa di un socio esistente.
+  - Inserire un nuovo socio tramite la maschera dedicata.
+
+
+2. CARICAMENTO DATI
+--------------------------------------------------------------------------------
+All'apertura della pagina:
+  - Viene inizializzata la connessione Tauri con Supabase.
+  - Viene chiamato il comando backend get_all_tesserati (Rust).
+  - Tutti i soci vengono scaricati da Supabase e tenuti in memoria (cache
+    locale nel browser/finestra).
+  - I soci vengono ordinati alfabeticamente per NOMINATIVO (regole italiane).
+  - Viene attivato un listener sull'evento Tauri socio-anagrafica-saved per
+    aggiornare l'elenco quando si salva l'anagrafica in un'altra finestra.
+
+Vista predefinita al primo caricamento:
+  - Vengono mostrati SOLO i soci con campo Archivia = false (non archiviati).
+  - I soci archiviati non compaiono finché non si usa il pulsante dedicato
+    nel footer (vedi sezione 7).
+
+Modalità demo:
+  - Se l'app non gira in ambiente Tauri, viene mostrato un socio di esempio
+    (ROSSI MARIO) per permettere di vedere l'interfaccia senza database.
+
+
+3. INTESTAZIONE (HEADER)
+--------------------------------------------------------------------------------
+
+3.1 Parte sinistra — Tessere scadute
+  - Etichetta: "TESSERE SCADUTE N."
+  - Contatore numerico: indica quanti soci NON archiviati hanno la tessera
+    scaduta (data di scadenza precedente a oggi).
+  - Pulsante filtro (icona imbuto):
+      • Cliccandolo si attiva/disattiva il filtro "solo tessere scadute".
+      • Quando attivo, l'elenco mostra solo i soci non archiviati con tessera
+        scaduta.
+      • Il pulsante è disabilitato se non ci sono tessere scadute, oppure
+        quando si sta visualizzando l'elenco archiviati.
+      • Quando attivo, il pulsante cambia aspetto (stato "active").
+
+  Come viene calcolata la scadenza:
+  - Il backend costruisce la data di scadenza tessera dal campo
+    Tesseramento_Anno (formato: 31/12/ANNO) oppure da Tesseramento_Data.
+  - Un socio ha tessera scaduta se quella data è prima di oggi.
+  - Nel blocco del socio, le tessere scadute mostrano l'avviso rosso
+    "TESSERA SCADUTA!!" accanto al campo SCADENZA TESSERA.
+
+3.2 Parte centrale — Titolo e ricerca
+  - Titolo: "ELENCO SOCI" con contatore dinamico tra parentesi, ad esempio:
+      (150)           → soci attivi totali
+      (12 scadute)    → filtro tessere scadute attivo
+      (5 archiviati)  → vista archiviati
+      (3 trovati)     → ricerca o filtri combinati attivi
+  - Pulsante lente (🔍): apre la casella di ricerca.
+  - Casella di ricerca:
+      • Cerca per NOMINATIVO (testo parziale, senza distinzione maiuscole).
+      • Filtra in tempo reale mentre si digita (con breve ritardo di 250 ms).
+      • Si chiude con la X o premendo ESC; cancellando la ricerca si torna
+        all'elenco completo della vista corrente.
+
+3.3 Parte destra — NUOVO SOCIO e CHIUDI
+  - NUOVO SOCIO (pulsante verde):
+      • Apre la maschera ANAGRAFICASOCI.html?nuovo=1 in una finestra separata
+        (1100 x 540 pixel, ridimensionabile).
+      • Etichetta finestra Tauri: anagrafica-socio-nuovo.
+      • Se la finestra esiste già, viene portata in primo piano invece di
+        aprirne una seconda.
+      • Nel browser apre una nuova scheda.
+      • Permette di inserire anagrafica e, opzionalmente, uno o più
+        tesseramenti prima del salvataggio definitivo (vedi sezione 5).
+  - CHIUDI:
+      • Chiude la finestra "elenco-soci" in ambiente Tauri.
+      • Se la chiusura non è possibile, torna alla home (index.html).
+
+
+4. ELENCO SOCI (AREA CENTRALE SCORREVOLE)
+--------------------------------------------------------------------------------
+Ogni socio è mostrato in un "blocco" (scheda) con campi in sola lettura.
+Non è possibile modificare i dati direttamente da questa schermata.
+
+Campi visualizzati per ogni socio:
+  - IDSOCIO          → codice identificativo del socio
+  - NOMINATIVO       → cognome e nome
+  - COD. FISC.       → codice fiscale
+  - TIPOLOGIA SOCIO  → tipo di tessera/socio
+  - OPERATORE        → checkbox (spuntata se il socio è anche operatore)
+  - ATTIVO           → checkbox (spuntata se il socio è attivo)
+  - DISPONIBILITA    → disponibilità del socio (es. autista)
+  - TELEFONO         → numero di telefono (se presente in database)
+  - NUMERO TESSERA   → numero tessera associativo
+  - SCADENZA TESSERA → data scadenza; evidenziata in rosso se scaduta
+  - NOTA AGGIUNTIVA  → note testuali libere
+  - ARCHIVIA         → checkbox (spuntata se il socio è archiviato)
+
+Pulsanti su ogni scheda:
+  - ANAGRAFICA → apre la maschera anagrafica del socio selezionato
+                 (ANAGRAFICASOCI.html?idsocio=... in finestra separata).
+                 Etichetta finestra Tauri: anagrafica-socio-{idsocio}.
+                 Se la finestra per quel socio esiste già, viene riportata
+                 in primo piano.
+  - SERVIZI    → previsto per aprire l'elenco servizi del socio
+                 (FUNZIONALITÀ ANCORA IN SVILUPPO: al momento mostra un avviso)
+
+Messaggi speciali:
+  - "Caricamento soci..." → durante il download da Supabase
+  - "Nessun tesserato trovato" → database vuoto o nessun risultato
+  - Messaggi personalizzati se ricerca/filtri non trovano risultati
+
+
+5. ANAGRAFICA SOCIO (FINESTRA COLLEGATA)
+--------------------------------------------------------------------------------
+L'anagrafica non fa parte di ELENCOSOCI.html ma si apre in un modulo separato.
+File: ANAGRAFICASOCI.html | anagraficasoci.css | anagraficasoci.js
+
+5.1 Apertura da socio esistente (pulsante ANAGRAFICA)
+  - Carica anagrafica e storico tesseramenti da Supabase.
+  - Inizialmente in sola lettura; pulsante MODIFICA per entrare in modifica.
+  - Salva con SALVA / annulla con ANNULLA.
+  - Campo TIPOLOGIA: menu a discesa collegato alla tabella TipoSocio_supa
+    (con voce "➕ Nuova tipologia…" per aggiungere valori non presenti).
+
+5.2 Nuovo socio (pulsante NUOVO SOCIO nell'header)
+  - Titolo pagina: "NUOVO SOCIO".
+  - Propone automaticamente il prossimo IDSOCIO disponibile (get_next_idsocio).
+  - Tipologia anagrafica predefinita: NUOVO.
+  - Maschera subito in modifica (SALVA / ANNULLA visibili, MODIFICA nascosto).
+  - Sezione Tesseramenti visibile fin da subito:
+      • Clic su "+ NUOVO" per aggiungere tesseramenti opzionali (anno, n.
+        tessera, data, tipologia, quota, note).
+      • I tesseramenti restano in memoria locale finché non si salva
+        l'anagrafica con SALVA in alto.
+      • Campo TIPOLOGIA tesseramento: stesso menu a discesa da TipoSocio_supa.
+  - SALVA anagrafica:
+      • Crea il socio in Supabase (create_socio_anagrafica).
+      • Salva anche tutti i tesseramenti preparati (save_tesseramento).
+  - ANNULLA / CHIUDI in fase di inserimento: chiede conferma e chiude senza
+    salvare.
+
+5.3 Aggiornamento automatico dell'elenco
+  - Alla salvataggio anagrafica, la maschera emette l'evento Tauri
+    socio-anagrafica-saved.
+  - Elenco Soci ascolta l'evento e:
+      • Se il socio è già in cache → aggiorna nominativo, cod. fiscale,
+        tipologia, telefono, note, disponibilità, flag operatore/attivo/
+        archivia nella scheda corrispondente (senza ricaricare tutto).
+      • Se il socio è nuovo e non era ancora in cache → ricarica l'intero
+        elenco da Supabase (loadAllTesserati).
+  - Se il nominativo cambia, l'elenco viene riordinato alfabeticamente.
+
+
+6. PAGINAZIONE (FOOTER — CENTRO)
+--------------------------------------------------------------------------------
+Per non sovraccaricare la schermata, l'elenco è diviso in pagine da 50 soci.
+
+Barra di paginazione:
+  - Pulsante "← Precedente"  → pagina precedente (disabilitato sulla prima)
+  - Testo informativo        → es. "Pagina 2 di 5 · soci 51-100 di 230"
+  - Pulsante "Successiva →"  → pagina successiva (disabilitato sull'ultima)
+
+Comportamento:
+  - Cambiando pagina, l'area elenco torna in cima (scroll a zero).
+  - Cambiando ricerca o filtri, si torna automaticamente alla pagina 1.
+
+
+7. FOOTER — MOSTRA ARCHIVIATI (SINISTRA)
+--------------------------------------------------------------------------------
+Pulsante "Mostra Archiviati":
+  - Mostra solo i soci con Archivia = true.
+  - Il testo del pulsante diventa "Mostra Attivi" per tornare alla vista
+    predefinita (soci non archiviati).
+  - Disabilitato se non esistono soci archiviati nel database.
+  - Quando si passa alla vista archiviati, il filtro tessere scadute viene
+    disattivato automaticamente (le scadenze riguardano solo i soci attivi).
+
+Nota: il filtro archiviati/attivi avviene lato frontend sulla cache già
+scaricata; il backend restituisce tutti i tesserati.
+
+
+8. COMBINAZIONE DEI FILTRI
+--------------------------------------------------------------------------------
+I filtri si applicano in sequenza sulla lista base:
+
+  Vista base:
+    • Attivi (default)  → Archivia = false
+    • Archiviati        → Archivia = true
+
+  Filtri aggiuntivi (solo in vista Attivi):
+    • Tessere scadute   → solo soci con scadenza tessera passata
+    • Ricerca nominativo → testo contenuto nel nominativo
+
+Esempi:
+  - Attivi + ricerca "ROSSI"     → soci attivi il cui nome contiene "ROSSI"
+  - Attivi + filtro scadute      → solo attivi con tessera scaduta
+  - Archiviati + ricerca "BIANCO"→ archiviati il cui nome contiene "BIANCO"
+
+
+9. SICUREZZA E DETTAGLI TECNICI
+--------------------------------------------------------------------------------
+  - I valori mostrati nei campi passano da escapeHtml() per evitare problemi
+    di sicurezza (XSS) se i dati contengono caratteri speciali.
+  - I flag booleani (Operatore, Attivo, Archivia) accettano diversi formati
+    da Supabase: true/false, SI/NO, 1/0, ATTIVO, ecc.
+  - I checkbox nei blocchi socio sono disabilitati: servono solo a visualizzare
+    lo stato, non a modificarlo.
+  - Supabase scarica i tesserati con paginazione automatica lato backend
+    (limite API 1000 righe per richiesta).
+
+
+10. FILE DEL MODULO
+--------------------------------------------------------------------------------
+  ELENCOSOCI.html   → struttura pagina (header, elenco, footer)
+  elencosoci.css    → stili grafici (colori, layout, tessere scadute in rosso)
+  elencosoci.js     → logica: caricamento, filtri, paginazione, apertura
+                      anagrafica, listener aggiornamenti
+
+  Modulo anagrafica (aperto da Elenco Soci):
+  ANAGRAFICASOCI.html   → maschera anagrafica e tesseramenti
+  anagraficasoci.css    → stili maschera anagrafica
+  anagraficasoci.js     → logica nuovo socio, modifica, tesseramenti
+
+Backend collegato (Elenco Soci):
+  src-tauri/src/main.rs     → get_all_tesserati, struct Tesserato
+  src-tauri/src/supabase.rs → lettura tabella tesserati da Supabase
+
+Backend collegato (Anagrafica):
+  src-tauri/src/main.rs     → get_socio_anagrafica, save_socio_anagrafica,
+                              get_next_idsocio, create_socio_anagrafica,
+                              save_tesseramento, get_all_tipologie_socio,
+                              add_tipologia_socio
+  src-tauri/src/supabase.rs → lettura/scrittura soci e tesseramenti;
+                              tabella tipologie TipoSocio_supa (config: tipo_socio)
+
+
+11. FUNZIONALITÀ NON ANCORA IMPLEMENTATE
+--------------------------------------------------------------------------------
+  - Apertura elenco SERVIZI del socio selezionato (pulsante SERVIZI)
+  - Modifica dati socio direttamente dalla scheda in Elenco Soci (tutto readonly
+    nell'elenco; le modifiche passano dalla maschera ANAGRAFICA)
+
+================================================================================
+  Fine documento — aggiornato alle funzionalità attuali del modulo Elenco Soci
+================================================================================

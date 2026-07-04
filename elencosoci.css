@@ -21,10 +21,120 @@ body {
 }
 
 .page-header-wrapper {
-    text-align: center;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 10px;
     padding-bottom: 8px;
     border-bottom: 3px solid #9ea09e;
+    gap: 12px;
+}
+
+.header-left {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.tessere-scadute-label {
+    font-size: 13px;
+    font-weight: bold;
+    color: #c62828;
+    white-space: nowrap;
+}
+
+.tessere-scadute-count {
+    font-size: 20px;
+    font-weight: bold;
+    color: #c62828;
+    min-width: 1.2em;
+    line-height: 1;
+}
+
+.btn-filter-scadute {
+    background-color: #fff;
+    border: 2px solid #c62828;
+    border-radius: 4px;
+    padding: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    width: 32px;
+    height: 28px;
+    flex-shrink: 0;
+    color: #c62828;
+}
+
+.btn-filter-scadute .icon-filter {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+
+.btn-filter-scadute:hover:not(:disabled) {
+    background-color: #c62828;
+    color: #fff;
+}
+
+.btn-filter-scadute.active {
+    background-color: #c62828;
+    color: #fff;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px #c62828;
+}
+
+.btn-filter-scadute:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    border-color: #999;
+    background-color: #eee;
+    color: #999;
+}
+
+.header-center {
+    flex: 1;
+    text-align: center;
+}
+
+.header-right {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-nuovo-socio {
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: bold;
+    background-color: #2e7d32;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.btn-nuovo-socio:hover {
+    background-color: #1b5e20;
+}
+
+.btn-chiudi {
+    padding: 8px 22px;
+    font-size: 14px;
+    font-weight: bold;
+    background-color: #d32f2f;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    white-space: nowrap;
 }
 
 .page-title-row {
@@ -33,6 +143,10 @@ body {
     justify-content: center;
     gap: 15px;
     flex-wrap: wrap;
+}
+
+.btn-chiudi:hover {
+    background-color: #b71c1c;
 }
 
 .page-title {
@@ -131,11 +245,103 @@ body {
 
 /* Container scrollabile con tutti i soci */
 .soci-container-scrollabile {
-    max-height: calc(100vh - 200px);
+    max-height: calc(100vh - 220px);
     overflow-y: auto;
     overflow-x: hidden;
     padding: 3px 0;
-    margin-bottom: 80px; /* Spazio per il footer fisso */
+    margin-bottom: 8px;
+}
+
+/* Barra paginazione nel footer */
+.soci-footer-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+.soci-footer-left,
+.soci-footer-right {
+    flex: 0 0 180px;
+}
+
+.soci-footer-left {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.soci-footer-right {
+    flex-shrink: 0;
+}
+
+.soci-pagination-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    flex: 1 1 auto;
+    font-size: 14px;
+    color: #fff;
+}
+
+.btn-mostra-archiviati {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: bold;
+    background-color: #6c757d;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.btn-mostra-archiviati:hover:not(:disabled) {
+    background-color: #5a6268;
+}
+
+.btn-mostra-archiviati.active {
+    background-color: #495057;
+    box-shadow: inset 0 0 0 2px #fff;
+}
+
+.btn-mostra-archiviati:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-pagination {
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: bold;
+    background-color: #2d7a32;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-pagination:hover:not(:disabled) {
+    background-color: #1b5e20;
+}
+
+.btn-pagination:disabled {
+    background-color: #aaa;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.soci-pagination-info {
+    min-width: 220px;
+    text-align: center;
+    font-weight: 500;
+    color: #fff;
 }
 
 /* Blocco socio singolo */
@@ -337,6 +543,24 @@ body {
     flex: 0 0 130px;
 }
 
+/* Tessera scaduta: sfondo rosso e avviso */
+.socio-form-group-scadenzatessera.scadenza-scaduta input {
+    background-color: #ffcccc !important;
+    border-color: #e53935 !important;
+    color: #b71c1c;
+    font-weight: bold;
+}
+
+.tessera-scaduta-label {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #c62828;
+    text-align: center;
+    line-height: 1.2;
+}
+
 .socio-form-group-telefono {
     flex: 0 0 140px;
 }
@@ -380,7 +604,24 @@ body {
 
 .socio-form-group-nota {
     flex: 1 1 auto;
-    min-width: 300px;
+    min-width: 120px;
+}
+
+.socio-form-group-nota textarea {
+    width: 100%;
+}
+
+.socio-form-group-archivia {
+    flex: 0 0 90px;
+    min-width: 90px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.socio-form-group-archivia label {
+    text-align: center;
+    width: 100%;
 }
 
 /* Pulsanti azione */
@@ -390,6 +631,7 @@ body {
     align-items: flex-end;
     align-self: flex-end;
     padding-top: 0px;
+    flex: 0 0 auto;
 }
 
 .socio-form-actions .btn {
@@ -421,33 +663,19 @@ body {
     background-color: #0b7dda;
 }
 
-/* Footer */
+/* Footer con paginazione */
 .soci-footer {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
     background-color: #8b4513;
-    padding: 15px;
-    text-align: center;
+    padding: 12px 20px;
     box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
     z-index: 1000;
-}
-
-.soci-footer .btn-chiudi {
-    padding: 10px 30px;
-    font-size: 16px;
-    font-weight: bold;
-    background-color: #d32f2f;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.soci-footer .btn-chiudi:hover {
-    background-color: #b71c1c;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* Scrollbar personalizzata */

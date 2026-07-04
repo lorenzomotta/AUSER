@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report Giornaliero - AUSER Asti</title>
+    <link rel="stylesheet" href="reportgiornaliero.css">
+</head>
+<body>
+    <div class="report-container">
+        <header class="report-header no-print">
+            <div class="header-actions-left">
+                <button type="button" class="btn btn-chiudi" id="btn-chiudi">CHIUDI</button>
+                <button type="button" class="btn btn-stampa" id="btn-stampa">STAMPA</button>
+            </div>
+            <h1 class="report-title">SERVIZI DEL GIORNO</h1>
+            <div class="header-date-nav">
+                <button type="button" class="btn-nav-giorno" id="btn-giorno-prev" title="Giorno precedente" aria-label="Giorno precedente">&lsaquo;</button>
+                <span class="report-data" id="report-data-label">--/--/----</span>
+                <button type="button" class="btn-nav-giorno" id="btn-giorno-next" title="Giorno successivo" aria-label="Giorno successivo">&rsaquo;</button>
+            </div>
+        </header>
+
+        <header class="report-header print-only">
+            <h1 class="report-title">SERVIZI DEL GIORNO</h1>
+            <span class="report-data" id="report-data-label-print">--/--/----</span>
+        </header>
+
+        <div id="report-loading" class="report-loading">Caricamento servizi...</div>
+        <div id="report-empty" class="report-empty" style="display: none;">Nessun servizio per questa data.</div>
+        <div id="report-servizi" class="report-servizi"></div>
+    </div>
+
+    <script src="reportgiornaliero.js"></script>
+</body>
+</html>

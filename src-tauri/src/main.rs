@@ -8,15 +8,57 @@ use std::sync::OnceLock;
 use std::fs;
 
 mod sharepoint;
+mod supabase;
 use sharepoint::{SharePointClient, SharePointConfig};
+use supabase::{SupabaseClient, SupabaseConfig, SupabaseTablesConfig, format_date_iso, format_time_iso, get_bool_field, get_field};
 
 use chrono::{Local, Datelike};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AppConfig {
     sharepoint: SharePointConfigSection,
+    supabase: Option<SupabaseConfigSection>,
     github: Option<GithubConfigSection>,
     lists: Option<ListsConfigSection>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SupabaseConfigSection {
+    url: String,
+    /// Chiave anon legacy (eyJ...) — può essere invalida se ruotate le JWT Signing Keys
+    anon_key: String,
+    /// Consigliata: chiave da Supabase → Settings → API Keys → Publishable (sb_publishable_...)
+    publishable_key: Option<String>,
+    /// Solo app desktop Tauri (backend Rust): Secret key (sb_secret_...) o service_role JWT
+    /// config.json è in .gitignore — NON condividere questa chiave
+    secret_key: Option<String>,
+    /// Compatibilità: singola tabella tesserati (sostituita da tables.tesserati)
+    #[serde(alias = "table_soci")]
+    table_tesserati: Option<String>,
+    tables: Option<SupabaseTablesConfigSection>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SupabaseTablesConfigSection {
+    tesserati: Option<String>,
+    servizi: Option<String>,
+    automezzi: Option<String>,
+    dotazioni_mezzi: Option<String>,
+    impostazioni: Option<String>,
+    motivazioni_trasporto: Option<String>,
+    motorizzazioni: Option<String>,
+    richiedenti: Option<String>,
+    stato_del_servizio: Option<String>,
+    telefoni: Option<String>,
+    tipo_pagamenti: Option<String>,
+    tipo_socio: Option<String>,
+    tipologia_socio: Option<String>,
+    tratte: Option<String>,
+    user_permissions: Option<String>,
+    tesseramenti: Option<String>,
+    /// Legacy: non esiste tabella operatori — filtrare tesserati.Operatore
+    #[serde(alias = "operatori")]
+    operatori: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -48,6 +90,9 @@ struct ListsConfigSection {
 // Stato globale per il client SharePoint
 // Usiamo tokio::sync::Mutex per supportare operazioni async
 static SHAREPOINT_CLIENT: OnceLock<Mutex<Option<SharePointClient>>> = OnceLock::new();
+
+// Stato globale per il client Supabase (tabella tesserati_supa)
+static SUPABASE_CLIENT: OnceLock<Mutex<Option<SupabaseClient>>> = OnceLock::new();
 
 // Stato per OAuth2 flow
 static OAUTH_STATE: OnceLock<Mutex<Option<String>>> = OnceLock::new();
@@ -96,24 +141,544 @@ fn get_sharepoint_client() -> &'static Mutex<Option<SharePointClient>> {
     SHAREPOINT_CLIENT.get_or_init(|| Mutex::new(None))
 }
 
+fn get_supabase_client() -> &'static Mutex<Option<SupabaseClient>> {
+    SUPABASE_CLIENT.get_or_init(|| Mutex::new(None))
+}
+
+/// Converte una riga Supabase (tabella Tesserati) nel struct Tesserato del frontend
+fn supabase_row_to_tesserato(row: &serde_json::Value) -> Option<Tesserato> {
+    let id = row
+        .get("id")
+        .and_then(|v| {
+            v.as_u64()
+                .map(|n| n as u32)
+                .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+        })
+        .unwrap_or_else(|| {
+            get_field(row, "IdSocio")
+                .parse::<u32>()
+                .unwrap_or(0)
+        });
+
+    let nominativo = get_field_any(
+        row,
+        &[
+            "NominativoSocio",
+            "NOMINATIVOSOCIO",
+            "Nominativo",
+            "NOMINATIVO",
+            "nominativo_socio",
+        ],
+    );
+    if id == 0 && nominativo.is_empty() {
+        return None;
+    }
+
+    let tesseramento_anno = get_field(row, "Tesseramento_Anno");
+    let scadenzatessera = if !tesseramento_anno.is_empty() {
+        format!("31/12/{}", tesseramento_anno)
+    } else {
+        format_date_iso(&get_field(row, "Tesseramento_Data"))
+    };
+
+    Some(Tesserato {
+        id,
+        idsocio: get_field(row, "IdSocio"),
+        nominativo,
+        codicefiscale: get_field(row, "CodiceFiscale"),
+        numerotessera: get_field(row, "Tesseramento_Numero"),
+        scadenzatessera,
+        telefono: get_field_any(row, &["Telefono", "TELEFONO", "telefono"]),
+        tipologiasocio: get_field(row, "TipologiaSocio"),
+        operatore: get_bool_field(row, &["Operatore", "OPERATORE", "operatore"]),
+        attivo: get_bool_field(row, &["Attivo", "ATTIVO", "attivo"]),
+        archivia: get_bool_field(
+            row,
+            &[
+                "Archiviazione",
+                "ARCHIVIAZIONE",
+                "archiviazione",
+                "Archivia",
+                "ARCHIVIA",
+                "archivia",
+            ],
+        ),
+        disponibilita: get_field_any(row, &["Disponibilita", "DISPONIBILITA", "disponibilita"]),
+        notaaggiuntiva: get_field_any(row, &["NoteAggiuntive", "NotaAggiuntiva", "NOTAAGGIUNTIVA"]),
+    })
+}
+
+fn get_nascita_fields(row: &serde_json::Value) -> (String, String) {
+    (
+        get_field_any(row, &["Nascita_Comune", "NASCITA_COMUNE", "ComuneNascita"]),
+        format_date_iso(&get_field_any(row, &["Nascita_Data", "NASCITA_DATA", "DataNascita"])),
+    )
+}
+
+fn get_sesso_field(row: &serde_json::Value) -> String {
+    get_field_any(row, &["Sesso", "SESSO", "sesso"])
+}
+
+fn get_residenza_fields(row: &serde_json::Value) -> (String, String, String, String, String) {
+    (
+        get_field_any(
+            row,
+            &[
+                "Residenza_Indirizzo",
+                "RESIDENZA_INDIRIZZO",
+                "IndirizzoResidenza",
+                "ViaResidenza",
+            ],
+        ),
+        get_field_any(
+            row,
+            &[
+                "Residenza_Civico",
+                "RESIDENZA_CIVICO",
+                "CivicoResidenza",
+                "NumeroCivico",
+            ],
+        ),
+        get_field_any(row, &["CAP", "Residenza_CAP", "RESIDENZA_CAP", "CapResidenza"]),
+        get_field_any(
+            row,
+            &["Residenza_Comune", "RESIDENZA_COMUNE", "ComuneResidenza"],
+        ),
+        get_field_any(
+            row,
+            &[
+                "Residenza_Provincia",
+                "RESIDENZA_PROVINCIA",
+                "ProvinciaResidenza",
+                "Prov",
+            ],
+        ),
+    )
+}
+
+/// Prova più nomi colonna Supabase (PascalCase o legacy SharePoint)
+fn get_field_any(row: &serde_json::Value, names: &[&str]) -> String {
+    for name in names {
+        let value = get_field(row, name);
+        if !value.is_empty() {
+            return value;
+        }
+    }
+    String::new()
+}
+
+fn row_has_column(row: &serde_json::Value, name: &str) -> bool {
+    row.as_object()
+        .map(|obj| obj.contains_key(name))
+        .unwrap_or(false)
+}
+
+/// Primo nome colonna effettivamente presente nella riga (per PATCH Supabase)
+fn resolve_column_key(row: &serde_json::Value, candidates: &[&str]) -> Option<String> {
+    for name in candidates {
+        if row_has_column(row, name) {
+            return Some((*name).to_string());
+        }
+    }
+    None
+}
+
+fn insert_patch_field(
+    body: &mut serde_json::Map<String, serde_json::Value>,
+    row: &serde_json::Value,
+    candidates: &[&str],
+    value: serde_json::Value,
+) {
+    if let Some(key) = resolve_column_key(row, candidates) {
+        body.insert(key, value);
+    } else {
+        println!(
+            "⚠️ PATCH skip: nessuna colonna tra {:?} in tesserati",
+            candidates
+        );
+    }
+}
+
+/// Valore booleano compatibile con il tipo già usato nella colonna Supabase
+fn json_for_bool_patch(row: &serde_json::Value, column_key: &str, value: bool) -> serde_json::Value {
+    match row.get(column_key) {
+        Some(serde_json::Value::Bool(_)) => serde_json::json!(value),
+        Some(serde_json::Value::Number(_)) => {
+            serde_json::json!(if value { 1 } else { 0 })
+        }
+        Some(serde_json::Value::String(s)) => {
+            let upper = s.trim().to_uppercase();
+            if upper == "SI" || upper == "NO" || upper == "SÌ" {
+                serde_json::json!(bool_to_db_flag(value))
+            } else {
+                serde_json::json!(value)
+            }
+        }
+        _ => serde_json::json!(value),
+    }
+}
+
+fn insert_patch_bool_field(
+    body: &mut serde_json::Map<String, serde_json::Value>,
+    row: &serde_json::Value,
+    candidates: &[&str],
+    value: bool,
+) {
+    if let Some(key) = resolve_column_key(row, candidates) {
+        let json_val = json_for_bool_patch(row, &key, value);
+        body.insert(key, json_val);
+    } else {
+        println!(
+            "⚠️ PATCH skip bool: nessuna colonna tra {:?} in tesserati",
+            candidates
+        );
+    }
+}
+
+/// Converte una riga Supabase (tabella Automezzi_Supa) nel struct Automezzo del frontend
+/// Mappatura SharePoint → Supabase:
+/// ID_AUTOMEZZO → IdAutomezzo | NR_AUTOMEZZO → Numero_Mezzo | MARCA → Marca | MODELLO → Modello
+/// TARGA → Targa | DOTAZIONE → Dotazione | SCADENZA ZTL → Scadenza_ZTL
+/// SCADENZA ASSICURAZIONE → Scadenza_Assicurazione | INSERVIZIO → InServizio
+/// NOTE → Note_mezzo | SCADENZA BOLLO → Scadenza_Bollo
+fn supabase_row_to_automezzo(row: &serde_json::Value) -> Option<Automezzo> {
+    let id_automezzo = get_field_any(row, &["IdAutomezzo", "ID_AUTOMEZZO", "id_automezzo"])
+        .parse::<u32>()
+        .unwrap_or(0);
+
+    let id = if id_automezzo > 0 {
+        id_automezzo
+    } else {
+        row.get("id")
+            .and_then(|v| {
+                v.as_u64()
+                    .map(|n| n as u32)
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            })
+            .unwrap_or(0)
+    };
+
+    // Numero_Mezzo = NR_AUTOMEZZO (numero visualizzato, es. "3" per FIAT PANDA)
+    let nr_automezzo = get_field_any(
+        row,
+        &[
+            "Numero_Mezzo",
+            "NR_AUTOMEZZO",
+            "Nr_Automezzo",
+            "NrAutomezzo",
+            "NumeroAutomezzo",
+            "nr_automezzo",
+        ],
+    );
+
+    if id == 0 && nr_automezzo.trim().is_empty() {
+        return None;
+    }
+
+    let scadenza_ztl_raw = get_field_any(row, &["Scadenza_ZTL", "SCADENZA ZTL", "ScadenzaZTL"]);
+    let scadenza_assicurazione_raw = get_field_any(
+        row,
+        &[
+            "Scadenza_Assicurazione",
+            "SCADENZA ASSICURAZIONE",
+            "ScadenzaAssicurazione",
+        ],
+    );
+    let scadenza_bollo_raw =
+        get_field_any(row, &["Scadenza_Bollo", "SCADENZA BOLLO", "ScadenzaBollo"]);
+
+    Some(Automezzo {
+        id,
+        nr_automezzo,
+        marca: get_field_any(row, &["Marca", "MARCA"]),
+        modello: get_field_any(row, &["Modello", "MODELLO"]),
+        targa: get_field_any(row, &["Targa", "TARGA"]),
+        dotazione: get_field_any(row, &["Dotazione", "DOTAZIONE"]),
+        scadenza_ztl: format_date_iso(&scadenza_ztl_raw),
+        scadenza_assicurazione: format_date_iso(&scadenza_assicurazione_raw),
+        in_servizio: get_field_any(row, &["InServizio", "INSERVIZIO", "In_Servizio"]),
+        note_mezzo: get_field_any(row, &["Note_mezzo", "NOTE", "Note_Mezzo"]),
+        scadenza_bollo: format_date_iso(&scadenza_bollo_raw),
+    })
+}
+
+async fn setup_supabase_from_config(config: &AppConfig) {
+    if let Some(supabase) = &config.supabase {
+        let has_key = !supabase.anon_key.is_empty()
+            || supabase
+                .publishable_key
+                .as_ref()
+                .map(|k| !k.is_empty())
+                .unwrap_or(false)
+            || supabase
+                .secret_key
+                .as_ref()
+                .map(|k| !k.is_empty())
+                .unwrap_or(false);
+
+        if supabase.url.is_empty() || !has_key {
+            println!("⚠️ Config Supabase incompleta (url o chiave API mancanti)");
+            return;
+        }
+
+        // App desktop Tauri (backend Rust): preferisci secret_key per bypassare RLS
+        // publishable/anon restano soggetti alle policy RLS → spesso 0 righe
+        let api_key = supabase
+            .secret_key
+            .clone()
+            .filter(|k| !k.is_empty() && !k.contains("your-"))
+            .or_else(|| {
+                supabase
+                    .publishable_key
+                    .clone()
+                    .filter(|k| !k.is_empty() && !k.contains("your-"))
+            })
+            .unwrap_or_else(|| supabase.anon_key.clone());
+
+        if api_key.contains("your-anon-key") || api_key.is_empty() {
+            println!("⚠️ Chiave API non configurata in config.json");
+            return;
+        }
+
+        let key_type = if api_key.starts_with("sb_publishable_") {
+            "publishable"
+        } else if api_key.starts_with("sb_secret_") {
+            "secret"
+        } else if api_key.starts_with("eyJ") {
+            if supabase.secret_key.as_ref().map(|k| k == &api_key).unwrap_or(false) {
+                "service_role-jwt"
+            } else {
+                "anon-jwt"
+            }
+        } else {
+            "custom"
+        };
+        if key_type.starts_with("secret") || key_type == "service_role-jwt" {
+            println!("⚠️ Uso chiave SECRET (accesso completo DB) — solo per app desktop interna");
+        }
+        println!(
+            "🔑 Supabase API key: tipo={}, prefisso={}...",
+            key_type,
+            &api_key.chars().take(16).collect::<String>()
+        );
+
+        let cfg = supabase.tables.as_ref();
+
+        let tables = SupabaseTablesConfig {
+            tesserati: cfg
+                .and_then(|t| t.tesserati.clone())
+                .or_else(|| supabase.table_tesserati.clone())
+                .unwrap_or_else(|| "tesserati_supa".to_string()),
+            servizi: cfg
+                .and_then(|t| t.servizi.clone())
+                .unwrap_or_else(|| "Servizi_supa".to_string()),
+            automezzi: cfg
+                .and_then(|t| t.automezzi.clone())
+                .unwrap_or_else(|| "Automezzi_Supa".to_string()),
+            dotazioni_mezzi: cfg
+                .and_then(|t| t.dotazioni_mezzi.clone())
+                .unwrap_or_else(|| "DotazioniMezzi_supa".to_string()),
+            impostazioni: cfg
+                .and_then(|t| t.impostazioni.clone())
+                .unwrap_or_else(|| "Impostazioni_supa".to_string()),
+            motivazioni_trasporto: cfg
+                .and_then(|t| t.motivazioni_trasporto.clone())
+                .unwrap_or_else(|| "Motivazioni_trasporto_supa".to_string()),
+            motorizzazioni: cfg
+                .and_then(|t| t.motorizzazioni.clone())
+                .unwrap_or_else(|| "Motorizzazioni_supa".to_string()),
+            richiedenti: cfg
+                .and_then(|t| t.richiedenti.clone())
+                .unwrap_or_else(|| "Richiedenti_supa".to_string()),
+            stato_del_servizio: cfg
+                .and_then(|t| t.stato_del_servizio.clone())
+                .unwrap_or_else(|| "StatoDelServizio_supa".to_string()),
+            telefoni: cfg
+                .and_then(|t| t.telefoni.clone())
+                .unwrap_or_else(|| "Telefoni_supa".to_string()),
+            tipo_pagamenti: cfg
+                .and_then(|t| t.tipo_pagamenti.clone())
+                .unwrap_or_else(|| "TipoPagamenti_supa".to_string()),
+            tipo_socio: cfg
+                .and_then(|t| t.tipo_socio.clone())
+                .unwrap_or_else(|| "TipoSocio_supa".to_string()),
+            tipologia_socio: cfg
+                .and_then(|t| t.tipologia_socio.clone())
+                .or_else(|| cfg.and_then(|t| t.tipo_socio.clone()))
+                .unwrap_or_else(|| "TipoSocio_supa".to_string()),
+            tratte: cfg
+                .and_then(|t| t.tratte.clone())
+                .unwrap_or_else(|| "Tratte_supa".to_string()),
+            user_permissions: cfg
+                .and_then(|t| t.user_permissions.clone())
+                .unwrap_or_else(|| "user_permissions".to_string()),
+            tesseramenti: cfg
+                .and_then(|t| t.tesseramenti.clone())
+                .unwrap_or_else(|| "tesseramenti_supa".to_string()),
+        };
+
+        let sb_config = SupabaseConfig {
+            url: supabase.url.clone(),
+            anon_key: api_key,
+            tables: tables.clone(),
+        };
+        let mut guard = get_supabase_client().lock().await;
+        *guard = Some(SupabaseClient::new(sb_config));
+        println!(
+            "✓ Client Supabase inizializzato ({} tabelle configurate)",
+            16
+        );
+        println!(
+            "  tesserati={}, servizi={}, automezzi={}, tipo_socio={}",
+            tables.tesserati, tables.servizi, tables.automezzi, tables.tipo_socio
+        );
+    }
+}
+
+fn config_json_paths() -> Vec<std::path::PathBuf> {
+    use std::path::PathBuf;
+
+    let mut possible_paths = vec![
+        PathBuf::from("config.json"),
+        PathBuf::from("../config.json"),
+    ];
+
+    if let Ok(current_dir) = std::env::current_dir() {
+        let root_path = if current_dir.ends_with("src-tauri") {
+            current_dir.parent().map(|p| p.join("config.json"))
+        } else {
+            Some(current_dir.join("config.json"))
+        };
+        if let Some(path) = root_path {
+            possible_paths.push(path);
+        }
+    }
+
+    possible_paths
+}
+
+async fn load_app_config_from_file() -> Result<AppConfig, String> {
+    let mut last_error = None;
+
+    for config_path in config_json_paths() {
+        match fs::read_to_string(&config_path) {
+            Ok(contents) => {
+                println!("✓ config.json caricato da: {:?}", config_path);
+                let config: AppConfig = serde_json::from_str(&contents)
+                    .map_err(|e| format!("Errore parsing config.json: {}", e))?;
+                return Ok(config);
+            }
+            Err(e) => {
+                last_error = Some(format!("{:?}: {}", config_path, e));
+            }
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| "config.json non trovato".to_string()))
+}
+
+async fn ensure_supabase_client() -> Result<(), String> {
+    {
+        let guard = get_supabase_client().lock().await;
+        if guard.is_some() {
+            return Ok(());
+        }
+    }
+
+    let config = load_app_config_from_file().await?;
+    setup_supabase_from_config(&config).await;
+
+    let guard = get_supabase_client().lock().await;
+    if guard.is_none() {
+        return Err(
+            "Supabase non inizializzato. Controlla url e anon_key in config.json (Settings → API in Supabase)."
+                .to_string(),
+        );
+    }
+
+    Ok(())
+}
+
+async fn fetch_servizi_supabase(filter: Option<&str>) -> Result<Vec<serde_json::Value>, String> {
+    ensure_supabase_client().await?;
+    let guard = get_supabase_client().lock().await;
+    let client = guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+    client
+        .fetch_servizi(filter)
+        .await
+        .map_err(|e| format_supabase_error(&e))
+}
+
+async fn fetch_motivazioni_servizi_supabase() -> Result<Vec<serde_json::Value>, String> {
+    ensure_supabase_client().await?;
+    let guard = get_supabase_client().lock().await;
+    let client = guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+    client
+        .fetch_servizi_motivazioni()
+        .await
+        .map_err(|e| format_supabase_error(&e))
+}
+
+fn format_supabase_error(err: &str) -> String {
+    if err.contains("401") || err.contains("Invalid API key") {
+        return format!(
+            "{}\n\n🔧 SOLUZIONE — la anon key (eyJ...) nel config NON funziona più.\n\
+            Apri Supabase → il tuo progetto → Settings → API Keys:\n\
+            • SOLUZIONE A (consigliata): copia la Publishable key (inizia con sb_publishable_)\n\
+              e incollala in config.json come \"publishable_key\": \"sb_publishable_...\"\n\
+            • SOLUZIONE B: clicca Regenerate sulla anon key e aggiorna \"anon_key\"\n\
+            • SOLUZIONE C (app desktop): copia Secret key (sb_secret_...) in \"secret_key\"\n\
+            Poi riavvia l'app (npm run tauri dev).",
+            err
+        );
+    }
+    err.to_string()
+}
+
+// Test connessione Supabase (utile per verificare la chiave API)
+#[tauri::command]
+async fn test_supabase_connection() -> Result<serde_json::Value, String> {
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    match client.fetch_tesserati(None, None).await {
+        Ok(rows) => Ok(serde_json::json!({
+            "success": true,
+            "message": format!("Connessione OK. Trovati {} record in tesserati_supa.", rows.len()),
+            "count": rows.len()
+        })),
+        Err(e) => Err(format_supabase_error(&e)),
+    }
+}
+
 // Helper per ottenere l'oauth state lock
 fn get_oauth_state() -> &'static Mutex<Option<String>> {
     OAUTH_STATE.get_or_init(|| Mutex::new(None))
 }
 
-// Comando per verificare se l'utente è autenticato
+// Comando per verificare se l'app è pronta (Supabase configurato — SharePoint non più richiesto)
 #[tauri::command]
 async fn check_authentication() -> Result<bool, String> {
-    let client_guard = get_sharepoint_client().lock().await;
-    
-    if let Some(client) = client_guard.as_ref() {
-        let is_auth = client.is_authenticated();
-        println!("Controllo autenticazione: client presente, is_authenticated = {}", is_auth);
-        return Ok(is_auth);
+    match ensure_supabase_client().await {
+        Ok(()) => {
+            let guard = get_supabase_client().lock().await;
+            let ready = guard.is_some();
+            println!("Controllo autenticazione (Supabase): ready = {}", ready);
+            Ok(ready)
+        }
+        Err(e) => {
+            println!("Controllo autenticazione: Supabase non disponibile — {}", e);
+            Ok(false)
+        }
     }
-    
-    println!("Controllo autenticazione: client SharePoint non presente");
-    Ok(false)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -148,15 +713,18 @@ struct ServizioCompleto {
     operatore: String,
     operatore_2: String,
     mezzo_usato: String,
+    mezzo: String, // Campo MEZZO che contiene il riferimento NR_AUTOMEZZO
     tempo: String,
     km: String,
     tipo_pagamento: String,
     data_bonifico: String,
     data_ricevuta: String,
+    numero_ricevuta: String,
     stato_servizio: String,
     note_prelievo: String,
     note_arrivo: String,
     note_fine_servizio: String,
+    archivia: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -167,7 +735,7 @@ struct Tessera {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Tesserato {
-    id: u32, // ID interno SharePoint
+    id: u32, // ID riga Supabase (o IdSocio)
     idsocio: String,
     nominativo: String,
     codicefiscale: String,
@@ -177,1562 +745,1897 @@ struct Tesserato {
     tipologiasocio: String,
     operatore: String,
     attivo: String,
+    archivia: String,
     disponibilita: String,
     notaaggiuntiva: String,
 }
 
-// Comando per ottenere servizi del giorno
-#[tauri::command]
-async fn get_servizi_giorno() -> Result<Vec<Servizio>, String> {
-    println!("=== get_servizi_giorno chiamato ===");
-    
-    let mut client_guard = get_sharepoint_client().lock().await;
-    
-    if client_guard.is_none() {
-        println!("⚠️ Client SharePoint non presente, uso dati di esempio");
-        return get_servizi_giorno_fallback();
-    }
-    
-    // Verifica autenticazione
-    if let Some(client) = client_guard.as_ref() {
-        let is_auth = client.is_authenticated();
-        println!("Stato autenticazione: {}", is_auth);
-        if !is_auth {
-            println!("⚠️ Client non autenticato, uso dati di esempio");
-            return get_servizi_giorno_fallback();
-        }
-    }
-    
-    // Prepara il filtro per la data corrente (tutta la giornata)
-    // Proviamo a usare un filtro con Microsoft Graph API per recuperare solo gli elementi con DATA_PRELIEVO >= oggi
-    // Se il filtro non funziona (campo non indicizzato), recupereremo tutti gli elementi e filtriamo manualmente
-    let oggi = Local::now().format("%Y-%m-%d").to_string();
-    let oggi_inizio = format!("{}T00:00:00Z", oggi);
-    
-    println!("Data oggi: {}", oggi);
-    println!("Tentativo di usare filtro DATA_PRELIEVO >= {}", oggi_inizio);
-    
-    // Costruisci il filtro per Microsoft Graph API
-    // NOTA: DATA_PRELIEVO potrebbe non essere indicizzato, quindi il filtro potrebbe fallire
-    // In quel caso, recupereremo tutti gli elementi e filtriamo manualmente
-    let filter = format!("fields/DATA_PRELIEVO ge {}", oggi_inizio);
-    
-    if let Some(client) = client_guard.as_mut() {
-        // Ottieni il nome della lista dal config
-        let list_name = get_list_name("servizi_giorno").await;
-        println!("📋 Usando lista: {}", list_name);
-        println!("Tentativo di recuperare servizi da SharePoint con filtro...");
-        // Proviamo prima con il filtro, se fallisce recuperiamo tutti gli elementi
-        let items_result = client.get_list_items(&list_name, Some(&filter)).await;
-        
-        // Se il filtro fallisce (errore 400), proviamo senza filtro
-        let items = match items_result {
-            Ok(items) => {
-                println!("✓ Filtro applicato con successo, recuperati {} elementi", items.len());
-                items
-            }
-            Err(e) => {
-                println!("⚠️ Filtro fallito (probabilmente campo non indicizzato): {}", e);
-                println!("Recupero tutti gli elementi senza filtro...");
-                match client.get_list_items(&list_name, None).await {
-                    Ok(all_items) => {
-                        println!("✓ Recuperati {} elementi totali (senza filtro)", all_items.len());
-                        all_items
-                    }
-                    Err(e2) => {
-                        eprintln!("✗ Errore anche senza filtro: {}", e2);
-                        return Err(format!("Errore nel recupero elementi: {} (filtro: {})", e2, e));
-                    }
-                }
-            }
-        };
-        
-        println!("✓ Ricevuti {} elementi da SharePoint", items.len());
-        
-        // Converti in Servizio e filtra per data corrente
-        // La data viene formattata in formato italiano "dd/mm/yyyy"
-        let now = Local::now();
-        let oggi_italiano = format!("{:02}/{:02}/{}", 
-            now.day(),
-            now.month(),
-            now.year()
-        );
-        println!("Data oggi (formato italiano): {}", oggi_italiano);
-        
-        // Log dei primi 5 elementi per vedere come sono formattate le date
-        println!("Primi 5 elementi ricevuti:");
-        for (i, item) in items.iter().take(5).enumerate() {
-            if let Ok(servizio) = serde_json::from_value::<Servizio>(item.clone()) {
-                println!("  [{}] ID: {}, Data: '{}', Operatore: {}", 
-                    i, servizio.id, servizio.data, servizio.operatore);
-            } else {
-                println!("  [{}] Errore nel parsing: {:?}", i, item);
-            }
-        }
-        
-        // Cerca specificamente l'elemento con ID 64
-        println!("🔍 Ricerca elemento con ID 64...");
-        let mut trovato_64 = false;
-        for item in items.iter() {
-            // Log dettagliato del raw item per vedere id_interno e IDSERVIZIO
-            let mut id_interno_64 = false;
-            if let Some(id_raw) = item.get("id") {
-                // Controlla se l'id interno è 64
-                if let Some(id_str) = id_raw.as_str() {
-                    if id_str == "64" || id_str.parse::<u32>().ok() == Some(64) {
-                        id_interno_64 = true;
-                    }
-                } else if let Some(id_num) = id_raw.as_number().and_then(|n| n.as_u64()) {
-                    if id_num == 64 {
-                        id_interno_64 = true;
-                    }
-                }
-                
-                if id_interno_64 {
-                    println!("  🔍 TROVATO elemento con id interno 64 (raw):");
-                    println!("    id interno (raw): {:?}", id_raw);
-                    if let Some(fields) = item.get("fields") {
-                        if let Some(idservizio) = fields.get("IDSERVIZIO") {
-                            println!("    IDSERVIZIO (raw): {:?}", idservizio);
-                        } else {
-                            println!("    IDSERVIZIO: NON PRESENTE");
-                        }
-                        // Log anche altri campi rilevanti
-                        if let Some(oper) = fields.get("OPER") {
-                            println!("    OPER (raw): {:?}", oper);
-                        }
-                        if let Some(data_prelievo) = fields.get("DATA_PRELIEVO") {
-                            println!("    DATA_PRELIEVO (raw): {:?}", data_prelievo);
-                        }
-                    }
-                    println!("    Raw item completo: {}", serde_json::to_string(item).unwrap_or_else(|_| "errore serializzazione".to_string()));
-                }
-            }
-            
-            if let Ok(servizio) = serde_json::from_value::<Servizio>(item.clone()) {
-                if servizio.id == 64 {
-                    trovato_64 = true;
-                    println!("  ✓ TROVATO elemento con ID 64 (dopo mapping)!");
-                    println!("    Data: '{}', Operatore: '{}'", servizio.data, servizio.operatore);
-                    println!("    Confronto con oggi: '{}' vs '{}' -> {}", 
-                        servizio.data, oggi_italiano, servizio.data == oggi_italiano);
-                }
-            }
-        }
-        if !trovato_64 {
-            println!("  ✗ Elemento con ID 64 NON trovato nei {} elementi recuperati", items.len());
-        }
-        
-        // Cerca tutti gli elementi con data 28/12/2025
-        println!("🔍 Ricerca elementi con data 28/12/2025...");
-        let mut elementi_28_12 = 0;
-        for item in items.iter() {
-            if let Ok(servizio) = serde_json::from_value::<Servizio>(item.clone()) {
-                if servizio.data == "28/12/2025" {
-                    elementi_28_12 += 1;
-                    if elementi_28_12 <= 5 {
-                        println!("  [{}] ID: {}, Data: '{}', Operatore: {}", 
-                            elementi_28_12, servizio.id, servizio.data, servizio.operatore);
-                    }
-                }
-            }
-        }
-        println!("  Totale elementi con data 28/12/2025: {}", elementi_28_12);
-        
-        let mut elementi_parsing_fallito = 0;
-        let mut elementi_totali_parsati = 0;
-        let mut servizi_trovati = 0;
-        let servizi: Vec<Servizio> = items
-            .iter()
-            .filter_map(|item| {
-                elementi_totali_parsati += 1;
-                match serde_json::from_value::<Servizio>(item.clone()) {
-                    Ok(servizio) => {
-                        // Filtra per data corrente (solo oggi)
-                        // La data è in formato "dd/mm/yyyy"
-                        let corrisponde = servizio.data == oggi_italiano;
-                        if servizi_trovati < 3 {
-                            println!("Confronto [{}]: servizio.data='{}' vs oggi_italiano='{}' -> {}", 
-                                servizio.id, servizio.data, oggi_italiano, corrisponde);
-                        }
-                        if corrisponde {
-                            servizi_trovati += 1;
-                            if servizi_trovati <= 3 {
-                                println!("  ✓ Servizio {} corrisponde alla data di oggi!", servizio.id);
-                            }
-                            Some(servizio)
-                        } else {
-                            None
-                        }
-                    }
-                    Err(e) => {
-                        elementi_parsing_fallito += 1;
-                        if elementi_parsing_fallito <= 5 {
-                            eprintln!("Errore nel parsing elemento {}: {} - {:?}", elementi_totali_parsati, e, item);
-                        }
-                        None
-                    }
-                }
-            })
-            .collect();
-        
-        if elementi_parsing_fallito > 0 {
-            println!("⚠️ Totale elementi con errore di parsing: {} su {}", elementi_parsing_fallito, items.len());
-        }
-        println!("✓ Convertiti e filtrati {} servizi per la data {} (su {} elementi parsati)", 
-            servizi.len(), oggi_italiano, elementi_totali_parsati - elementi_parsing_fallito);
-        Ok(servizi)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct SocioAnagrafica {
+    id: u32,
+    idsocio: String,
+    nominativo: String,
+    codicefiscale: String,
+    sesso: String,
+    nascita_comune: String,
+    nascita_data: String,
+    residenza_indirizzo: String,
+    residenza_civico: String,
+    residenza_cap: String,
+    residenza_comune: String,
+    residenza_provincia: String,
+    telefono: String,
+    tipologiasocio: String,
+    operatore: bool,
+    attivo: bool,
+    archivia: bool,
+    disponibilita: String,
+    notaaggiuntiva: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct TesseramentoRecord {
+    id: Option<String>,
+    idsocio: String,
+    anno: String,
+    numero: String,
+    data: String,
+    scadenza: String,
+    tipologia: String,
+    quota: String,
+    note: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SocioAnagraficaCompleta {
+    anagrafica: SocioAnagrafica,
+    tesseramenti: Vec<TesseramentoRecord>,
+}
+
+fn bool_to_db_flag(value: bool) -> String {
+    if value {
+        "SI".to_string()
     } else {
-        println!("⚠️ Client non disponibile dopo il lock");
-        get_servizi_giorno_fallback()
+        "NO".to_string()
     }
 }
 
-fn get_servizi_giorno_fallback() -> Result<Vec<Servizio>, String> {
-    Ok(vec![
-        Servizio {
-            id: 1146,
-            operatore: "GAGLIARDI DESIDERATO".to_string(),
-            data: "23/12/2025".to_string(),
-            nominativo: "GALUPPO ANGELO".to_string(),
-            ora_sotto_casa: "08:30".to_string(),
-            ora_destinazione: "".to_string(),
-            tipo_servizio: "TRASPORTO IN OSPEDALE CARD. MASSAIA AST".to_string(),
-        },
-        Servizio {
-            id: 1140,
-            operatore: "ARNONE ANTONINO".to_string(),
-            data: "23/12/2025".to_string(),
-            nominativo: "GROSSO GRAZIELLA".to_string(),
-            ora_sotto_casa: "10:30".to_string(),
-            ora_destinazione: "".to_string(),
-            tipo_servizio: "Trasporto Via Scotti".to_string(),
-        },
-        Servizio {
-            id: 1132,
-            operatore: "PASCARIELLO GIUSEPPE".to_string(),
-            data: "23/12/2025".to_string(),
-            nominativo: "CAMILLERI MARIANNA".to_string(),
-            ora_sotto_casa: "14:45".to_string(),
-            ora_destinazione: "".to_string(),
-            tipo_servizio: "TRASPORTO GENERICO".to_string(),
-        },
-    ])
-}
-
-// Comando per ottenere prossimi servizi
-#[tauri::command]
-async fn get_prossimi_servizi() -> Result<Vec<Servizio>, String> {
-    println!("=== get_prossimi_servizi chiamato ===");
-    
-    let mut client_guard = get_sharepoint_client().lock().await;
-    
-    if client_guard.is_none() {
-        println!("⚠️ Client SharePoint non presente, uso dati di esempio");
-        return get_prossimi_servizi_fallback();
-    }
-    
-    // Verifica autenticazione
-    if let Some(client) = client_guard.as_ref() {
-        let is_auth = client.is_authenticated();
-        println!("Stato autenticazione: {}", is_auth);
-        if !is_auth {
-            println!("⚠️ Client non autenticato, uso dati di esempio");
-            return get_prossimi_servizi_fallback();
-        }
-    }
-    
-    // Calcola domani (oggi + 1 giorno)
-    let oggi = Local::now();
-    let domani = oggi + chrono::Duration::days(1);
-    let domani_str = domani.format("%Y-%m-%d").to_string();
-    let domani_inizio = format!("{}T00:00:00Z", domani_str);
-    
-    println!("Data oggi: {}", oggi.format("%Y-%m-%d"));
-    println!("Data domani: {}", domani_str);
-    println!("Tentativo di usare filtro DATA_PRELIEVO >= {}", domani_inizio);
-    
-    // Costruisci il filtro per Microsoft Graph API (domani e successivi)
-    let filter = format!("fields/DATA_PRELIEVO ge {}", domani_inizio);
-    
-    if let Some(client) = client_guard.as_mut() {
-        // Ottieni il nome della lista dal config
-        let list_name = get_list_name("prossimi_servizi").await;
-        println!("📋 Usando lista: {}", list_name);
-        println!("Tentativo di recuperare prossimi servizi da SharePoint con filtro...");
-        // Proviamo prima con il filtro, se fallisce recuperiamo tutti gli elementi
-        let items_result = client.get_list_items(&list_name, Some(&filter)).await;
-        
-        // Se il filtro fallisce (errore 400), proviamo senza filtro e filtriamo lato client
-        let items = match items_result {
-            Ok(items) => {
-                println!("✓ Filtro applicato con successo, recuperati {} elementi", items.len());
-                items
-            }
-            Err(e) => {
-                println!("⚠️ Filtro fallito (probabilmente campo non indicizzato): {}", e);
-                println!("Recupero tutti gli elementi senza filtro e filtro lato client...");
-                match client.get_list_items(&list_name, None).await {
-                    Ok(all_items) => {
-                        println!("✓ Recuperati {} elementi totali (senza filtro)", all_items.len());
-                        all_items
-                    }
-                    Err(e2) => {
-                        eprintln!("✗ Errore anche senza filtro: {}", e2);
-                        return Err(format!("Errore nel recupero elementi: {} (filtro: {})", e2, e));
-                    }
-                }
-            }
-        };
-        
-        println!("✓ Ricevuti {} elementi da SharePoint", items.len());
-        
-        // Converti in Servizio e filtra per data domani e successivi
-        let domani_italiano = format!("{:02}/{:02}/{}", 
-            domani.day(),
-            domani.month(),
-            domani.year()
-        );
-        println!("Data domani (formato italiano): {}", domani_italiano);
-        
-        // Parse della data domani per il confronto
-        let domani_naive = chrono::NaiveDate::from_ymd_opt(
-            domani.year(),
-            domani.month(),
-            domani.day()
-        ).unwrap();
-        
-        let servizi: Vec<Servizio> = items
-            .iter()
-            .filter_map(|item| {
-                match serde_json::from_value::<Servizio>(item.clone()) {
-                    Ok(servizio) => {
-                        // Parse della data del servizio (formato dd/mm/yyyy)
-                        let parse_date = |date_str: &str| -> Option<chrono::NaiveDate> {
-                            if date_str.is_empty() {
-                                return None;
-                            }
-                            chrono::NaiveDate::parse_from_str(date_str, "%d/%m/%Y").ok()
-                        };
-                        
-                        if let Some(servizio_date) = parse_date(&servizio.data) {
-                            // Include solo servizi con data >= domani
-                            if servizio_date >= domani_naive {
-                                Some(servizio)
-                            } else {
-                                None
-                            }
-                        } else {
-                            // Se non riesce a parsare la data, escludi l'elemento
-                            None
-                        }
-                    }
-                    Err(_) => None,
-                }
-            })
-            .collect();
-        
-        println!("✓ Convertiti e filtrati {} servizi per data >= {} (domani e successivi)", 
-            servizi.len(), domani_italiano);
-        Ok(servizi)
-    } else {
-        println!("⚠️ Client non disponibile dopo il lock");
-        get_prossimi_servizi_fallback()
-    }
-}
-
-fn get_prossimi_servizi_fallback() -> Result<Vec<Servizio>, String> {
-    Ok(vec![
-        Servizio {
-            id: 1153,
-            operatore: "GUAZZINI LUCA".to_string(),
-            data: "24/12/2025".to_string(),
-            nominativo: "BESTENTE ANNA VINCENZA".to_string(),
-            ora_sotto_casa: "09:30".to_string(),
-            ora_destinazione: "".to_string(),
-            tipo_servizio: "Commissioni varie".to_string(),
-        },
-        Servizio {
-            id: 1099,
-            operatore: "CONTI MARZIA".to_string(),
-            data: "24/12/2025".to_string(),
-            nominativo: "RESCE MARIA GIUSEPPINA".to_string(),
-            ora_sotto_casa: "09:30".to_string(),
-            ora_destinazione: "".to_string(),
-            tipo_servizio: "TRASPORTO IN OSPEDALE CARD. MASSAIA AST".to_string(),
-        },
-        Servizio {
-            id: 1157,
-            operatore: "PASCARIELLO GIUSEPPE".to_string(),
-            data: "24/12/2025".to_string(),
-            nominativo: "CHIRONE FILIPPO".to_string(),
-            ora_sotto_casa: "10:30".to_string(),
-            ora_destinazione: "".to_string(),
-            tipo_servizio: "TRASPORTO IN OSPEDALE CON MEZZO ATTREZ".to_string(),
-        },
-    ])
-}
-
-// Comando per ottenere servizi inseriti oggi
-#[tauri::command]
-async fn get_servizi_inseriti_oggi() -> Result<Vec<Servizio>, String> {
-    let oggi = Local::now().format("%Y-%m-%d").to_string();
-    let filter = format!("Created ge datetime'{}T00:00:00Z'", oggi);
-    
-    let mut client_guard = get_sharepoint_client().lock().await;
-    
-    if let Some(client) = client_guard.as_mut() {
-        // Ottieni il nome della lista dal config
-        let list_name = get_list_name("servizi_inseriti_oggi").await;
-        println!("📋 Usando lista: {}", list_name);
-        // Proviamo prima con il filtro, se fallisce recuperiamo tutti gli elementi
-        let items_result = client.get_list_items(&list_name, Some(&filter)).await;
-        
-        // Se il filtro fallisce (errore 400), proviamo senza filtro e filtriamo lato client
-        let items = match items_result {
-            Ok(items) => {
-                println!("✓ Filtro createdDateTime applicato con successo, recuperati {} elementi", items.len());
-                items
-            }
-            Err(e) => {
-                println!("⚠️ Filtro createdDateTime fallito (probabilmente non supportato): {}", e);
-                println!("Recupero tutti gli elementi senza filtro e filtro lato client...");
-                match client.get_list_items(&list_name, None).await {
-                    Ok(all_items) => {
-                        println!("✓ Recuperati {} elementi totali (senza filtro)", all_items.len());
-                        // Filtra lato client per createdDateTime >= oggi
-                        let oggi_start = format!("{}T00:00:00Z", oggi);
-                        let filtered: Vec<serde_json::Value> = all_items
-                            .iter()
-                            .filter_map(|item| {
-                                // Cerca createdDateTime nell'oggetto (potrebbe essere a livello root o in fields)
-                                let created_str = item.get("createdDateTime")
-                                    .or_else(|| item.get("fields").and_then(|f| f.get("createdDateTime")))
-                                    .and_then(|v| v.as_str());
-                                
-                                if let Some(created) = created_str {
-                                    // Confronta le date (formato ISO 8601)
-                                    if created >= oggi_start.as_str() {
-                                        Some(item.clone())
-                                    } else {
-                                        None
-                                    }
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect();
-                        println!("✓ Filtrati {} elementi con createdDateTime >= {}", filtered.len(), oggi_start);
-                        filtered
-                    }
-                    Err(e2) => {
-                        eprintln!("✗ Errore anche senza filtro: {}", e2);
-                        return Err(format!("Errore nel recupero elementi: {} (filtro: {})", e2, e));
-                    }
-                }
-            }
-        };
-        
-        let servizi: Vec<Servizio> = items
-            .iter()
-            .filter_map(|item| {
-                serde_json::from_value(item.clone()).ok()
-            })
-            .collect();
-        Ok(servizi)
-    } else {
-        get_servizi_inseriti_oggi_fallback()
-    }
-}
-
-fn get_servizi_inseriti_oggi_fallback() -> Result<Vec<Servizio>, String> {
-    Ok(vec![
-        Servizio {
-            id: 1159,
-            operatore: "FRANCO FRANCESCO".to_string(),
-            data: "30/12/2025".to_string(),
-            nominativo: "BOTTARO UGO".to_string(),
-            ora_sotto_casa: "09:30".to_string(),
-            ora_destinazione: "".to_string(),
-            tipo_servizio: "TRASPORTO IN OSPEDALE CARD. MASSAIA AST".to_string(),
-        },
-        Servizio {
-            id: 1157,
-            operatore: "PASCARIELLO GIUSEPPE".to_string(),
-            data: "24/12/2025".to_string(),
-            nominativo: "CHIRONE FILIPPO".to_string(),
-            ora_sotto_casa: "10:30".to_string(),
-            ora_destinazione: "".to_string(),
-            tipo_servizio: "TRASPORTO IN OSPEDALE CON MEZZO ATTREZ".to_string(),
-        },
-    ])
-}
-
-// Comando per ottenere tessere da fare
-#[tauri::command]
-async fn get_tessere_da_fare() -> Result<Vec<Tessera>, String> {
-    println!("=== get_tessere_da_fare chiamato ===");
-    
-    let mut client_guard = get_sharepoint_client().lock().await;
-    
-    if client_guard.is_none() {
-        println!("⚠️ Client SharePoint non presente, uso dati di esempio");
-        return Ok(vec![
-            Tessera {
-                id: 712,
-                descrizione: "LA VECCHIA (in carico all'ANTE".to_string(),
-            },
-        ]);
-    }
-    
-    // Verifica autenticazione
-    if let Some(client) = client_guard.as_ref() {
-        let is_auth = client.is_authenticated();
-        println!("Stato autenticazione: {}", is_auth);
-        if !is_auth {
-            println!("⚠️ Client non autenticato, uso dati di esempio");
-            return Ok(vec![
-                Tessera {
-                    id: 712,
-                    descrizione: "LA VECCHIA (in carico all'ANTE".to_string(),
-                },
-            ]);
-        }
-    }
-    
-    // Costruisci il filtro per TIPOLOGIASOCIO = "NUOVO" o "ESTERNO"
-    // Sintassi OData per Microsoft Graph API
-    let filter = "fields/TIPOLOGIASOCIO eq 'NUOVO' or fields/TIPOLOGIASOCIO eq 'ESTERNO'";
-    
-    if let Some(client) = client_guard.as_mut() {
-        // Ottieni il nome della lista dal config (lista "tesserati")
-        let list_name = get_list_name("tesserati").await;
-        println!("📋 Usando lista: {}", list_name);
-        
-        // USA get_list_items_raw per ottenere i dati raw con "fields", non get_list_items che converte in formato Servizio
-        // Prova prima con il filtro, se fallisce recuperiamo tutti gli elementi e filtriamo manualmente
-        let items_result = client.get_list_items_raw(&list_name, Some(filter)).await;
-        
-        let items = match items_result {
-            Ok(items) => {
-                println!("✓ Filtro applicato con successo, recuperati {} elementi", items.len());
-                items
-            }
-            Err(e) => {
-                println!("⚠️ Filtro fallito, recupero tutti gli elementi: {}", e);
-                match client.get_list_items_raw(&list_name, None).await {
-                    Ok(all_items) => {
-                        println!("✓ Recuperati {} elementi totali (senza filtro)", all_items.len());
-                        all_items
-                    }
-                    Err(e2) => {
-                        eprintln!("✗ Errore nel recupero elementi: {}", e2);
-                        return Err(format!("Errore nel recupero elementi: {}", e2));
-                    }
-                }
-            }
-        };
-        
-        println!("✓ Ricevuti {} elementi da SharePoint dalla lista {}", items.len(), list_name);
-        
-        if items.is_empty() {
-            println!("⚠️ Nessun elemento recuperato dalla lista {}", list_name);
-            return Ok(vec![]);
-        }
-        
-        // Converti in Tessera e filtra per TIPOLOGIASOCIO
-        let mut tessere = Vec::new();
-        
-        for item in items.iter() {
-            // Estrai l'id interno di SharePoint
-            let id = if let Some(id_val) = item.get("id") {
-                if let Some(id_str) = id_val.as_str() {
-                    id_str.parse::<u32>().ok().unwrap_or(0)
-                } else if let Some(id_num) = id_val.as_u64() {
-                    id_num as u32
-                } else {
-                    0
-                }
-            } else {
-                continue;
-            };
-            
-            if let Some(fields) = item.get("fields") {
-                // Helper per estrarre il valore di un campo
-                let get_field_value = |field_name: &str| -> String {
-                    if let Some(val) = fields.get(field_name) {
-                        if let Some(s) = val.as_str() {
-                            return s.to_string();
-                        }
-                        if val.is_null() {
-                            return String::new();
-                        }
-                        // Gestisci oggetti annidati (es. {value: "..."})
-                        if let Some(obj) = val.as_object() {
-                            if let Some(value) = obj.get("value") {
-                                if let Some(s) = value.as_str() {
-                                    return s.to_string();
-                                }
-                            }
-                        }
-                        val.to_string()
-                    } else {
-                        String::new()
-                    }
-                };
-                
-                // Estrai TIPOLOGIASOCIO e filtra
-                let tipologia_value = get_field_value("TIPOLOGIASOCIO");
-                let tipologia_clean = tipologia_value.trim().to_uppercase();
-                if tipologia_clean != "NUOVO" && tipologia_clean != "ESTERNO" {
-                    continue;
-                }
-                
-                // Costruisci la descrizione: prova Nominativo_SOCIO (dall'immagine), poi COGNOME NOME, altrimenti altri campi
-                let nominativo_socio = get_field_value("Nominativo_SOCIO");
-                let nominativo_socio_alt = get_field_value("NOMINATIVO_SOCIO");
-                let cognome = get_field_value("COGNOME");
-                let nome = get_field_value("NOME");
-                
-                let descrizione = if !nominativo_socio.is_empty() {
-                    nominativo_socio
-                } else if !nominativo_socio_alt.is_empty() {
-                    nominativo_socio_alt
-                } else if !cognome.is_empty() && !nome.is_empty() {
-                    format!("{} {}", cognome, nome)
-                } else if !cognome.is_empty() {
-                    cognome
-                } else if !nome.is_empty() {
-                    nome
-                } else {
-                    // Prova altri campi comuni
-                    let desc = get_field_value("DESCRIZIONE");
-                    if !desc.is_empty() {
-                        desc
-                    } else {
-                        get_field_value("TITOLO")
-                    }
-                };
-                
-                if descrizione.is_empty() {
-                    // Se non abbiamo una descrizione, saltiamo questo elemento
-                    continue;
-                }
-                
-                tessere.push(Tessera {
-                    id,
-                    descrizione,
-                });
-            }
-        }
-        
-        println!("✓ Convertiti {} elementi in Tessera (su {} totali recuperati)", tessere.len(), items.len());
-        
-        if tessere.is_empty() {
-            println!("⚠️ Nessuna tessera trovata con TIPOLOGIASOCIO='NUOVO' o 'ESTERNO'");
-            return Ok(vec![]);
-        }
-        
-        Ok(tessere)
-    } else {
-        Err("Client SharePoint non disponibile".to_string())
-    }
-}
-
-// Comando per ottenere tutti i tesserati
-#[tauri::command]
-async fn get_all_tesserati() -> Result<Vec<Tesserato>, String> {
-    println!("=== get_all_tesserati chiamato ===");
-    
-    let mut client_guard = get_sharepoint_client().lock().await;
-    
-    if client_guard.is_none() {
-        println!("⚠️ Client SharePoint non presente, uso dati di esempio");
-        return Ok(vec![]);
-    }
-    
-    // Verifica autenticazione
-    if let Some(client) = client_guard.as_ref() {
-        let is_auth = client.is_authenticated();
-        println!("Stato autenticazione: {}", is_auth);
-        if !is_auth {
-            println!("⚠️ Client non autenticato, uso dati di esempio");
-            return Ok(vec![]);
-        }
-    }
-    
-    if let Some(client) = client_guard.as_mut() {
-        // Ottieni il nome della lista dal config (lista "tesserati")
-        let list_name = get_list_name("tesserati").await;
-        println!("📋 Usando lista: {}", list_name);
-        
-        // Recupera tutti gli elementi senza filtro
-        let items_result = client.get_list_items_raw(&list_name, None).await;
-        
-        let items = match items_result {
-            Ok(items) => {
-                println!("✓ Recuperati {} elementi dalla lista {}", items.len(), list_name);
-                items
-            }
-            Err(e) => {
-                eprintln!("✗ Errore nel recupero elementi: {}", e);
-                return Err(format!("Errore nel recupero elementi: {}", e));
-            }
-        };
-        
-        if items.is_empty() {
-            println!("⚠️ Nessun elemento recuperato dalla lista {}", list_name);
-            return Ok(vec![]);
-        }
-        
-        // Converti in Tesserato
-        let mut tesserati = Vec::new();
-        
-        // Log i campi del primo elemento per debug (solo una volta)
-        let mut fields_logged = false;
-        
-        // Contatori per statistiche operatori
-        let mut operatore_count = 0u32;
-        let mut operatore_total = 0u32;
-        
-        for item in items.iter() {
-            // Estrai l'id interno di SharePoint
-            let id = if let Some(id_val) = item.get("id") {
-                if let Some(id_str) = id_val.as_str() {
-                    id_str.parse::<u32>().ok().unwrap_or(0)
-                } else if let Some(id_num) = id_val.as_u64() {
-                    id_num as u32
-                } else {
-                    0
-                }
-            } else {
-                continue;
-            };
-            
-            if let Some(fields) = item.get("fields") {
-                // Helper per estrarre il valore di un campo
-                let get_field_value = |field_name: &str| -> String {
-                    if let Some(val) = fields.get(field_name) {
-                        if let Some(s) = val.as_str() {
-                            return s.to_string();
-                        }
-                        if val.is_null() {
-                            return String::new();
-                        }
-                        // Gestisci array (campi di scelta multipla)
-                        if let Some(arr) = val.as_array() {
-                            let values: Vec<String> = arr.iter()
-                                .filter_map(|v| {
-                                    // Ogni elemento dell'array può essere una stringa o un oggetto con "value"
-                                    if let Some(s) = v.as_str() {
-                                        Some(s.to_string())
-                                    } else if let Some(obj) = v.as_object() {
-                                        if let Some(value) = obj.get("value") {
-                                            value.as_str().map(|s| s.to_string())
-                                        } else if let Some(lookup_value) = obj.get("LookupValue") {
-                                            lookup_value.as_str().map(|s| s.to_string())
-                                        } else {
-                                            None
-                                        }
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect();
-                            if !values.is_empty() {
-                                return values.join(" - ");
-                            }
-                            return String::new();
-                        }
-                        // Gestisci oggetti annidati (es. {value: "..."} o {value: [...]})
-                        if let Some(obj) = val.as_object() {
-                            // Prova prima con "value" (può essere un array)
-                            if let Some(value) = obj.get("value") {
-                                if let Some(arr) = value.as_array() {
-                                    // È un array dentro un oggetto
-                                    let values: Vec<String> = arr.iter()
-                                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                                        .collect();
-                                    if !values.is_empty() {
-                                        return values.join(" - ");
-                                    }
-                                } else if let Some(s) = value.as_str() {
-                                    return s.to_string();
-                                }
-                            }
-                            // Prova con "LookupValue" (per campi lookup multipli)
-                            if let Some(lookup_value) = obj.get("LookupValue") {
-                                if let Some(s) = lookup_value.as_str() {
-                                    return s.to_string();
-                                }
-                            }
-                        }
-                        val.to_string()
-                    } else {
-                        String::new()
-                    }
-                };
-                
-                // Estrai tutti i campi richiesti
-                // Prova varianti del nome per IDSOCIO
-                let idsocio_val = get_field_value("IDSOCIO");
-                let idsocio = if !idsocio_val.is_empty() {
-                    idsocio_val
-                } else {
-                    // Prova varie combinazioni di nomi
-                    let variants = vec![
-                        "ID_SOCIO", "IdSocio", "idSocio", "Id_Socio", "IDSOCIO",
-                        "SocioID", "SOCIO_ID", "Socio_Id", "socioId",
-                        "ID", "Id", "Title" // Alcuni potrebbero usare Title o ID generico
-                    ];
-                    
-                    let mut found_value = String::new();
-                    let mut found_key = String::new();
-                    
-                    for variant in variants {
-                        let val = get_field_value(variant);
-                        if !val.is_empty() && (found_value.is_empty() || variant == "IDSOCIO" || variant == "ID_SOCIO") {
-                            found_value = val;
-                            found_key = variant.to_string();
-                            break; // Usa il primo trovato
-                        }
-                    }
-                    
-                    if !found_value.is_empty() {
-                        // Solo log una volta ogni 10 elementi per non intasare i log
-                        if id % 10 == 0 {
-                            println!("✓ IDSOCIO trovato come '{}': '{}' (ID interno: {})", found_key, found_value, id);
-                        }
-                        found_value
-                            } else {
-                                // Log i campi disponibili solo per il primo elemento se non ancora fatto
-                                if !fields_logged {
-                                    if let Some(fields_obj) = fields.as_object() {
-                                        let mut all_keys: Vec<&String> = fields_obj.keys().collect();
-                                        all_keys.sort();
-                                        println!("⚠️ IDSOCIO non trovato nel primo elemento. Tutti i campi disponibili ({}): {:?}", all_keys.len(), all_keys);
-                                        // Cerca campi che contengono "SOCIO", "ID", o numeri
-                                        let matching_keys: Vec<&String> = all_keys.iter()
-                                            .filter(|k| {
-                                                let k_upper = k.to_uppercase();
-                                                k_upper.contains("SOCIO") || 
-                                                k_upper.contains("ID") || 
-                                                (k_upper.len() <= 10 && k.chars().any(|c| c.is_numeric()))
-                                            })
-                                            .cloned()
-                                            .collect();
-                                        if !matching_keys.is_empty() {
-                                            println!("  → Campi che potrebbero essere IDSOCIO: {:?}", matching_keys);
-                                        }
-                                    }
-                                    fields_logged = true;
-                                }
-                                // Usa l'ID interno di SharePoint come IDSOCIO se il campo non esiste
-                                id.to_string()
-                            }
-                };
-                let nominativo_socio = get_field_value("Nominativo_SOCIO");
-                let nominativo_socio_alt = get_field_value("NOMINATIVO_SOCIO");
-                let cognome = get_field_value("COGNOME");
-                let nome = get_field_value("NOME");
-                
-                // Costruisci il nominativo (prova Nominativo_SOCIO, poi COGNOME NOME)
-                let nominativo = if !nominativo_socio.is_empty() {
-                    nominativo_socio
-                } else if !nominativo_socio_alt.is_empty() {
-                    nominativo_socio_alt
-                } else if !cognome.is_empty() && !nome.is_empty() {
-                    format!("{} {}", cognome, nome)
-                } else if !cognome.is_empty() {
-                    cognome
-                } else if !nome.is_empty() {
-                    nome
-                } else {
-                    String::new()
-                };
-                
-                // Estrai Codice Fiscale (prova varianti)
-                // IMPORTANTE: "Codice Fiscale" con spazio è il nome corretto in SharePoint
-                // SharePoint usa spesso il nome interno con spazio codificato come "Codice_x0020_Fiscale"
-                let codicefiscale_variants = vec![
-                    "Codice Fiscale",  // Nome visualizzato in SharePoint (con spazio)
-                    "Codice_x0020_Fiscale",  // Nome interno SharePoint (spazio codificato)
-                    "Codice_x0020_fiscale",
-                    "CODICE FISCALE", 
-                    "CODICE_X0020_FISCALE",
-                    "CodiceFiscale",  // Senza spazio
-                    "CODICE_FISCALE", 
-                    "Codice_Fiscale",
-                    "Codice fiscale",
-                    "CF", "cf", "Cf", "C_F", "c_f",
-                    "FISCALECODE", "FiscaleCode", "fiscaleCode",
-                    "CODICEFISCALE", "codicefiscale"
-                ];
-                
-                let mut codicefiscale_final = String::new();
-                let mut codicefiscale_found_key = String::new();
-                
-                for variant in codicefiscale_variants {
-                    let val = get_field_value(variant);
-                    if !val.is_empty() {
-                        codicefiscale_final = val;
-                        codicefiscale_found_key = variant.to_string();
-                        break;
-                    }
-                }
-                
-                // Log per debug (solo per il primo elemento se non ancora fatto)
-                if !fields_logged {
-                    if !codicefiscale_final.is_empty() {
-                        println!("✓ Codice Fiscale trovato come '{}': '{}' (ID interno: {})", codicefiscale_found_key, codicefiscale_final, id);
-                    } else {
-                        // Log TUTTI i campi disponibili per capire qual è il nome corretto
-                        if let Some(fields_obj) = fields.as_object() {
-                            let mut all_keys: Vec<&String> = fields_obj.keys().collect();
-                            all_keys.sort();
-                            println!("⚠️ Codice Fiscale non trovato (ID interno: {}). TUTTI i campi disponibili ({}):", id, all_keys.len());
-                            for key in &all_keys {
-                                if let Some(val) = fields_obj.get(*key) {
-                                    let val_str = if let Some(s) = val.as_str() {
-                                        format!("'{}'", s)
-                                    } else if val.is_null() {
-                                        "null".to_string()
-                                    } else if val.is_array() {
-                                        format!("[array di {} elementi]", val.as_array().map(|a| a.len()).unwrap_or(0))
-                                    } else {
-                                        format!("{:?}", val)
-                                    };
-                                    println!("  - {}: {}", key, val_str.chars().take(100).collect::<String>());
-                                }
-                            }
-                            // Cerca campi che contengono "FISCALE", "CF", "CODICE"
-                            let matching_keys: Vec<&String> = all_keys.iter()
-                                .filter(|k| {
-                                    let k_upper = k.to_uppercase();
-                                    k_upper.contains("FISCALE") || 
-                                    k_upper.contains("CF") || 
-                                    k_upper.contains("CODICE")
-                                })
-                                .cloned()
-                                .collect();
-                            if !matching_keys.is_empty() {
-                                println!("  → Campi che potrebbero essere Codice Fiscale: {:?}", matching_keys);
-                            }
-                        }
-                    }
-                    fields_logged = true;
-                }
-                
-                let numerotessera = get_field_value("NUMEROTESSERA");
-                let scadenzatessera = get_field_value("SCADENZATESSERA");
-                let telefono = get_field_value("TELEFONO");
-                let tipologiasocio = get_field_value("TIPOLOGIASOCIO");
-                
-                // Prova varianti per OPERATORE
-                // NOTA: In SharePoint, un campo checkbox/boolean viene restituito come "true" o "false" (stringa)
-                // anche se visualizzato come "SI"/"NO" nell'interfaccia
-                let operatore = get_field_value("OPERATORE");
-                let operatore_final = if !operatore.is_empty() {
-                    operatore
-                } else {
-                    // Prova altre varianti
-                    let alt_op = get_field_value("Operatore");
-                    if !alt_op.is_empty() {
-                        alt_op
-                    } else {
-                        get_field_value("operatore")
-                    }
-                };
-                
-                // Se il campo è vuoto, potrebbe essere un campo boolean che non è ancora stato impostato
-                // In quel caso restituisce null o empty string
-                
-                // Prova varianti per ATTIVO
-                let attivo = get_field_value("ATTIVO");
-                let attivo_final = if !attivo.is_empty() {
-                    attivo
-                } else {
-                    // Prova altre varianti
-                    let alt_att = get_field_value("Attivo");
-                    if !alt_att.is_empty() {
-                        alt_att
-                    } else {
-                        let alt_att2 = get_field_value("attivo");
-                        if !alt_att2.is_empty() {
-                            alt_att2
-                        } else {
-                            get_field_value("STATO") // Alcuni usano STATO invece di ATTIVO
-                        }
-                    }
-                };
-                
-                // Log e statistiche per debug OPERATORE
-                operatore_total += 1;
-                let op_upper = operatore_final.trim().to_uppercase();
-                let is_operatore = op_upper == "TRUE" || op_upper == "SI" || op_upper == "SÌ" || 
-                                  op_upper == "S" || op_upper == "1" || op_upper == "YES" || op_upper == "Y";
-                
-                if is_operatore {
-                    operatore_count += 1;
-                    if operatore_count <= 3 {
-                        println!("✓ OPERATORE TROVATO - ID {}: OPERATORE='{}' (trovati finora: {}/{})", 
-                            id, operatore_final, operatore_count, operatore_total);
-                    }
-                }
-                
-                // Log dettagliato per i primi 10 elementi
-                if id <= 10 {
-                    println!("🔍 DEBUG elemento ID {}: OPERATORE='{}' (tipo: str, lunghezza: {}, isOperatore: {}), ATTIVO='{}'", 
-                        id, operatore_final, operatore_final.len(), is_operatore, attivo_final);
-                }
-                
-                let disponibilita = get_field_value("DISPONIBILITA");
-                let notaaggiuntiva = get_field_value("NOTAAGGIUNTIVA");
-                
-                tesserati.push(Tesserato {
-                    id,
-                    idsocio,
-                    nominativo,
-                    codicefiscale: codicefiscale_final,
-                    numerotessera,
-                    scadenzatessera,
-                    telefono,
-                    tipologiasocio,
-                    operatore: operatore_final,
-                    attivo: attivo_final,
-                    disponibilita,
-                    notaaggiuntiva,
-                });
-            }
-        }
-        
-        println!("✓ Convertiti {} elementi in Tesserato (su {} totali recuperati)", tesserati.len(), items.len());
-        println!("📊 STATISTICHE OPERATORI: Trovati {}/{} tesserati con operatore = true/si", operatore_count, operatore_total);
-        
-        // Log di tutti i valori unici del campo operatore per capire cosa c'è
-        use std::collections::HashSet;
-        let mut valori_operatore: HashSet<String> = HashSet::new();
-        for tesserato in &tesserati {
-            if !tesserato.operatore.trim().is_empty() {
-                valori_operatore.insert(tesserato.operatore.trim().to_uppercase());
-            }
-        }
-        println!("📋 Valori unici del campo OPERATORE trovati: {:?}", valori_operatore);
-        
-        if operatore_count == 0 {
-            println!("⚠️ ATTENZIONE: Nessun operatore trovato! Verifica i valori del campo OPERATORE in SharePoint.");
-        } else if operatore_count != 2 {
-            println!("⚠️ ATTENZIONE: Trovati {} operatori invece di 2.", operatore_count);
-            println!("   Nota: Se il campo OPERATORE è una checkbox in SharePoint, i valori 'true'/'false' sono normali.");
-            println!("   Verifica in SharePoint quali record hanno effettivamente la checkbox OPERATORE selezionata.");
-        }
-        
-        Ok(tesserati)
-    } else {
-        Err("Client SharePoint non disponibile".to_string())
-    }
-}
-
-// Comando per ottenere un servizio completo per ID
-#[tauri::command]
-async fn get_servizio_completo(servizio_id: u32) -> Result<ServizioCompleto, String> {
-    println!("=== get_servizio_completo chiamato per ID: {} ===", servizio_id);
-    
-    let mut client_guard = get_sharepoint_client().lock().await;
-    
-    if client_guard.is_none() {
-        println!("⚠️ Client SharePoint non presente, uso dati di esempio");
-        return get_servizio_completo_fallback(servizio_id);
-    }
-    
-    // Verifica autenticazione
-    if let Some(client) = client_guard.as_ref() {
-        let is_auth = client.is_authenticated();
-        println!("Stato autenticazione: {}", is_auth);
-        if !is_auth {
-            println!("⚠️ Client non autenticato, uso dati di esempio");
-            return get_servizio_completo_fallback(servizio_id);
-        }
-    }
-    
-    if let Some(client) = client_guard.as_mut() {
-        // Usa la stessa lista dei servizi del giorno
-        let list_name = get_list_name("servizi_giorno").await;
-        println!("📋 Usando lista: {}", list_name);
-        
-        // Recupera tutti gli elementi (filtriamo lato client per ID)
-        let items_result = client.get_list_items(&list_name, None).await;
-        
-        let items = match items_result {
-            Ok(items) => items,
-            Err(e) => {
-                println!("⚠️ Errore nel recupero elementi: {}", e);
-                return get_servizio_completo_fallback(servizio_id);
-            }
-        };
-        
-        // Cerca l'elemento con IDSERVIZIO corrispondente
-        for item in items.iter() {
-            if let Some(fields) = item.get("fields") {
-                let get_field_value = |field_name: &str| -> String {
-                    if let Some(val) = fields.get(field_name) {
-                        if let Some(s) = val.as_str() {
-                            return s.to_string();
-                        }
-                        if let Some(n) = val.as_number() {
-                            return n.to_string();
-                        }
-                        if val.is_null() {
-                            return String::new();
-                        }
-                        // Gestisci oggetti annidati (es. {value: "..."})
-                        if let Some(obj) = val.as_object() {
-                            if let Some(value) = obj.get("value") {
-                                if let Some(s) = value.as_str() {
-                                    return s.to_string();
-                                }
-                                if let Some(n) = value.as_number() {
-                                    return n.to_string();
-                                }
-                            }
-                        }
-                        val.to_string()
-                    } else {
-                        String::new()
-                    }
-                };
-                
-                // Estrai IDSERVIZIO
-                let id = if let Some(idservizio_val) = fields.get("IDSERVIZIO") {
-                    if let Some(n) = idservizio_val.as_number() {
-                        n.as_u64().unwrap_or(0) as u32
-                    } else if let Some(s) = idservizio_val.as_str() {
-                        s.parse::<u32>().ok().unwrap_or(0)
-                    } else {
-                        0
-                    }
-                } else {
-                    continue;
-                };
-                
-                if id == servizio_id {
-                    // Trovato! Converti in ServizioCompleto
-                    let data_prelievo_val = fields.get("DATA_PRELIEVO");
-                    let data_prelievo_raw = if let Some(val) = data_prelievo_val {
-                        if let Some(s) = val.as_str() {
-                            s.to_string()
-                        } else if let Some(obj) = val.as_object() {
-                            if let Some(value) = obj.get("value") {
-                                if let Some(s) = value.as_str() {
-                                    s.to_string()
-                                } else {
-                                    value.to_string()
-                                }
-                            } else {
-                                serde_json::to_string(val).unwrap_or_else(|_| String::new())
-                            }
-                        } else {
-                            val.to_string()
-                        }
-                    } else {
-                        String::new()
-                    };
-                    let data_formattata = format_date_sharepoint_rust(&data_prelievo_raw);
-                    
-                    // Formatta DATABONIFICO e DATARICEVUTA
-                    let data_bonifico_raw = get_field_value("DATABONIFICO");
-                    let data_bonifico_formattata = format_date_sharepoint_rust(&data_bonifico_raw);
-                    let data_ricevuta_raw = get_field_value("DATARICEVUTA");
-                    let data_ricevuta_formattata = format_date_sharepoint_rust(&data_ricevuta_raw);
-                    
-                    return Ok(ServizioCompleto {
-                        id: id.to_string(),
-                        data_prelievo: data_formattata,
-                        idsocio: get_field_value("IDSOCIO"),
-                        socio_trasportato: get_field_value("TRASP"),
-                        ora_inizio: get_field_value("ORA_PRELIEVO"),
-                        comune_prelievo: get_field_value("COMUNE_PRELIEVO"),
-                        luogo_prelievo: get_field_value("INDIRIZZO_PRELIEVO"),
-                        tipo_servizio: get_field_value("TIPO_SERVIZIO"),
-                        carrozzina: get_field_value("CARROZZINA"),
-                        richiedente: get_field_value("RICHIEDENTE"),
-                        motivazione: get_field_value("MOTIVAZIONE"),
-                        ora_arrivo: get_field_value("ORA_DESTINAZIONE"),
-                        comune_destinazione: get_field_value("COMUNE_DESTINAZIONE"),
-                        luogo_destinazione: get_field_value("INDIRIZZO_DESTINAZIONE"),
-                        pagamento: get_field_value("PAGAMENTO"),
-                        stato_incasso: get_field_value("STATO_INCASSO"),
-                        operatore: get_field_value("OPER"),
-                        operatore_2: get_field_value("OPER2"),
-                        mezzo_usato: get_field_value("MEZZO_USATO"),
-                        tempo: get_field_value("TEMPO"),
-                        km: get_field_value("KM"),
-                        tipo_pagamento: get_field_value("TIPOPAGAMENTO"),
-                        data_bonifico: data_bonifico_formattata, // Usa DATABONIFICO
-                        data_ricevuta: data_ricevuta_formattata, // Usa DATARICEVUTA
-                        stato_servizio: get_field_value("STATOSERVIZIO"), // Corretto: STATOSERVIZIO senza underscore
-                        note_prelievo: get_field_value("PRELIEVO_NOTE"),
-                        note_arrivo: get_field_value("note_destinazione"),
-                        note_fine_servizio: get_field_value("NOTE_FINE_SERVIZIO"),
-                    });
-                }
-            }
-        }
-        
-        println!("⚠️ Servizio con ID {} non trovato", servizio_id);
-        get_servizio_completo_fallback(servizio_id)
-    } else {
-        get_servizio_completo_fallback(servizio_id)
-    }
-}
-
-fn get_servizio_completo_fallback(id: u32) -> Result<ServizioCompleto, String> {
-    Ok(ServizioCompleto {
-        id: id.to_string(),
-        data_prelievo: "02/09/2025".to_string(),
-        idsocio: "12345".to_string(),
-        socio_trasportato: "ASTUTI GUIDO".to_string(),
-        ora_inizio: "08:00".to_string(),
-        comune_prelievo: "ROMA".to_string(),
-        luogo_prelievo: "VIA ROMA 123".to_string(),
-        tipo_servizio: "STANDARD".to_string(),
-        carrozzina: "".to_string(),
-        richiedente: "SOCIO".to_string(),
-        motivazione: "Visita medica".to_string(),
-        ora_arrivo: "09:30".to_string(),
-        comune_destinazione: "ROMA".to_string(),
-        luogo_destinazione: "OSPEDALE SANTO SPIRITO".to_string(),
-        pagamento: "0,00 €".to_string(),
-        stato_incasso: "DA INCASSARE".to_string(),
-        operatore: "ANDREAZZA MARIA".to_string(),
-        operatore_2: "".to_string(),
-        mezzo_usato: "FIAT PANDA (3)".to_string(),
-        tempo: "0".to_string(),
-        km: "15".to_string(),
-        tipo_pagamento: "CONTANTI".to_string(),
-        data_bonifico: "".to_string(),
-        data_ricevuta: "".to_string(),
-        stato_servizio: "ESEGUITO".to_string(),
-        note_prelievo: "".to_string(),
-        note_arrivo: "".to_string(),
-        note_fine_servizio: "".to_string(),
+fn supabase_row_to_anagrafica(row: &serde_json::Value) -> Option<SocioAnagrafica> {
+    let tesserato = supabase_row_to_tesserato(row)?;
+    let (nascita_comune, nascita_data) = get_nascita_fields(row);
+    let (residenza_indirizzo, residenza_civico, residenza_cap, residenza_comune, residenza_provincia) =
+        get_residenza_fields(row);
+    Some(SocioAnagrafica {
+        id: tesserato.id,
+        idsocio: tesserato.idsocio,
+        nominativo: tesserato.nominativo,
+        codicefiscale: tesserato.codicefiscale,
+        sesso: get_sesso_field(row),
+        nascita_comune,
+        nascita_data,
+        residenza_indirizzo,
+        residenza_civico,
+        residenza_cap,
+        residenza_comune,
+        residenza_provincia,
+        telefono: tesserato.telefono,
+        tipologiasocio: tesserato.tipologiasocio,
+        operatore: is_truthy_str(&tesserato.operatore),
+        attivo: is_truthy_str(&tesserato.attivo),
+        archivia: is_truthy_str(&tesserato.archivia),
+        disponibilita: tesserato.disponibilita,
+        notaaggiuntiva: tesserato.notaaggiuntiva,
     })
 }
 
-// Comando per ottenere tutti i servizi completi ordinati per data e ora decrescente
-#[tauri::command]
-async fn get_all_servizi_completi() -> Result<Vec<ServizioCompleto>, String> {
-    println!("=== get_all_servizi_completi chiamato ===");
-    
-    let mut client_guard = get_sharepoint_client().lock().await;
-    
-    if client_guard.is_none() {
-        println!("⚠️ Client SharePoint non presente, uso dati di esempio");
-        return get_all_servizi_completi_fallback();
-    }
-    
-    // Verifica autenticazione
-    if let Some(client) = client_guard.as_ref() {
-        let is_auth = client.is_authenticated();
-        println!("Stato autenticazione: {}", is_auth);
-        if !is_auth {
-            println!("⚠️ Client non autenticato, uso dati di esempio");
-            return get_all_servizi_completi_fallback();
-        }
-    }
-    
-    if let Some(client) = client_guard.as_mut() {
-        let list_name = get_list_name("servizi_giorno").await;
-        println!("📋 Usando lista: {}", list_name);
-        
-        // Recupera tutti gli elementi raw (senza filtro) per avere accesso ai fields
-        let items_result = client.get_list_items_raw(&list_name, None).await;
-        
-        let items = match items_result {
-            Ok(items) => items,
-            Err(e) => {
-                println!("⚠️ Errore nel recupero elementi: {}", e);
-                return get_all_servizi_completi_fallback();
-            }
-        };
-        
-        println!("✓ Recuperati {} elementi da SharePoint", items.len());
-        
-        // Log del primo elemento per debug
-        if !items.is_empty() {
-            println!("🔍 DEBUG - Primo elemento (primi 500 caratteri): {}", 
-                serde_json::to_string(&items[0]).unwrap_or_default().chars().take(500).collect::<String>());
-            println!("🔍 DEBUG - Chiavi del primo elemento: {:?}", 
-                items[0].as_object().map(|o| o.keys().cloned().collect::<Vec<_>>()).unwrap_or_default());
-            if let Some(fields) = items[0].get("fields") {
-                println!("🔍 DEBUG - Fields presente nel primo elemento");
-                if let Some(fields_obj) = fields.as_object() {
-                    println!("🔍 DEBUG - Chiavi nei fields del primo elemento: {:?}", 
-                        fields_obj.keys().take(20).cloned().collect::<Vec<_>>());
-                    // Controlla IDSERVIZIO e Title
-                    if let Some(idservizio) = fields_obj.get("IDSERVIZIO") {
-                        println!("🔍 DEBUG - IDSERVIZIO trovato: {:?}", idservizio);
-                    } else {
-                        println!("🔍 DEBUG - IDSERVIZIO NON trovato nei fields");
-                    }
-                    if let Some(title) = fields_obj.get("Title") {
-                        println!("🔍 DEBUG - Title trovato: {:?}", title);
-                    } else {
-                        println!("🔍 DEBUG - Title NON trovato nei fields");
-                    }
-                }
-            } else {
-                println!("🔍 DEBUG - Fields NON presente nel primo elemento");
-            }
-        }
-        
-        // Converti tutti gli elementi in ServizioCompleto
-        let mut servizi: Vec<ServizioCompleto> = items
-            .iter()
-            .enumerate()
-            .filter_map(|(index, item)| {
-                if let Some(fields) = item.get("fields") {
-                    let get_field_value = |field_name: &str| -> String {
-                        if let Some(val) = fields.get(field_name) {
-                            if let Some(s) = val.as_str() {
-                                return s.to_string();
-                            }
-                            if let Some(n) = val.as_number() {
-                                return n.to_string();
-                            }
-                            if val.is_null() {
-                                return String::new();
-                            }
-                            if let Some(obj) = val.as_object() {
-                                if let Some(value) = obj.get("value") {
-                                    if let Some(s) = value.as_str() {
-                                        return s.to_string();
-                                    }
-                                    if let Some(n) = value.as_number() {
-                                        return n.to_string();
-                                    }
-                                }
-                            }
-                            val.to_string()
-                        } else {
-                            String::new()
-                        }
-                    };
-                    
-                    // Log dei nomi dei campi per il primo elemento (debug)
-                    if index == 0 {
-                        println!("🔍 DEBUG - Chiavi disponibili nei fields (primo elemento):");
-                        if let Some(fields_obj) = fields.as_object() {
-                            let mut keys: Vec<&String> = fields_obj.keys().collect();
-                            keys.sort();
-                            for key in keys.iter().take(80) {
-                                println!("  - {}", key);
-                            }
-                            // Cerca specificamente STATO_SERVIZIO, stato_servizio, statoservizio, etc.
-                            for pattern in &["STATO_SERVIZIO", "statoservizio", "STATOSERVIZIO", "StatoServizio", "stato_servizio", "STATO_Servizio"] {
-                                if fields_obj.contains_key(*pattern) {
-                                    println!("  ✓ Trovato campo per stato servizio: {} = {:?}", pattern, fields_obj.get(*pattern));
-                                }
-                            }
-                            for pattern in &["DATA_BONIFICO", "databonifico", "DATABONIFICO", "DataBonifico", "data_bonifico", "DATA_Bonifico"] {
-                                if fields_obj.contains_key(*pattern) {
-                                    println!("  ✓ Trovato campo per data bonifico: {} = {:?}", pattern, fields_obj.get(*pattern));
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Estrai IDSERVIZIO
-                    let id = if let Some(idservizio_val) = fields.get("IDSERVIZIO") {
-                        if let Some(n) = idservizio_val.as_number() {
-                            n.as_u64().unwrap_or(0) as u32
-                        } else if let Some(s) = idservizio_val.as_str() {
-                            s.parse::<u32>().ok().unwrap_or(0)
-                        } else {
-                            0
-                        }
-                    } else {
-                        // IDSERVIZIO non presente - prova a usare Title come fallback
-                        if let Some(title_val) = fields.get("Title") {
-                            if let Some(title_str) = title_val.as_str() {
-                                title_str.parse::<u32>().ok().unwrap_or(0)
-                            } else if let Some(title_num) = title_val.as_number() {
-                                title_num.as_u64().unwrap_or(0) as u32
-                            } else {
-                                0
-                            }
-                        } else {
-                            0
-                        }
-                    };
-                    
-                    if id == 0 {
-                        // Log per debug quando l'ID è 0
-                        println!("⚠️ Elemento senza ID valido (IDSERVIZIO/Title non valido): {:?}", 
-                            fields.get("IDSERVIZIO").or_else(|| fields.get("Title")));
-                        return None; // ID non valido, salta questo elemento
-                    }
-                    
-                    let data_prelievo_val = fields.get("DATA_PRELIEVO");
-                    let data_prelievo_raw = if let Some(val) = data_prelievo_val {
-                        if let Some(s) = val.as_str() {
-                            s.to_string()
-                        } else if let Some(obj) = val.as_object() {
-                            if let Some(value) = obj.get("value") {
-                                if let Some(s) = value.as_str() {
-                                    s.to_string()
-                                } else {
-                                    value.to_string()
-                                }
-                            } else {
-                                serde_json::to_string(val).unwrap_or_else(|_| String::new())
-                            }
-                        } else {
-                            val.to_string()
-                        }
-                    } else {
-                        String::new()
-                    };
-                    let data_formattata = format_date_sharepoint_rust(&data_prelievo_raw);
-                    
-                    // Formatta DATABONIFICO e DATARICEVUTA
-                    let data_bonifico_raw = get_field_value("DATABONIFICO");
-                    let data_bonifico_formattata = format_date_sharepoint_rust(&data_bonifico_raw);
-                    let data_ricevuta_raw = get_field_value("DATARICEVUTA");
-                    let data_ricevuta_formattata = format_date_sharepoint_rust(&data_ricevuta_raw);
-                    
-                    Some(ServizioCompleto {
-                        id: id.to_string(),
-                        data_prelievo: data_formattata,
-                        idsocio: get_field_value("IDSOCIO"),
-                        socio_trasportato: get_field_value("TRASP"),
-                        ora_inizio: get_field_value("ORA_PRELIEVO"),
-                        comune_prelievo: get_field_value("COMUNE_PRELIEVO"),
-                        luogo_prelievo: get_field_value("INDIRIZZO_PRELIEVO"),
-                        tipo_servizio: get_field_value("TIPO_SERVIZIO"),
-                        carrozzina: get_field_value("CARROZZINA"),
-                        richiedente: get_field_value("RICHIEDENTE"),
-                        motivazione: get_field_value("MOTIVAZIONE"),
-                        ora_arrivo: get_field_value("ORA_DESTINAZIONE"),
-                        comune_destinazione: get_field_value("COMUNE_DESTINAZIONE"),
-                        luogo_destinazione: get_field_value("INDIRIZZO_DESTINAZIONE"),
-                        pagamento: get_field_value("PAGAMENTO"),
-                        stato_incasso: get_field_value("STATO_INCASSO"),
-                        operatore: get_field_value("OPER"),
-                        operatore_2: get_field_value("OPER2"),
-                        mezzo_usato: get_field_value("MEZZO_USATO"),
-                        tempo: get_field_value("TEMPO"),
-                        km: get_field_value("KM"),
-                        tipo_pagamento: get_field_value("TIPOPAGAMENTO"),
-                        data_bonifico: data_bonifico_formattata, // Usa DATABONIFICO
-                        data_ricevuta: data_ricevuta_formattata, // Usa DATARICEVUTA
-                        stato_servizio: get_field_value("STATOSERVIZIO"), // Corretto: STATOSERVIZIO senza underscore
-                        note_prelievo: get_field_value("PRELIEVO_NOTE"),
-                        note_arrivo: get_field_value("note_destinazione"),
-                        note_fine_servizio: get_field_value("NOTE_FINE_SERVIZIO"),
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect();
-        
-        println!("✓ Convertiti {} servizi", servizi.len());
-        
-        if servizi.is_empty() {
-            println!("⚠️ Nessun servizio convertito, uso fallback");
-            return get_all_servizi_completi_fallback();
-        }
-        
-        // Ordina per data decrescente e poi per ora decrescente
-        servizi.sort_by(|a, b| {
-            use chrono::NaiveDate;
-            use chrono::NaiveTime;
-            
-            // Parse date (formato dd/mm/yyyy)
-            let parse_date = |date_str: &str| -> Option<NaiveDate> {
-                if date_str.is_empty() {
-                    return None;
-                }
-                NaiveDate::parse_from_str(date_str, "%d/%m/%Y").ok()
-            };
-            
-            // Parse time (formato HH:MM o HH:MM:SS)
-            let parse_time = |time_str: &str| -> Option<NaiveTime> {
-                if time_str.is_empty() {
-                    return None;
-                }
-                NaiveTime::parse_from_str(time_str, "%H:%M").ok()
-                    .or_else(|| NaiveTime::parse_from_str(time_str, "%H:%M:%S").ok())
-            };
-            
-            let date_a = parse_date(&a.data_prelievo);
-            let date_b = parse_date(&b.data_prelievo);
-            
-            // Prima ordina per data (decrescente)
-            match (date_a, date_b) {
-                (Some(da), Some(db)) => {
-                    match db.cmp(&da) {
-                        std::cmp::Ordering::Equal => {
-                            // Se le date sono uguali, ordina per ora (decrescente)
-                            let time_a = parse_time(&a.ora_inizio);
-                            let time_b = parse_time(&b.ora_inizio);
-                            match (time_a, time_b) {
-                                (Some(ta), Some(tb)) => tb.cmp(&ta),
-                                (Some(_), None) => std::cmp::Ordering::Less,
-                                (None, Some(_)) => std::cmp::Ordering::Greater,
-                                (None, None) => std::cmp::Ordering::Equal,
-                            }
-                        }
-                        other => other,
-                    }
-                }
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (None, None) => std::cmp::Ordering::Equal,
-            }
-        });
-        
-        println!("✓ Servizi ordinati per data e ora decrescente");
-        Ok(servizi)
+fn is_truthy_str(value: &str) -> bool {
+    let v = value.trim().to_lowercase();
+    v == "true" || v == "si" || v == "sì" || v == "1" || v == "yes" || v == "attivo"
+}
+
+fn supabase_row_to_tesseramento(row: &serde_json::Value) -> TesseramentoRecord {
+    let anno = get_field_any(row, &["Anno", "Tesseramento_Anno", "ANNO"]);
+    let scadenza = if !anno.is_empty() {
+        format!("31/12/{}", anno)
     } else {
-        get_all_servizi_completi_fallback()
+        format_date_iso(&get_field_any(row, &["Scadenza", "Scadenza_Tessera"]))
+    };
+
+    TesseramentoRecord {
+        id: row
+            .get("id")
+            .map(|v| {
+                v.as_u64()
+                    .map(|n| n.to_string())
+                    .unwrap_or_else(|| v.to_string())
+            }),
+        idsocio: get_field_any(row, &["IdSocio", "IDSOCIO"]),
+        anno,
+        numero: get_field_any(row, &["Numero", "Tesseramento_Numero", "Numero_Tessera"]),
+        data: format_date_iso(&get_field_any(
+            row,
+            &["Data_Tesseramento", "Tesseramento_Data", "Data"],
+        )),
+        scadenza,
+        tipologia: get_field_any(row, &["Tipologia", "TipologiaSocio"]),
+        quota: get_field_any(row, &["Quota", "Quota_Versata"]),
+        note: get_field_any(row, &["Note", "Note_Tesseramento"]),
     }
 }
 
-fn get_all_servizi_completi_fallback() -> Result<Vec<ServizioCompleto>, String> {
-    Ok(vec![
-        ServizioCompleto {
-            id: "159".to_string(),
-            data_prelievo: "02/09/2025".to_string(),
-            idsocio: "12345".to_string(),
-            socio_trasportato: "ASTUTI GUIDO".to_string(),
-            ora_inizio: "08:00".to_string(),
-            comune_prelievo: "ROMA".to_string(),
-            luogo_prelievo: "VIA ROMA 123".to_string(),
-            tipo_servizio: "STANDARD".to_string(),
-            carrozzina: "".to_string(),
-            richiedente: "SOCIO".to_string(),
-            motivazione: "Visita medica".to_string(),
-            ora_arrivo: "09:30".to_string(),
-            comune_destinazione: "ROMA".to_string(),
-            luogo_destinazione: "OSPEDALE SANTO SPIRITO".to_string(),
-            pagamento: "0,00 €".to_string(),
-            stato_incasso: "DA INCASSARE".to_string(),
-            operatore: "ANDREAZZA MARIA".to_string(),
-            operatore_2: "".to_string(),
-            mezzo_usato: "FIAT PANDA (3)".to_string(),
-            tempo: "0".to_string(),
-            km: "15".to_string(),
-            tipo_pagamento: "CONTANTI".to_string(),
-            data_bonifico: "".to_string(),
-            data_ricevuta: "".to_string(),
-            stato_servizio: "ESEGUITO".to_string(),
-            note_prelievo: "".to_string(),
-            note_arrivo: "".to_string(),
-            note_fine_servizio: "".to_string(),
+fn tesseramento_from_tesserato_row(row: &serde_json::Value) -> Option<TesseramentoRecord> {
+    let idsocio = get_field(row, "IdSocio");
+    let anno = get_field(row, "Tesseramento_Anno");
+    let numero = get_field(row, "Tesseramento_Numero");
+    let data_raw = get_field(row, "Tesseramento_Data");
+
+    if idsocio.is_empty() || (anno.is_empty() && data_raw.is_empty() && numero.is_empty()) {
+        return None;
+    }
+
+    let anno_eff = if anno.is_empty() {
+        data_raw
+            .split('-')
+            .next()
+            .unwrap_or("")
+            .to_string()
+    } else {
+        anno
+    };
+
+    Some(TesseramentoRecord {
+        id: None,
+        idsocio,
+        anno: anno_eff.clone(),
+        numero,
+        data: format_date_iso(&data_raw),
+        scadenza: if anno_eff.is_empty() {
+            String::new()
+        } else {
+            format!("31/12/{}", anno_eff)
         },
-    ])
+        tipologia: get_field(row, "TipologiaSocio"),
+        quota: String::new(),
+        note: String::new(),
+    })
+}
+
+fn italian_date_to_iso(date_str: &str) -> Option<String> {
+    let parts: Vec<&str> = date_str.trim().split('/').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    Some(format!("{}-{}-{}", parts[2], parts[1], parts[0]))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Automezzo {
+    id: u32,              // IdAutomezzo (ID_AUTOMEZZO)
+    nr_automezzo: String, // Numero_Mezzo (NR_AUTOMEZZO)
+    marca: String,        // Marca
+    modello: String,      // Modello
+    targa: String,        // Targa
+    dotazione: String,    // Dotazione
+    scadenza_ztl: String, // Scadenza_ZTL
+    scadenza_assicurazione: String, // Scadenza_Assicurazione
+    in_servizio: String,  // InServizio (boolean → stringa)
+    note_mezzo: String,   // Note_mezzo
+    scadenza_bollo: String, // Scadenza_Bollo
+}
+
+fn servizio_id_from_row(row: &serde_json::Value) -> u32 {
+    get_field_any(
+        row,
+        &[
+            "idservizio",
+            "IdServizio",
+            "Id_Servizio",
+            "IDSERVIZIO",
+            "id_servizio",
+        ],
+    )
+    .parse::<u32>()
+    .unwrap_or(0)
+}
+
+fn servizio_data_raw(row: &serde_json::Value) -> String {
+    get_field_any(row, &["Prelievo_Data", "DATA_PRELIEVO", "Data_Prelievo"])
+}
+
+fn servizio_data_italiana(row: &serde_json::Value) -> String {
+    format_date_sharepoint_rust(&servizio_data_raw(row))
+}
+
+/// Filtro PostgREST: servizi con Prelievo_Data nell'anno indicato
+fn servizi_filter_anno(anno: u32) -> String {
+    format!(
+        "Prelievo_Data=gte.{}-01-01&Prelievo_Data=lte.{}-12-31",
+        anno, anno
+    )
+}
+
+fn servizio_ora_prelievo(row: &serde_json::Value) -> String {
+    format_time_iso(&get_field_any(
+        row,
+        &["Prelievo_Ora", "ORA_PRELIEVO", "OraPrelievo", "Ora_Prelievo"],
+    ))
+}
+
+// Cache nominativi IdSocio → NominativoSocio (evita di riscaricare 900+ tesserati ogni volta)
+static NOMINATIVI_CACHE: OnceLock<Mutex<Option<HashMap<String, String>>>> = OnceLock::new();
+
+fn nominativi_cache() -> &'static Mutex<Option<HashMap<String, String>>> {
+    NOMINATIVI_CACHE.get_or_init(|| Mutex::new(None))
+}
+
+async fn fetch_idsocio_nominativo_map() -> HashMap<String, String> {
+    {
+        let guard = nominativi_cache().lock().await;
+        if let Some(ref map) = *guard {
+            return map.clone();
+        }
+    }
+
+    let mut map = HashMap::new();
+    if ensure_supabase_client().await.is_err() {
+        return map;
+    }
+    let guard = get_supabase_client().lock().await;
+    if let Some(client) = guard.as_ref() {
+        if let Ok(rows) = client
+            .fetch_tesserati(None, Some("IdSocio,NominativoSocio"))
+            .await
+        {
+            for row in rows {
+                let id = get_field(&row, "IdSocio");
+                let nom = get_field(&row, "NominativoSocio");
+                if !id.is_empty() && !nom.is_empty() {
+                    map.insert(id, nom);
+                }
+            }
+        }
+    }
+
+    let mut cache = nominativi_cache().lock().await;
+    *cache = Some(map.clone());
+    map
+}
+
+fn resolve_operatore_nome(row: &serde_json::Value, nominativi: &HashMap<String, String>) -> String {
+    let id_op = get_field_any(row, &["IdOperatore", "IDOPERATORE", "Id_Operatore"]);
+    if !id_op.is_empty() {
+        if let Some(nom) = nominativi.get(&id_op) {
+            return nom.clone();
+        }
+    }
+    get_field_any(row, &["Oper", "OPER", "Operatore"])
+}
+
+fn parse_italian_date(date_str: &str) -> Option<chrono::NaiveDate> {
+    if date_str.is_empty() {
+        return None;
+    }
+    chrono::NaiveDate::parse_from_str(date_str, "%d/%m/%Y").ok()
+}
+
+fn get_bool_from_row(row: &serde_json::Value, names: &[&str]) -> bool {
+    for name in names {
+        if let Some(v) = row.get(*name) {
+            if let Some(b) = v.as_bool() {
+                if b {
+                    return true;
+                }
+            } else if let Some(s) = v.as_str() {
+                let u = s.to_uppercase();
+                if u == "TRUE" || u == "1" || u == "SI" || u == "SÌ" {
+                    return true;
+                }
+            } else if let Some(n) = v.as_number() {
+                if n.as_f64().unwrap_or(0.0) != 0.0 {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+fn build_tipo_servizio_row(row: &serde_json::Value) -> String {
+    if get_bool_from_row(row, &["Sollevatore", "SOLLEVATORE"]) {
+        return "SOLLEVATORE".to_string();
+    }
+    if get_bool_from_row(row, &["Standard", "STANDARD"]) {
+        return "STANDARD".to_string();
+    }
+    let tipo = get_field_any(row, &["Tipo_Servizio", "TIPO_SERVIZIO", "TipoServizio"]);
+    if !tipo.is_empty() {
+        return tipo.to_uppercase();
+    }
+    String::new()
+}
+
+fn build_tempo_row(row: &serde_json::Value) -> String {
+    // TEMPO_ORE (SharePoint) → Tempo (Supabase, tipo time)
+    let tempo = get_field_any(row, &["Tempo", "TEMPO", "TEMPO_ORE", "Tempo_Ore"]);
+    let formatted = format_time_iso(&tempo);
+    if !formatted.is_empty() {
+        return formatted;
+    }
+    // Fallback legacy: ore + minuti separati
+    let tempo_ore = get_field_any(row, &["Tempo_Ore", "TEMPO_ORE"]);
+    let tempo_minuti = get_field_any(row, &["Tempo_Minuti", "TEMPO_MINUTI"]);
+    let ore_num = tempo_ore.trim().parse::<u32>().unwrap_or(0);
+    let minuti_num = tempo_minuti.trim().parse::<u32>().unwrap_or(0);
+    if ore_num > 0 || minuti_num > 0 {
+        return format!("{:02}:{:02}", ore_num, minuti_num);
+    }
+    String::new()
+}
+
+fn supabase_row_to_servizio(
+    row: &serde_json::Value,
+    nominativi: &HashMap<String, String>,
+) -> Option<Servizio> {
+    let id = servizio_id_from_row(row);
+    if id == 0 {
+        return None;
+    }
+    Some(Servizio {
+        id,
+        operatore: resolve_operatore_nome(row, nominativi),
+        data: servizio_data_italiana(row),
+        nominativo: get_field_any(row, &["Trasportato", "TRASP", "Trasp"]),
+        ora_sotto_casa: servizio_ora_prelievo(row),
+        ora_destinazione: format_date_iso(&get_field_any(
+            row,
+            &["Destinazione_Data", "DATA_DESTINAZIONE", "Data_Destinazione"],
+        )),
+        tipo_servizio: get_field_any(row, &["Motivazione", "MOTIVAZIONE"]),
+    })
+}
+
+fn supabase_row_to_servizio_completo(
+    row: &serde_json::Value,
+    nominativi: &HashMap<String, String>,
+) -> Option<ServizioCompleto> {
+    let id = servizio_id_from_row(row);
+    if id == 0 {
+        return None;
+    }
+
+    let data_bonifico_raw =
+        get_field_any(row, &["Bonifico_Data", "DATABONIFICO", "DataBonifico"]);
+    let data_ricevuta_raw =
+        get_field_any(row, &["Ricevuta_Data", "DATARICEVUTA", "DataRicevuta"]);
+    let donazioni_raw = get_field_any(row, &["Donazioni", "DONAZIONI"]);
+    let incassato = get_field_any(row, &["Incassato", "INCASSATO"]);
+
+    Some(ServizioCompleto {
+        id: id.to_string(),
+        data_prelievo: servizio_data_italiana(row),
+        idsocio: get_field_any(row, &["IdSocio", "IDSOCIO"]),
+        socio_trasportato: get_field_any(row, &["Trasportato", "TRASP", "Trasp"]),
+        ora_inizio: servizio_ora_prelievo(row),
+        comune_prelievo: get_field_any(row, &["Prelievo_Comune", "PRELIEVO_COMUNE"]),
+        luogo_prelievo: get_field_any(row, &["Prelievo_Indirizzo", "PRELIEVO_INDIRIZZO"]),
+        tipo_servizio: build_tipo_servizio_row(row),
+        carrozzina: get_field_any(row, &["Carrozzina", "CARROZZINA"]),
+        richiedente: get_field_any(row, &["Richiedente", "RICHIEDENTE"]),
+        motivazione: get_field_any(row, &["Motivazione", "MOTIVAZIONE"]),
+        ora_arrivo: format_date_iso(&get_field_any(
+            row,
+            &["Destinazione_Data", "DATA_DESTINAZIONE"],
+        )),
+        comune_destinazione: get_field_any(row, &["Destinazione_Comune", "DESTINAZIONE_COMUNE"]),
+        luogo_destinazione: get_field_any(
+            row,
+            &["Destinazione_Indirizzo", "DESTINAZIONE_INDIRIZZO"],
+        ),
+        pagamento: format_euro_italiano(&donazioni_raw),
+        stato_incasso: if incassato.is_empty() {
+            "DA INCASSARE".to_string()
+        } else {
+            incassato
+        },
+        operatore: resolve_operatore_nome(row, nominativi),
+        operatore_2: get_field_any(row, &["Oper2", "OPER2"]),
+        mezzo_usato: String::new(),
+        mezzo: get_field_any(row, &["Mezzo", "MEZZO"]),
+        tempo: build_tempo_row(row),
+        km: get_field_any(row, &["Km", "KM"]),
+        tipo_pagamento: get_field_any(row, &["TipoPagamento", "TIPOPAGAMENTO"]),
+        data_bonifico: format_date_sharepoint_rust(&data_bonifico_raw),
+        data_ricevuta: format_date_sharepoint_rust(&data_ricevuta_raw),
+        numero_ricevuta: get_field_any(
+            row,
+            &[
+                "Ricevuta_numero",
+                "Ricevuta_Numero",
+                "RICEVUTA_NUMERO",
+                "NumeroRicevuta",
+            ],
+        ),
+        stato_servizio: get_field_any(row, &["StatoServizio", "STATOSERVIZIO"]),
+        note_prelievo: get_field_any(row, &["Prelievo_Note", "PRELIEVO_NOTE"]),
+        note_arrivo: get_field_any(row, &["Destinazione_Note", "DESTINAZIONE_NOTE"]),
+        note_fine_servizio: get_field_any(
+            row,
+            &["NoteFineServizio", "NOTAFINESERVIZIO", "NOTE_FINE_SERVIZIO"],
+        ),
+        archivia: get_bool_field(row, &["Archiviazione", "ARCHIVIAZIONE", "archiviazione"]),
+    })
+}
+
+/// Ordina servizi home per data prelievo crescente, poi ora sotto casa crescente
+fn sort_servizi_crescente(servizi: &mut [Servizio]) {
+    use chrono::NaiveTime;
+
+    servizi.sort_by(|a, b| {
+        let parse_time = |time_str: &str| -> Option<NaiveTime> {
+            NaiveTime::parse_from_str(time_str, "%H:%M")
+                .ok()
+                .or_else(|| NaiveTime::parse_from_str(time_str, "%H:%M:%S").ok())
+        };
+
+        let date_a = parse_italian_date(&a.data);
+        let date_b = parse_italian_date(&b.data);
+
+        match (date_a, date_b) {
+            (Some(da), Some(db)) => match da.cmp(&db) {
+                std::cmp::Ordering::Equal => {
+                    let time_a = parse_time(&a.ora_sotto_casa);
+                    let time_b = parse_time(&b.ora_sotto_casa);
+                    match (time_a, time_b) {
+                        (Some(ta), Some(tb)) => ta.cmp(&tb),
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => std::cmp::Ordering::Equal,
+                    }
+                }
+                other => other,
+            },
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        }
+    });
+}
+
+fn sort_servizi_completi(servizi: &mut [ServizioCompleto]) {
+    use chrono::{NaiveDate, NaiveTime};
+
+    servizi.sort_by(|a, b| {
+        let parse_date = |date_str: &str| -> Option<NaiveDate> {
+            parse_italian_date(date_str)
+        };
+        let parse_time = |time_str: &str| -> Option<NaiveTime> {
+            NaiveTime::parse_from_str(time_str, "%H:%M")
+                .ok()
+                .or_else(|| NaiveTime::parse_from_str(time_str, "%H:%M:%S").ok())
+        };
+
+        let date_a = parse_date(&a.data_prelievo);
+        let date_b = parse_date(&b.data_prelievo);
+
+        match (date_a, date_b) {
+            (Some(da), Some(db)) => match db.cmp(&da) {
+                std::cmp::Ordering::Equal => {
+                    let time_a = parse_time(&a.ora_inizio);
+                    let time_b = parse_time(&b.ora_inizio);
+                    match (time_a, time_b) {
+                        (Some(ta), Some(tb)) => tb.cmp(&ta),
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => std::cmp::Ordering::Equal,
+                    }
+                }
+                other => other,
+            },
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        }
+    });
+}
+
+// Comando per ottenere servizi del giorno (Supabase / Servizi_supa)
+#[tauri::command]
+async fn get_servizi_giorno() -> Result<Vec<Servizio>, String> {
+    println!("=== get_servizi_giorno chiamato (Supabase) ===");
+
+    let rows = fetch_servizi_supabase(None).await?;
+    let nominativi = fetch_idsocio_nominativo_map().await;
+    let now = Local::now();
+    let oggi_italiano = format!("{:02}/{:02}/{}", now.day(), now.month(), now.year());
+
+    let servizi: Vec<Servizio> = rows
+        .iter()
+        .filter_map(|row| {
+            let s = supabase_row_to_servizio(row, &nominativi)?;
+            if s.data == oggi_italiano { Some(s) } else { None }
+        })
+        .collect();
+
+    println!("✓ Trovati {} servizi del giorno ({}) da Supabase", servizi.len(), oggi_italiano);
+    Ok(servizi)
+}
+
+// Comando per ottenere prossimi servizi (Supabase / Servizi_supa)
+#[tauri::command]
+async fn get_prossimi_servizi() -> Result<Vec<Servizio>, String> {
+    println!("=== get_prossimi_servizi chiamato (Supabase) ===");
+
+    let rows = fetch_servizi_supabase(None).await?;
+    let nominativi = fetch_idsocio_nominativo_map().await;
+    let domani = Local::now() + chrono::Duration::days(1);
+    let domani_date = chrono::NaiveDate::from_ymd_opt(domani.year(), domani.month(), domani.day())
+        .ok_or_else(|| "Errore calcolo data domani".to_string())?;
+
+    let mut servizi: Vec<Servizio> = rows
+        .iter()
+        .filter_map(|row| {
+            let s = supabase_row_to_servizio(row, &nominativi)?;
+            parse_italian_date(&s.data)
+                .filter(|d| *d >= domani_date)
+                .map(|_| s)
+        })
+        .collect();
+
+    sort_servizi_crescente(&mut servizi);
+
+    println!("✓ Trovati {} prossimi servizi da Supabase", servizi.len());
+    Ok(servizi)
+}
+
+// Comando per ottenere servizi inseriti oggi (Supabase / Servizi_supa)
+#[tauri::command]
+async fn get_servizi_inseriti_oggi() -> Result<Vec<Servizio>, String> {
+    println!("=== get_servizi_inseriti_oggi chiamato (Supabase) ===");
+
+    let rows = fetch_servizi_supabase(None).await?;
+    let nominativi = fetch_idsocio_nominativo_map().await;
+    let oggi_iso = Local::now().format("%Y-%m-%d").to_string();
+
+    let servizi: Vec<Servizio> = rows
+        .iter()
+        .filter_map(|row| {
+            let created = get_field_any(
+                row,
+                &["created_at", "Created_At", "DataInserimento", "Data_Inserimento"],
+            );
+            if created.starts_with(&oggi_iso) || created.contains(&oggi_iso) {
+                supabase_row_to_servizio(row, &nominativi)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    println!("✓ Trovati {} servizi inseriti oggi da Supabase", servizi.len());
+    Ok(servizi)
+}
+
+// Comando per ottenere tessere da fare (da Supabase, filtro TipologiaSocio)
+#[tauri::command]
+async fn get_tessere_da_fare() -> Result<Vec<Tessera>, String> {
+    println!("=== get_tessere_da_fare chiamato ===");
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+
+    if let Some(client) = client_guard.as_ref() {
+        let filter = "TipologiaSocio=in.(NUOVO,ESTERNO)";
+        let rows = match client.fetch_tesserati(Some(filter), None).await {
+            Ok(rows) => rows,
+            Err(e) => {
+                println!("⚠️ Filtro Supabase fallito, recupero tutti i tesserati: {}", e);
+                client
+                    .fetch_tesserati(None, None)
+                    .await
+                    .map_err(|e2| format_supabase_error(&e2))?
+            }
+        };
+
+        let mut tessere = Vec::new();
+
+        for row in rows.iter() {
+            let tipologia = get_field(row, "TipologiaSocio").trim().to_uppercase();
+            if tipologia != "NUOVO" && tipologia != "ESTERNO" {
+                continue;
+            }
+
+            let id = row
+                .get("id")
+                .and_then(|v| v.as_u64().map(|n| n as u32))
+                .unwrap_or_else(|| {
+                    get_field(row, "IdSocio")
+                        .parse::<u32>()
+                        .unwrap_or(0)
+                });
+
+            let descrizione = get_field(row, "NominativoSocio");
+            if descrizione.is_empty() {
+                continue;
+            }
+
+            tessere.push(Tessera { id, descrizione });
+        }
+
+        println!("✓ Trovate {} tessere da fare da Supabase", tessere.len());
+        Ok(tessere)
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+// Comando per ottenere tutti i tesserati da Supabase (Elenco Soci)
+#[tauri::command]
+async fn get_all_tesserati() -> Result<Vec<Tesserato>, String> {
+    println!("=== get_all_tesserati chiamato (Supabase / tesserati_supa) ===");
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+
+    if let Some(client) = client_guard.as_ref() {
+        let rows = client
+            .fetch_tesserati(None, None)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        if rows.is_empty() {
+            println!("⚠️ Nessun tesserato trovato in Supabase");
+            return Ok(vec![]);
+        }
+
+        let mut tesserati: Vec<Tesserato> = rows
+            .iter()
+            .filter_map(supabase_row_to_tesserato)
+            .collect();
+
+        // Ordine alfabetico per nominativo (Elenco Soci / Elenco Operatori)
+        tesserati.sort_by(|a, b| {
+            a.nominativo
+                .to_lowercase()
+                .trim()
+                .cmp(&b.nominativo.to_lowercase().trim())
+        });
+
+        let operatore_count = tesserati
+            .iter()
+            .filter(|t| {
+                let v = t.operatore.trim().to_lowercase();
+                v == "true" || v == "si" || v == "sì" || v == "1" || v == "yes"
+            })
+            .count();
+
+        let attivo_count = tesserati
+            .iter()
+            .filter(|t| {
+                let v = t.attivo.trim().to_lowercase();
+                v == "true" || v == "si" || v == "sì" || v == "1" || v == "yes" || v == "attivo"
+            })
+            .count();
+
+        if let Some(first) = tesserati.first() {
+            println!(
+                "  📋 Esempio socio: Operatore='{}', Attivo='{}'",
+                first.operatore, first.attivo
+            );
+        }
+
+        println!(
+            "✓ Convertiti {} soci da Supabase (operatori: {}, attivi: {})",
+            tesserati.len(),
+            operatore_count,
+            attivo_count
+        );
+
+        Ok(tesserati)
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+// Anagrafica completa di un socio (dati + storico tesseramenti)
+#[tauri::command]
+async fn get_socio_anagrafica(idsocio: String) -> Result<SocioAnagraficaCompleta, String> {
+    println!("=== get_socio_anagrafica IdSocio={} ===", idsocio);
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+
+    if let Some(client) = client_guard.as_ref() {
+        let filter = format!("IdSocio=eq.{}", idsocio);
+        let rows = client
+            .fetch_tesserati(Some(&filter), None)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        let row = rows
+            .first()
+            .ok_or_else(|| format!("Socio IdSocio={} non trovato", idsocio))?;
+
+        let anagrafica = supabase_row_to_anagrafica(row)
+            .ok_or_else(|| format!("Dati anagrafici non validi per IdSocio={}", idsocio))?;
+
+        let tess_filter = format!("IdSocio=eq.{}", idsocio);
+        let mut tesseramenti: Vec<TesseramentoRecord> = match client
+            .fetch_tesseramenti(Some(&tess_filter))
+            .await
+        {
+            Ok(rows) => rows.iter().map(supabase_row_to_tesseramento).collect(),
+            Err(e) => {
+                println!(
+                    "⚠️ Tabella tesseramenti non disponibile ({}), uso dati da tesserati",
+                    e
+                );
+                vec![]
+            }
+        };
+
+        if tesseramenti.is_empty() {
+            if let Some(legacy) = tesseramento_from_tesserato_row(row) {
+                tesseramenti.push(legacy);
+            }
+        }
+
+        tesseramenti.sort_by(|a, b| {
+            let ya = a.anno.parse::<i32>().unwrap_or(0);
+            let yb = b.anno.parse::<i32>().unwrap_or(0);
+            yb.cmp(&ya)
+        });
+
+        Ok(SocioAnagraficaCompleta {
+            anagrafica,
+            tesseramenti,
+        })
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+fn build_socio_anagrafica_body(
+    anagrafica: &SocioAnagrafica,
+    row: Option<&serde_json::Value>,
+    for_insert: bool,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut body = serde_json::Map::new();
+
+    let put_field = |body: &mut serde_json::Map<String, serde_json::Value>,
+                     row: Option<&serde_json::Value>,
+                     candidates: &[&str],
+                     default_key: &str,
+                     value: serde_json::Value| {
+        if let Some(r) = row {
+            insert_patch_field(body, r, candidates, value);
+        } else {
+            body.insert(default_key.to_string(), value);
+        }
+    };
+
+    let put_bool = |body: &mut serde_json::Map<String, serde_json::Value>,
+                    row: Option<&serde_json::Value>,
+                    candidates: &[&str],
+                    default_key: &str,
+                    value: bool| {
+        if let Some(r) = row {
+            insert_patch_bool_field(body, r, candidates, value);
+        } else {
+            body.insert(default_key.to_string(), serde_json::json!(value));
+        }
+    };
+
+    if for_insert {
+        put_field(
+            &mut body,
+            row,
+            &["IdSocio", "IDSOCIO"],
+            "IdSocio",
+            serde_json::json!(anagrafica.idsocio),
+        );
+    }
+
+    put_field(
+        &mut body,
+        row,
+        &["NominativoSocio"],
+        "NominativoSocio",
+        serde_json::json!(anagrafica.nominativo),
+    );
+    put_field(
+        &mut body,
+        row,
+        &["CodiceFiscale"],
+        "CodiceFiscale",
+        serde_json::json!(anagrafica.codicefiscale),
+    );
+    put_field(
+        &mut body,
+        row,
+        &["Sesso", "SESSO", "sesso"],
+        "Sesso",
+        serde_json::json!(anagrafica.sesso),
+    );
+    put_field(
+        &mut body,
+        row,
+        &["Nascita_Comune", "NASCITA_COMUNE", "ComuneNascita"],
+        "Nascita_Comune",
+        serde_json::json!(anagrafica.nascita_comune),
+    );
+
+    if let Some(iso) = italian_date_to_iso(&anagrafica.nascita_data) {
+        put_field(
+            &mut body,
+            row,
+            &["Nascita_Data", "NASCITA_DATA", "DataNascita"],
+            "Nascita_Data",
+            serde_json::json!(iso),
+        );
+    } else if for_insert {
+        put_field(
+            &mut body,
+            row,
+            &["Nascita_Data", "NASCITA_DATA", "DataNascita"],
+            "Nascita_Data",
+            serde_json::json!(""),
+        );
+    }
+
+    put_field(
+        &mut body,
+        row,
+        &[
+            "Residenza_Indirizzo",
+            "RESIDENZA_INDIRIZZO",
+            "IndirizzoResidenza",
+            "ViaResidenza",
+        ],
+        "Residenza_Indirizzo",
+        serde_json::json!(anagrafica.residenza_indirizzo),
+    );
+    put_field(
+        &mut body,
+        row,
+        &[
+            "Residenza_Civico",
+            "RESIDENZA_CIVICO",
+            "CivicoResidenza",
+            "NumeroCivico",
+        ],
+        "Residenza_Civico",
+        serde_json::json!(anagrafica.residenza_civico),
+    );
+    put_field(
+        &mut body,
+        row,
+        &["CAP", "Residenza_CAP", "RESIDENZA_CAP", "CapResidenza"],
+        "Residenza_CAP",
+        serde_json::json!(anagrafica.residenza_cap),
+    );
+    put_field(
+        &mut body,
+        row,
+        &["Residenza_Comune", "RESIDENZA_COMUNE", "ComuneResidenza"],
+        "Residenza_Comune",
+        serde_json::json!(anagrafica.residenza_comune),
+    );
+    put_field(
+        &mut body,
+        row,
+        &[
+            "Residenza_Provincia",
+            "RESIDENZA_PROVINCIA",
+            "ProvinciaResidenza",
+            "Prov",
+        ],
+        "Residenza_Provincia",
+        serde_json::json!(anagrafica.residenza_provincia),
+    );
+
+    if !anagrafica.telefono.is_empty() || for_insert {
+        put_field(
+            &mut body,
+            row,
+            &["Telefono", "TELEFONO", "telefono"],
+            "Telefono",
+            serde_json::json!(anagrafica.telefono),
+        );
+    }
+
+    put_field(
+        &mut body,
+        row,
+        &["TipologiaSocio"],
+        "TipologiaSocio",
+        serde_json::json!(anagrafica.tipologiasocio),
+    );
+    put_bool(
+        &mut body,
+        row,
+        &["Operatore", "OPERATORE", "operatore"],
+        "Operatore",
+        anagrafica.operatore,
+    );
+    put_bool(
+        &mut body,
+        row,
+        &["Attivo", "ATTIVO", "attivo"],
+        "Attivo",
+        anagrafica.attivo,
+    );
+    put_bool(
+        &mut body,
+        row,
+        &["Archivia", "ARCHIVIA", "archivia"],
+        "Archivia",
+        anagrafica.archivia,
+    );
+
+    if !anagrafica.disponibilita.is_empty() {
+        put_field(
+            &mut body,
+            row,
+            &["Disponibilita", "DISPONIBILITA", "disponibilita"],
+            "Disponibilita",
+            serde_json::json!(anagrafica.disponibilita),
+        );
+    }
+
+    put_field(
+        &mut body,
+        row,
+        &["NoteAggiuntive", "NotaAggiuntiva", "NOTAAGGIUNTIVA"],
+        "NoteAggiuntive",
+        serde_json::json!(anagrafica.notaaggiuntiva),
+    );
+
+    body
+}
+
+#[tauri::command]
+async fn get_next_idsocio() -> Result<String, String> {
+    println!("=== get_next_idsocio chiamato (Supabase / tesserati_supa) ===");
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let rows = client
+            .fetch_tesserati(None, Some("IdSocio"))
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        let mut max_id: u64 = 0;
+        for row in &rows {
+            if let Ok(n) = get_field(row, "IdSocio").trim().parse::<u64>() {
+                max_id = max_id.max(n);
+            }
+        }
+
+        let next = (max_id + 1).to_string();
+        println!("✓ Prossimo IdSocio suggerito: {}", next);
+        Ok(next)
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+#[tauri::command]
+async fn create_socio_anagrafica(anagrafica: SocioAnagrafica) -> Result<SocioAnagrafica, String> {
+    println!(
+        "=== create_socio_anagrafica IdSocio={} Nominativo='{}' ===",
+        anagrafica.idsocio, anagrafica.nominativo
+    );
+
+    if anagrafica.idsocio.trim().is_empty() {
+        return Err("IdSocio obbligatorio".to_string());
+    }
+    if anagrafica.nominativo.trim().is_empty() {
+        return Err("Nominativo obbligatorio".to_string());
+    }
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let filter = format!("IdSocio=eq.{}", anagrafica.idsocio);
+        let existing = client
+            .fetch_tesserati(Some(&filter), None)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        if !existing.is_empty() {
+            return Err(format!(
+                "Esiste già un socio con IdSocio={}",
+                anagrafica.idsocio
+            ));
+        }
+
+        let template = client
+            .fetch_tesserati(None, None)
+            .await
+            .ok()
+            .and_then(|rows| rows.first().cloned());
+
+        let body = build_socio_anagrafica_body(&anagrafica, template.as_ref(), true);
+        if body.is_empty() {
+            return Err("Nessun campo da inserire per il nuovo socio".to_string());
+        }
+
+        let inserted = client
+            .insert_tesserato(&body)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        supabase_row_to_anagrafica(&inserted)
+            .ok_or_else(|| "Impossibile convertire il socio appena inserito".to_string())
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+#[tauri::command]
+async fn save_socio_anagrafica(anagrafica: SocioAnagrafica) -> Result<(), String> {
+    println!(
+        "=== save_socio_anagrafica IdSocio={} ===",
+        anagrafica.idsocio
+    );
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let filter = format!("IdSocio=eq.{}", anagrafica.idsocio);
+        let rows = client
+            .fetch_tesserati(Some(&filter), None)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        let row = rows
+            .first()
+            .ok_or_else(|| format!("Socio IdSocio={} non trovato", anagrafica.idsocio))?;
+
+        let body = build_socio_anagrafica_body(&anagrafica, Some(row), false);
+        if body.is_empty() {
+            return Err("Nessun campo da aggiornare".to_string());
+        }
+
+        client
+            .patch_tesserato(&anagrafica.idsocio, &body)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+        Ok(())
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+#[tauri::command]
+async fn save_tesseramento(tesseramento: TesseramentoRecord) -> Result<TesseramentoRecord, String> {
+    println!(
+        "=== save_tesseramento IdSocio={} Anno={} ===",
+        tesseramento.idsocio, tesseramento.anno
+    );
+
+    ensure_supabase_client().await?;
+
+    let mut body = serde_json::Map::new();
+    body.insert(
+        "IdSocio".to_string(),
+        serde_json::json!(tesseramento.idsocio),
+    );
+    body.insert("Anno".to_string(), serde_json::json!(tesseramento.anno));
+    body.insert(
+        "Numero".to_string(),
+        serde_json::json!(tesseramento.numero),
+    );
+    if let Some(iso) = italian_date_to_iso(&tesseramento.data) {
+        body.insert(
+            "Data_Tesseramento".to_string(),
+            serde_json::json!(iso),
+        );
+    }
+    body.insert(
+        "Tipologia".to_string(),
+        serde_json::json!(tesseramento.tipologia),
+    );
+    body.insert("Quota".to_string(), serde_json::json!(tesseramento.quota));
+    body.insert("Note".to_string(), serde_json::json!(tesseramento.note));
+
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let saved_row = match client.upsert_tesseramento(&body).await {
+            Ok(row) => row,
+            Err(e) => {
+                println!(
+                    "⚠️ Salvataggio su tabella tesseramenti fallito ({}), aggiorno solo tesserati",
+                    e
+                );
+                serde_json::Value::Null
+            }
+        };
+
+        // Aggiorna i campi tesseramento su tesserati solo se è l'anno più recente
+        let filter = format!("IdSocio=eq.{}", tesseramento.idsocio);
+        let current_anno = client
+            .fetch_tesserati(Some(&filter), Some("Tesseramento_Anno"))
+            .await
+            .ok()
+            .and_then(|rows| rows.first().cloned())
+            .map(|r| get_field(&r, "Tesseramento_Anno"))
+            .unwrap_or_default()
+            .parse::<i32>()
+            .unwrap_or(0);
+
+        let new_anno = tesseramento.anno.parse::<i32>().unwrap_or(0);
+        let max_from_history = client
+            .fetch_tesseramenti(Some(&filter))
+            .await
+            .ok()
+            .map(|rows| {
+                rows.iter()
+                    .filter_map(|r| get_field(r, "Anno").parse::<i32>().ok())
+                    .max()
+                    .unwrap_or(0)
+            })
+            .unwrap_or(0);
+
+        let anno_da_sincronizzare = new_anno.max(max_from_history).max(current_anno);
+
+        if new_anno >= anno_da_sincronizzare || current_anno == 0 {
+            let mut sync = serde_json::Map::new();
+            sync.insert(
+                "Tesseramento_Anno".to_string(),
+                serde_json::json!(tesseramento.anno),
+            );
+            sync.insert(
+                "Tesseramento_Numero".to_string(),
+                serde_json::json!(tesseramento.numero),
+            );
+            if let Some(iso) = italian_date_to_iso(&tesseramento.data) {
+                sync.insert("Tesseramento_Data".to_string(), serde_json::json!(iso));
+            }
+            client
+                .patch_tesserato(&tesseramento.idsocio, &sync)
+                .await
+                .map_err(|e| format_supabase_error(&e))?;
+        }
+
+        if saved_row.is_null() {
+            Ok(tesseramento)
+        } else {
+            Ok(supabase_row_to_tesseramento(&saved_row))
+        }
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+// Comando per ottenere tutti gli automezzi da Supabase
+#[tauri::command]
+async fn get_all_automezzi() -> Result<Vec<Automezzo>, String> {
+    println!("=== get_all_automezzi chiamato (Supabase / Automezzi_Supa) ===");
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+
+    if let Some(client) = client_guard.as_ref() {
+        let rows = client
+            .fetch_automezzi(None)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        if rows.is_empty() {
+            println!("⚠️ Nessun automezzo trovato in Supabase");
+            return Ok(vec![]);
+        }
+
+        let automezzi: Vec<Automezzo> = rows
+            .iter()
+            .filter_map(supabase_row_to_automezzo)
+            .collect();
+
+        if automezzi.is_empty() && !rows.is_empty() {
+            if let Some(first) = rows.first().and_then(|r| r.as_object()) {
+                let mut keys: Vec<&String> = first.keys().collect();
+                keys.sort();
+                println!(
+                    "⚠️ 0 automezzi convertiti su {} righe — verifica IdAutomezzo / Numero_Mezzo. Colonne: {:?}",
+                    rows.len(),
+                    keys.iter().map(|k| k.as_str()).collect::<Vec<_>>()
+                );
+            }
+        }
+
+        for (idx, a) in automezzi.iter().take(3).enumerate() {
+            println!(
+                "  Automezzo [{}]: ID={}, NR='{}', MARCA='{}', MODELLO='{}', TARGA='{}'",
+                idx + 1,
+                a.id,
+                a.nr_automezzo,
+                a.marca,
+                a.modello,
+                a.targa
+            );
+        }
+
+        println!("✓ Convertiti {} automezzi da Supabase", automezzi.len());
+        Ok(automezzi)
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+fn build_automezzo_body(
+    automezzo: &Automezzo,
+    row: Option<&serde_json::Value>,
+) -> serde_json::Map<String, serde_json::Value> {
+    let in_servizio = is_truthy_str(&automezzo.in_servizio);
+    let mut body = serde_json::Map::new();
+
+    let put_field = |body: &mut serde_json::Map<String, serde_json::Value>,
+                     row: Option<&serde_json::Value>,
+                     candidates: &[&str],
+                     default_key: &str,
+                     value: serde_json::Value| {
+        if let Some(r) = row {
+            insert_patch_field(body, r, candidates, value);
+        } else {
+            body.insert(default_key.to_string(), value);
+        }
+    };
+
+    put_field(
+        &mut body,
+        row,
+        &[
+            "Numero_Mezzo",
+            "NR_AUTOMEZZO",
+            "Nr_Automezzo",
+            "NrAutomezzo",
+            "NumeroAutomezzo",
+            "nr_automezzo",
+        ],
+        "Numero_Mezzo",
+        serde_json::json!(automezzo.nr_automezzo),
+    );
+    put_field(
+        &mut body,
+        row,
+        &["Marca", "MARCA"],
+        "Marca",
+        serde_json::json!(automezzo.marca),
+    );
+    put_field(
+        &mut body,
+        row,
+        &["Modello", "MODELLO"],
+        "Modello",
+        serde_json::json!(automezzo.modello),
+    );
+    put_field(
+        &mut body,
+        row,
+        &["Targa", "TARGA"],
+        "Targa",
+        serde_json::json!(automezzo.targa),
+    );
+    put_field(
+        &mut body,
+        row,
+        &["Dotazione", "DOTAZIONE"],
+        "Dotazione",
+        serde_json::json!(automezzo.dotazione),
+    );
+    put_field(
+        &mut body,
+        row,
+        &["Note_mezzo", "NOTE", "Note_Mezzo"],
+        "Note_mezzo",
+        serde_json::json!(automezzo.note_mezzo),
+    );
+
+    if let Some(r) = row {
+        insert_patch_bool_field(
+            &mut body,
+            r,
+            &["InServizio", "INSERVIZIO", "In_Servizio"],
+            in_servizio,
+        );
+    } else {
+        body.insert("InServizio".to_string(), serde_json::json!(in_servizio));
+    }
+
+    let scadenze = [
+        (
+            automezzo.scadenza_ztl.as_str(),
+            &["Scadenza_ZTL", "SCADENZA ZTL", "ScadenzaZTL"][..],
+            "Scadenza_ZTL",
+        ),
+        (
+            automezzo.scadenza_assicurazione.as_str(),
+            &[
+                "Scadenza_Assicurazione",
+                "SCADENZA ASSICURAZIONE",
+                "ScadenzaAssicurazione",
+            ][..],
+            "Scadenza_Assicurazione",
+        ),
+        (
+            automezzo.scadenza_bollo.as_str(),
+            &["Scadenza_Bollo", "SCADENZA BOLLO", "ScadenzaBollo"][..],
+            "Scadenza_Bollo",
+        ),
+    ];
+
+    for (date_str, candidates, default_key) in scadenze {
+        let value = if let Some(iso) = italian_date_to_iso(date_str) {
+            serde_json::json!(iso)
+        } else {
+            serde_json::json!("")
+        };
+        put_field(&mut body, row, candidates, default_key, value);
+    }
+
+    body
+}
+
+#[tauri::command]
+async fn create_automezzo(automezzo: Automezzo) -> Result<Automezzo, String> {
+    println!(
+        "=== create_automezzo NR='{}' TARGA='{}' ===",
+        automezzo.nr_automezzo, automezzo.targa
+    );
+
+    if automezzo.nr_automezzo.trim().is_empty() {
+        return Err("N. mezzo obbligatorio".to_string());
+    }
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let template = client
+            .fetch_automezzi(None)
+            .await
+            .ok()
+            .and_then(|rows| rows.first().cloned());
+
+        let body = build_automezzo_body(&automezzo, template.as_ref());
+        if body.is_empty() {
+            return Err("Nessun campo da inserire per il nuovo mezzo".to_string());
+        }
+
+        let inserted = client
+            .insert_automezzo(&body)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        supabase_row_to_automezzo(&inserted)
+            .ok_or_else(|| "Impossibile convertire il mezzo appena inserito".to_string())
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+#[tauri::command]
+async fn save_automezzo(automezzo: Automezzo) -> Result<(), String> {
+    println!(
+        "=== save_automezzo IdAutomezzo={} NR='{}' ===",
+        automezzo.id, automezzo.nr_automezzo
+    );
+
+    if automezzo.id == 0 {
+        return Err("ID automezzo non valido".to_string());
+    }
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let filter = format!("IdAutomezzo=eq.{}", automezzo.id);
+        let rows = client
+            .fetch_automezzi(Some(&filter))
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        let row = rows
+            .first()
+            .ok_or_else(|| format!("Automezzo IdAutomezzo={} non trovato", automezzo.id))?;
+
+        let body = build_automezzo_body(&automezzo, Some(row));
+        if body.is_empty() {
+            return Err("Nessun campo da aggiornare".to_string());
+        }
+
+        client
+            .patch_automezzo(automezzo.id, &body)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+        Ok(())
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+fn tipologie_socio_da_righe(rows: &[serde_json::Value]) -> Vec<String> {
+    let mut tipologie: Vec<String> = rows
+        .iter()
+        .filter_map(|row| {
+            let value = get_field_any(
+                row,
+                &[
+                    "TipologiaSocio",
+                    "TIPOLOGIASOCIO",
+                    "TipoSocio",
+                    "TIPOSOCIO",
+                    "Tipologia",
+                    "TIPOLOGIA",
+                    "Descrizione",
+                    "Nome",
+                ],
+            );
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+        .collect();
+
+    tipologie.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    tipologie.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+    tipologie
+}
+
+fn richiedenti_da_righe(rows: &[serde_json::Value]) -> Vec<String> {
+    let mut richiedenti: Vec<String> = rows
+        .iter()
+        .filter_map(|row| {
+            let value = get_field_any(
+                row,
+                &[
+                    "Richiedente",
+                    "RICHIEDENTE",
+                    "Richiedenti",
+                    "RICHIEDENTI",
+                    "Descrizione",
+                    "DESCRIZIONE",
+                    "Nome",
+                    "NOME",
+                ],
+            );
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+        .collect();
+
+    richiedenti.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    richiedenti.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+    richiedenti
+}
+
+fn tipi_pagamento_da_righe(rows: &[serde_json::Value]) -> Vec<String> {
+    let mut tipi: Vec<String> = rows
+        .iter()
+        .filter_map(|row| {
+            let value = get_field_any(
+                row,
+                &[
+                    "ModoPagamento",
+                    "MODOPAGAMENTO",
+                    "Modo_Pagamento",
+                    "MODO_PAGAMENTO",
+                    "TipoPagamento",
+                    "TIPOPAGAMENTO",
+                    "Descrizione",
+                    "DESCRIZIONE",
+                    "Nome",
+                    "NOME",
+                ],
+            );
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+        .collect();
+
+    tipi.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    tipi.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+    tipi
+}
+
+#[tauri::command]
+async fn get_all_tipi_pagamento() -> Result<Vec<String>, String> {
+    println!("=== get_all_tipi_pagamento chiamato (Supabase / TipoPagamenti_supa) ===");
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let rows = client
+            .fetch_tipi_pagamento(None)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        let tipi = tipi_pagamento_da_righe(&rows);
+        println!("✓ Caricati {} tipi pagamento da Supabase", tipi.len());
+        Ok(tipi)
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+fn normalizza_motivazione_testo(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn motivazioni_da_righe(rows: &[serde_json::Value]) -> Vec<String> {
+    let mut motivazioni: Vec<String> = rows
+        .iter()
+        .filter_map(|row| {
+            let value = get_field_any(row, &["Motivazione", "MOTIVAZIONE"]);
+            let trimmed = normalizza_motivazione_testo(value.trim());
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            }
+        })
+        .collect();
+
+    motivazioni.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    motivazioni.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+    motivazioni
+}
+
+#[tauri::command]
+async fn get_all_richiedenti() -> Result<Vec<String>, String> {
+    println!("=== get_all_richiedenti chiamato (Supabase / Richiedenti_supa) ===");
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let rows = client
+            .fetch_richiedenti(None)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        let richiedenti = richiedenti_da_righe(&rows);
+        println!("✓ Caricati {} richiedenti da Supabase", richiedenti.len());
+        Ok(richiedenti)
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+#[tauri::command]
+async fn get_all_tipologie_socio() -> Result<Vec<String>, String> {
+    println!("=== get_all_tipologie_socio chiamato (Supabase / TipoSocio_supa) ===");
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let rows = client
+            .fetch_tipologie_socio(None)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        let tipologie = tipologie_socio_da_righe(&rows);
+        println!("✓ Caricate {} tipologie socio da Supabase", tipologie.len());
+        Ok(tipologie)
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+#[tauri::command]
+async fn add_tipologia_socio(tipologia: String) -> Result<(), String> {
+    let value = tipologia.trim();
+    if value.is_empty() {
+        return Ok(());
+    }
+
+    println!(
+        "=== add_tipologia_socio TipologiaSocio='{}' (Supabase / TipoSocio_supa) ===",
+        value
+    );
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let rows = client
+            .fetch_tipologie_socio(None)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        let existing = tipologie_socio_da_righe(&rows);
+        if dotazione_gia_presente(&existing, value) {
+            println!("ℹ Tipologia già presente in tabella, skip insert");
+            return Ok(());
+        }
+
+        client
+            .insert_tipologia_socio(value)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+        Ok(())
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+fn dotazione_gia_presente(list: &[String], value: &str) -> bool {
+    let v = value.trim();
+    if v.is_empty() {
+        return false;
+    }
+    list.iter()
+        .any(|item| item.trim().eq_ignore_ascii_case(v))
+}
+
+fn dotazioni_da_righe(rows: &[serde_json::Value]) -> Vec<String> {
+    let mut dotazioni: Vec<String> = rows
+        .iter()
+        .filter_map(|row| {
+            let value = get_field_any(row, &["Dotazione", "DOTAZIONE", "dotazione"]);
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+        .collect();
+
+    dotazioni.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    dotazioni.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+    dotazioni
+}
+
+#[tauri::command]
+async fn get_all_dotazioni_mezzi() -> Result<Vec<String>, String> {
+    println!("=== get_all_dotazioni_mezzi chiamato (Supabase / DotazioniMezzi_supa) ===");
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let rows = client
+            .fetch_dotazioni_mezzi(None)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        let dotazioni = dotazioni_da_righe(&rows);
+        println!("✓ Caricate {} dotazioni mezzi da Supabase", dotazioni.len());
+        Ok(dotazioni)
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+#[tauri::command]
+async fn add_dotazione_mezzo(dotazione: String) -> Result<(), String> {
+    let value = dotazione.trim();
+    if value.is_empty() {
+        return Ok(());
+    }
+
+    println!(
+        "=== add_dotazione_mezzo Dotazione='{}' (Supabase / DotazioniMezzi_supa) ===",
+        value
+    );
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let rows = client
+            .fetch_dotazioni_mezzi(None)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        let existing = dotazioni_da_righe(&rows);
+        if dotazione_gia_presente(&existing, value) {
+            println!("ℹ Dotazione già presente in tabella, skip insert");
+            return Ok(());
+        }
+
+        client
+            .insert_dotazione_mezzo(value)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+        Ok(())
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+// Comando per ottenere un servizio completo per ID (Supabase / Servizi_supa)
+#[tauri::command]
+async fn get_servizio_completo(servizio_id: u32) -> Result<ServizioCompleto, String> {
+    println!("=== get_servizio_completo chiamato per ID: {} (Supabase) ===", servizio_id);
+
+    let filter = format!("idservizio=eq.{}", servizio_id);
+    let nominativi = fetch_idsocio_nominativo_map().await;
+    let rows = fetch_servizi_supabase(Some(&filter)).await?;
+    if let Some(row) = rows.first() {
+        if let Some(sc) = supabase_row_to_servizio_completo(row, &nominativi) {
+            return Ok(sc);
+        }
+    }
+
+    let rows = fetch_servizi_supabase(None).await?;
+    for row in &rows {
+        if servizio_id_from_row(row) == servizio_id {
+            if let Some(sc) = supabase_row_to_servizio_completo(row, &nominativi) {
+                return Ok(sc);
+            }
+        }
+    }
+
+    Err(format!("Servizio {} non trovato in Supabase", servizio_id))
+}
+
+#[tauri::command]
+async fn get_motivazioni_servizi() -> Result<Vec<String>, String> {
+    println!("=== get_motivazioni_servizi chiamato (Supabase) ===");
+    let rows = fetch_motivazioni_servizi_supabase().await?;
+    let lista = motivazioni_da_righe(&rows);
+    println!("✓ Trovate {} motivazioni distinte da Supabase", lista.len());
+    Ok(lista)
+}
+
+// Comando per ottenere tutti i servizi completi (Supabase / Servizi_supa)
+// anno: filtra per anno di Prelievo_Data; tutti_anni=true scarica l'intero archivio
+#[tauri::command]
+async fn get_all_servizi_completi(
+    anno: Option<u32>,
+    tutti_anni: Option<bool>,
+) -> Result<Vec<ServizioCompleto>, String> {
+    let nominativi = fetch_idsocio_nominativo_map().await;
+
+    if tutti_anni.unwrap_or(false) {
+        println!("=== get_all_servizi_completi chiamato (Supabase, TUTTI GLI ANNI) ===");
+        let rows = fetch_servizi_supabase(None).await?;
+        let mut servizi: Vec<ServizioCompleto> = rows
+            .iter()
+            .filter_map(|row| supabase_row_to_servizio_completo(row, &nominativi))
+            .collect();
+        sort_servizi_completi(&mut servizi);
+        println!("✓ Convertiti {} servizi completi da Supabase", servizi.len());
+        return Ok(servizi);
+    }
+
+    let year = anno.unwrap_or_else(|| Local::now().date_naive().year() as u32);
+    println!(
+        "=== get_all_servizi_completi chiamato (Supabase, anno {}) ===",
+        year
+    );
+
+    let filter = servizi_filter_anno(year);
+    let (rows, filtered_at_db) = match fetch_servizi_supabase(Some(&filter)).await {
+        Ok(r) => (r, true),
+        Err(e) => {
+            println!(
+                "⚠️ Filtro anno Supabase fallito ({}), recupero tutti i servizi: {}",
+                filter, e
+            );
+            (fetch_servizi_supabase(None).await?, false)
+        }
+    };
+
+    let mut servizi: Vec<ServizioCompleto> = rows
+        .iter()
+        .filter_map(|row| supabase_row_to_servizio_completo(row, &nominativi))
+        .collect();
+
+    if !filtered_at_db {
+        let before = servizi.len();
+        servizi.retain(|s| {
+            parse_italian_date(&s.data_prelievo)
+                .map(|d| d.year() as u32 == year)
+                .unwrap_or(false)
+        });
+        if servizi.len() < before {
+            println!(
+                "  Filtro anno lato Rust: {} → {} servizi",
+                before,
+                servizi.len()
+            );
+        }
+    }
+
+    sort_servizi_completi(&mut servizi);
+
+    if servizi.is_empty() && !rows.is_empty() {
+        if let Some(first) = rows.first().and_then(|r| r.as_object()) {
+            let mut keys: Vec<&String> = first.keys().collect();
+            keys.sort();
+            println!(
+                "⚠️ 0 servizi convertiti su {} righe Supabase — verifica colonna idservizio. Colonne: {:?}",
+                rows.len(),
+                keys.iter().map(|k| k.as_str()).collect::<Vec<_>>()
+            );
+        }
+    }
+
+    println!("✓ Convertiti {} servizi completi da Supabase", servizi.len());
+    Ok(servizi)
+}
+
+// Helper per formattare un valore in formato euro italiano (1.234,56 €)
+fn format_euro_italiano(value_str: &str) -> String {
+    if value_str.is_empty() {
+        return String::new();
+    }
+    
+    // Rimuovi spazi e caratteri non numerici (tranne punto, virgola e meno)
+    let cleaned: String = value_str
+        .chars()
+        .filter(|c| c.is_ascii_digit() || *c == '.' || *c == ',' || *c == '-')
+        .collect();
+    
+    if cleaned.is_empty() {
+        return value_str.to_string();
+    }
+    
+    // Sostituisci la virgola con punto per il parsing (formato italiano o inglese)
+    let normalized = cleaned.replace(',', ".");
+    
+    // Prova a parsare come numero decimale
+    match normalized.parse::<f64>() {
+        Ok(num) => {
+            // Se è negativo, gestiscilo
+            let is_negative = num < 0.0;
+            let abs_num = num.abs();
+            
+            // Formatta con 2 decimali
+            let formatted = format!("{:.2}", abs_num);
+            
+            // Separa parte intera e decimale
+            let parts: Vec<&str> = formatted.split('.').collect();
+            let integer_part = parts[0];
+            let decimal_part = if parts.len() > 1 { parts[1] } else { "00" };
+            
+            // Aggiungi punti come separatori delle migliaia (da destra a sinistra)
+            let mut formatted_integer = String::new();
+            let chars: Vec<char> = integer_part.chars().rev().collect();
+            
+            for (i, ch) in chars.iter().enumerate() {
+                if i > 0 && i % 3 == 0 {
+                    formatted_integer.push('.');
+                }
+                formatted_integer.push(*ch);
+            }
+            
+            let formatted_integer: String = formatted_integer.chars().rev().collect();
+            
+            // Costruisci il risultato con virgola per i decimali e simbolo euro
+            let sign = if is_negative { "-" } else { "" };
+            format!("{}{},{}{} €", sign, formatted_integer, decimal_part, "")
+        }
+        Err(_) => {
+            // Se non riesce a parsare, restituisci il valore originale
+            value_str.to_string()
+        }
+    }
 }
 
 // Helper per formattare la data (versione Rust)
@@ -1871,7 +2774,7 @@ async fn save_credentials(sharepoint_url: String, token: String) -> Result<(), S
     Ok(())
 }
 
-// Comando per aggiornare un servizio su SharePoint
+// Comando per aggiornare un servizio (Supabase / Servizi_supa)
 #[tauri::command]
 async fn update_servizio_sharepoint(
     id: u32,
@@ -1882,50 +2785,210 @@ async fn update_servizio_sharepoint(
     ora_destinazione: Option<String>,
     tipo_servizio: Option<String>,
 ) -> Result<(), String> {
-    // Prepara i dati prima di acquisire il lock
-    let mut data_map = HashMap::new();
-    
+    ensure_supabase_client().await?;
+
+    let mut body = serde_json::Map::new();
     if let Some(op) = operatore {
-        data_map.insert("operatore".to_string(), serde_json::json!(op));
+        // IdOperatore è numerico; se arriva un nome testo non aggiorniamo il campo
+        if op.parse::<i64>().is_ok() {
+            body.insert("IdOperatore".to_string(), serde_json::json!(op));
+        }
     }
     if let Some(d) = data {
-        data_map.insert("data".to_string(), serde_json::json!(d));
+        if let Some(parsed) = parse_italian_date(&d) {
+            body.insert(
+                "Prelievo_Data".to_string(),
+                serde_json::json!(parsed.format("%Y-%m-%d").to_string()),
+            );
+        }
     }
     if let Some(nom) = nominativo {
-        data_map.insert("nominativo".to_string(), serde_json::json!(nom));
+        body.insert("Trasportato".to_string(), serde_json::json!(nom));
     }
-    if let Some(ora_sc) = ora_sotto_casa {
-        data_map.insert("ora_sotto_casa".to_string(), serde_json::json!(ora_sc));
+    if let Some(ora) = ora_sotto_casa {
+        body.insert("Prelievo_Ora".to_string(), serde_json::json!(ora));
     }
-    if let Some(ora_dest) = ora_destinazione {
-        data_map.insert("ora_destinazione".to_string(), serde_json::json!(ora_dest));
+    if let Some(ora) = ora_destinazione {
+        if let Some(parsed) = parse_italian_date(&ora) {
+            body.insert(
+                "Destinazione_Data".to_string(),
+                serde_json::json!(parsed.format("%Y-%m-%d").to_string()),
+            );
+        }
     }
     if let Some(tipo) = tipo_servizio {
-        data_map.insert("tipo_servizio".to_string(), serde_json::json!(tipo));
+        body.insert("Motivazione".to_string(), serde_json::json!(tipo));
     }
-    
-    // Acquisisci il lock, verifica che il client esista, poi rilascia il lock prima di await
-    let has_client = {
-        let client_guard = get_sharepoint_client().lock().await;
-        client_guard.is_some()
-    };
-    
-    if !has_client {
-        return Err("Client SharePoint non configurato".to_string());
+
+    let guard = get_supabase_client().lock().await;
+    let client = guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    client
+        .patch_servizio(id, &body)
+        .await
+        .map_err(|e| format_supabase_error(&e))
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateServizioPayload {
+    id: u32,
+    data_prelievo: Option<String>,
+    idsocio: Option<String>,
+    socio_trasportato: Option<String>,
+    ora_inizio: Option<String>,
+    comune_prelievo: Option<String>,
+    luogo_prelievo: Option<String>,
+    tipo_servizio: Option<String>,
+    carrozzina: Option<String>,
+    richiedente: Option<String>,
+    motivazione: Option<String>,
+    ora_arrivo: Option<String>,
+    comune_destinazione: Option<String>,
+    luogo_destinazione: Option<String>,
+    pagamento: Option<String>,
+    stato_incasso: Option<String>,
+    operatore: Option<String>,
+    operatore_2: Option<String>,
+    mezzo: Option<String>,
+    tempo: Option<String>,
+    km: Option<String>,
+    tipo_pagamento: Option<String>,
+    data_bonifico: Option<String>,
+    data_ricevuta: Option<String>,
+    numero_ricevuta: Option<String>,
+    stato_servizio: Option<String>,
+    note_prelievo: Option<String>,
+    note_arrivo: Option<String>,
+    note_fine_servizio: Option<String>,
+    archivia: Option<String>,
+}
+
+fn insert_opt_string(body: &mut serde_json::Map<String, serde_json::Value>, key: &str, value: Option<String>) {
+    if let Some(v) = value {
+        let trimmed = v.trim().to_string();
+        body.insert(key.to_string(), serde_json::json!(trimmed));
     }
-    
-    // Acquisisci di nuovo il lock per l'operazione async
-    let mut client_guard = get_sharepoint_client().lock().await;
-    if let Some(client) = client_guard.as_mut() {
-        // Ottieni il nome della lista dal config (usa servizi_giorno come default per gli aggiornamenti)
-        let list_name = get_list_name("servizi_giorno").await;
-        println!("📋 Aggiornamento servizio - Usando lista: {}", list_name);
-        client
-            .update_list_item(&list_name, id, &data_map)
-            .await
+}
+
+fn insert_opt_date(body: &mut serde_json::Map<String, serde_json::Value>, key: &str, value: Option<String>) {
+    if let Some(v) = value {
+        let trimmed = v.trim();
+        if trimmed.is_empty() {
+            body.insert(key.to_string(), serde_json::Value::Null);
+            return;
+        }
+        if let Some(parsed) = parse_italian_date(trimmed) {
+            body.insert(
+                key.to_string(),
+                serde_json::json!(parsed.format("%Y-%m-%d").to_string()),
+            );
+        }
+    }
+}
+
+fn parse_euro_italiano_to_f64(value_str: &str) -> Option<f64> {
+    let mut s = value_str.replace('€', "").trim().to_string();
+    if s.is_empty() {
+        return None;
+    }
+    if s.contains(',') {
+        s = s.replace('.', "").replace(',', ".");
     } else {
-        Err("Client SharePoint non configurato".to_string())
+        s = s.replace(' ', "");
     }
+    s.parse::<f64>().ok()
+}
+
+async fn resolve_operatore_id_by_nome(nome: &str) -> Option<String> {
+    let target = nome.trim();
+    if target.is_empty() {
+        return None;
+    }
+    let map = fetch_idsocio_nominativo_map().await;
+    for (id, nom) in map {
+        if nom.eq_ignore_ascii_case(target) {
+            return Some(id);
+        }
+    }
+    None
+}
+
+// Comando per aggiornare tutti i campi di un servizio (Supabase / Servizi_supa)
+#[tauri::command]
+async fn update_servizio_completo(payload: UpdateServizioPayload) -> Result<(), String> {
+    ensure_supabase_client().await?;
+
+    let mut body = serde_json::Map::new();
+
+    insert_opt_date(&mut body, "Prelievo_Data", payload.data_prelievo);
+    insert_opt_string(&mut body, "IdSocio", payload.idsocio);
+    insert_opt_string(&mut body, "Trasportato", payload.socio_trasportato);
+    insert_opt_string(&mut body, "Prelievo_Ora", payload.ora_inizio);
+    insert_opt_string(&mut body, "Prelievo_Comune", payload.comune_prelievo);
+    insert_opt_string(&mut body, "Prelievo_Indirizzo", payload.luogo_prelievo);
+    insert_opt_string(&mut body, "Carrozzina", payload.carrozzina);
+    insert_opt_string(&mut body, "Richiedente", payload.richiedente);
+    insert_opt_string(&mut body, "Motivazione", payload.motivazione);
+    insert_opt_date(&mut body, "Destinazione_Data", payload.ora_arrivo);
+    insert_opt_string(&mut body, "Destinazione_Comune", payload.comune_destinazione);
+    insert_opt_string(&mut body, "Destinazione_Indirizzo", payload.luogo_destinazione);
+    insert_opt_string(&mut body, "Incassato", payload.stato_incasso);
+    insert_opt_string(&mut body, "Oper2", payload.operatore_2);
+    insert_opt_string(&mut body, "Mezzo", payload.mezzo);
+    insert_opt_string(&mut body, "Tempo", payload.tempo);
+    insert_opt_string(&mut body, "Km", payload.km);
+    insert_opt_string(&mut body, "TipoPagamento", payload.tipo_pagamento);
+    insert_opt_date(&mut body, "Bonifico_Data", payload.data_bonifico);
+    insert_opt_date(&mut body, "Ricevuta_Data", payload.data_ricevuta);
+    insert_opt_string(&mut body, "Ricevuta_numero", payload.numero_ricevuta);
+    insert_opt_string(&mut body, "StatoServizio", payload.stato_servizio);
+    insert_opt_string(&mut body, "Prelievo_Note", payload.note_prelievo);
+    insert_opt_string(&mut body, "Destinazione_Note", payload.note_arrivo);
+    insert_opt_string(
+        &mut body,
+        "NoteFineServizio",
+        payload.note_fine_servizio,
+    );
+
+    if let Some(tipo) = payload.tipo_servizio {
+        let t = tipo.trim().to_uppercase();
+        body.insert("Sollevatore".to_string(), serde_json::json!(t == "SOLLEVATORE"));
+        body.insert("Standard".to_string(), serde_json::json!(t == "STANDARD"));
+    }
+
+    if let Some(pag) = payload.pagamento {
+        if let Some(num) = parse_euro_italiano_to_f64(&pag) {
+            body.insert("Donazioni".to_string(), serde_json::json!(num));
+        }
+    }
+
+    if let Some(op) = payload.operatore {
+        if let Some(id) = resolve_operatore_id_by_nome(&op).await {
+            body.insert("IdOperatore".to_string(), serde_json::json!(id));
+        } else if op.trim().parse::<i64>().is_ok() {
+            body.insert("IdOperatore".to_string(), serde_json::json!(op.trim()));
+        }
+    }
+
+    if let Some(arch) = payload.archivia {
+        let val = matches!(
+            arch.trim().to_lowercase().as_str(),
+            "true" | "si" | "sì" | "1" | "yes"
+        );
+        body.insert("Archiviazione".to_string(), serde_json::json!(val));
+    }
+
+    let guard = get_supabase_client().lock().await;
+    let client = guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    client
+        .patch_servizio(payload.id, &body)
+        .await
+        .map_err(|e| format_supabase_error(&e))
 }
 
 // Comando per caricare configurazione da file
@@ -1971,6 +3034,7 @@ async fn load_config_file() -> Result<serde_json::Value, String> {
                         "tenant_id": config.sharepoint.tenant_id,
                         "client_secret": config.sharepoint.client_secret
                     },
+                    "supabase": config.supabase,
                     "github": config.github,
                     "lists": config.lists
                 }));
@@ -2044,19 +3108,23 @@ async fn init_sharepoint_from_config() -> Result<(), String> {
                     }
                     *client_guard = Some(SharePointClient::new(updated_config));
                     
+                    println!("✓ Configurazione aggiornata preservando l'autenticazione");
+                    setup_supabase_from_config(&config).await;
+
                     // Aggiorna anche la configurazione delle liste
                     if let Some(lists) = config.lists {
                         let mut lists_guard = get_lists_config().lock().await;
                         *lists_guard = Some(lists);
                         println!("✓ Configurazione liste aggiornata");
                     }
-                    
-                    println!("✓ Configurazione aggiornata preservando l'autenticazione");
+
                     return Ok(());
                     }
                 }
                 
                 // Se non c'è un client autenticato, crea un nuovo client
+                setup_supabase_from_config(&config).await;
+
                 let sharepoint_config = SharePointConfig {
                     site_url: config.sharepoint.site_url,
                     access_token: None,
@@ -2069,7 +3137,7 @@ async fn init_sharepoint_from_config() -> Result<(), String> {
                 
                 let client = SharePointClient::new(sharepoint_config);
                 *client_guard = Some(client);
-                
+
                 // Salva anche la configurazione delle liste
                 if let Some(lists) = config.lists {
                     let mut lists_guard = get_lists_config().lock().await;
@@ -2090,6 +3158,14 @@ async fn init_sharepoint_from_config() -> Result<(), String> {
     
     // Se nessun path ha funzionato, restituisci l'ultimo errore
     Err(last_error.unwrap_or_else(|| "config.json non trovato in nessuna posizione. Il client SharePoint non sarà inizializzato.".to_string()))
+}
+
+// Comando per inizializzare solo il client Supabase da config.json
+#[tauri::command]
+async fn init_supabase_from_config() -> Result<(), String> {
+    let config = load_app_config_from_file().await?;
+    setup_supabase_from_config(&config).await;
+    Ok(())
 }
 
 // Comando per ottenere URL di autorizzazione OAuth2
@@ -2183,14 +3259,39 @@ async fn complete_oauth_authentication(
 
 fn main() {
     tauri::Builder::default()
+        .setup(|_| {
+            tauri::async_runtime::block_on(async {
+                if let Ok(config) = load_app_config_from_file().await {
+                    setup_supabase_from_config(&config).await;
+                } else {
+                    println!("⚠️ Supabase: config.json non trovato all'avvio");
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_servizi_giorno,
             get_prossimi_servizi,
             get_servizi_inseriti_oggi,
             get_tessere_da_fare,
             get_all_tesserati,
+            get_socio_anagrafica,
+            save_socio_anagrafica,
+            get_next_idsocio,
+            create_socio_anagrafica,
+            save_tesseramento,
+            get_all_automezzi,
+            save_automezzo,
+            create_automezzo,
+            get_all_dotazioni_mezzi,
+            add_dotazione_mezzo,
+            get_all_tipologie_socio,
+            get_all_richiedenti,
+            get_all_tipi_pagamento,
+            add_tipologia_socio,
             get_servizio_completo,
             get_all_servizi_completi,
+            get_motivazioni_servizi,
             stampa_servizio,
             modifica_servizio,
             completa_servizio,
@@ -2199,10 +3300,13 @@ fn main() {
             authenticate_sharepoint,
             save_credentials,
             update_servizio_sharepoint,
+            update_servizio_completo,
             get_oauth_authorization_url,
             complete_oauth_authentication,
             load_config_file,
             init_sharepoint_from_config,
+            init_supabase_from_config,
+            test_supabase_connection,
             check_authentication
         ])
         .run(tauri::generate_context!())
