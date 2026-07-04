@@ -1080,7 +1080,7 @@ function initCalendario() {
         eventOrder: 'order',
         headerToolbar: isVistaMobileCalendario()
             ? { left: 'prev today next', center: 'title', right: '' }
-            : { left: 'prev,next today', center: 'title', right: '' },
+            : { left: '', center: 'title', right: 'prev,next today' },
         buttonText: { today: 'Oggi' },
         nowIndicator: false,
         eventContent: renderEventContent,

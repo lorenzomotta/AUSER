@@ -422,9 +422,9 @@ function initCalendario() {
         moreLinkClick: 'popover',
         eventOrder: 'order',
         headerToolbar: {
-            left: 'prev,next today',
+            left: '',
             center: 'title',
-            right: ''
+            right: 'prev,next today'
         },
         buttonText: {
             today: 'Oggi'
