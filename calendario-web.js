@@ -23,6 +23,13 @@ function isVistaMobileCalendario() {
     return window.matchMedia('(max-width: 768px)').matches;
 }
 
+function vistaCalendarioEffettiva(nomeVista) {
+    if (isVistaMobileCalendario() && nomeVista === 'dayGridWeek') {
+        return 'listWeek';
+    }
+    return nomeVista;
+}
+
 function configuraVistaInizialeMobile() {
     if (isVistaMobileCalendario()) {
         vistaCorrente = 'dayGridDay';
@@ -649,62 +656,14 @@ function formattaGiornoMobile(date) {
     };
 }
 
-function dayCellDidMountMobile(arg) {
-    if (!isVistaMobileCalendario() || arg.view?.type !== 'dayGridWeek') return;
-
-    const top = arg.el.querySelector('.fc-daygrid-day-top');
-    if (top) top.style.display = 'none';
-
-    const frame = arg.el.querySelector('.fc-daygrid-day-frame');
-    if (!frame) return;
-
-    frame.querySelector('.cal-week-day-header')?.remove();
-
+function renderIntestazioneGiornoSettimanaMobile(arg) {
     const { data, giorno } = formattaGiornoMobile(arg.date);
-    const header = document.createElement('div');
-    header.className = 'cal-week-day-header';
-    header.innerHTML = `
-        <div class="cal-week-day-data">${escapeHtml(data)}</div>
-        <div class="cal-week-day-nome">${escapeHtml(giorno)}</div>
-    `;
-    frame.insertBefore(header, frame.firstChild);
-    arg.el.classList.add('cal-week-day-stacked');
-}
-
-function applicaLayoutSettimanaMobile() {
-    const mount = document.getElementById('calendario-mount');
-    if (!mount || !isVistaMobileCalendario() || !calendar || calendar.view?.type !== 'dayGridWeek') {
-        mount?.classList.remove('cal-week-mobile-stack');
-        return;
-    }
-
-    mount.classList.add('cal-week-mobile-stack');
-
-    mount.querySelectorAll('.fc-dayGridWeek-view .fc-scrollgrid-sync-table').forEach((table) => {
-        table.style.display = 'block';
-        table.style.width = '100%';
-    });
-
-    mount.querySelectorAll('.fc-dayGridWeek-view .fc-scrollgrid-sync-table colgroup').forEach((cg) => {
-        cg.style.display = 'none';
-    });
-
-    mount.querySelectorAll('.fc-dayGridWeek-view .fc-scrollgrid-sync-table tbody').forEach((tbody) => {
-        tbody.style.display = 'block';
-        tbody.style.width = '100%';
-    });
-
-    mount.querySelectorAll('.fc-dayGridWeek-view .fc-scrollgrid-sync-table tbody tr').forEach((tr) => {
-        tr.style.display = 'flex';
-        tr.style.flexDirection = 'column';
-        tr.style.width = '100%';
-    });
-
-    mount.querySelectorAll('.fc-dayGridWeek-view .fc-daygrid-day').forEach((cell) => {
-        cell.style.display = 'block';
-        cell.style.width = '100%';
-        cell.style.maxWidth = '100%';
-    });
+    return {
+        html: `<div class="cal-week-day-header">
+            <div class="cal-week-day-data">${escapeHtml(data)}</div>
+            <div class="cal-week-day-nome">${escapeHtml(giorno)}</div>
+        </div>`
+    };
 }
 
 function renderEventContent(arg) {
@@ -713,7 +672,7 @@ function renderEventContent(arg) {
     const socio = s.socio_trasportato || '';
     const op = s.operatore || '';
 
-    if (isVistaMobileCalendario() && arg.view?.type === 'dayGridWeek') {
+    if (isVistaMobileCalendario() && arg.view?.type === 'listWeek') {
         const parti = [ora, socio, op].filter(p => p.trim() !== '');
         const riga = parti.length ? parti.map(p => escapeHtml(p)).join(' · ') : '—';
         return { html: `<div class="cal-event cal-event-week-row" title="${riga}">${riga}</div>` };
@@ -765,7 +724,6 @@ async function aggiornaEventiCalendario() {
         calendar.addEventSource(eventi);
         aggiornaContatore(eventi.length);
         setLoading(false);
-        requestAnimationFrame(() => applicaLayoutSettimanaMobile());
     } catch (error) {
         if (reqId !== loadRequestId) return;
         console.error('Errore aggiornamento calendario:', error);
@@ -1152,18 +1110,22 @@ function initCalendario() {
 
     calendar = new FullCalendar.Calendar(mount, {
         locale: 'it',
-        initialView: vistaCorrente,
+        initialView: vistaCalendarioEffettiva(vistaCorrente),
         firstDay: 1,
         height: 'auto',
         dayMinHeight: 118,
         moreLinkClick: 'popover',
         views: {
             dayGridMonth: { dayMaxEvents: 8 },
-            dayGridWeek: {
-                dayMaxEvents: isVistaMobileCalendario() ? false : 8,
-                dayMaxEventRows: isVistaMobileCalendario() ? false : true
-            },
-            dayGridDay: { dayMaxEvents: false, dayMaxEventRows: false }
+            dayGridWeek: { dayMaxEvents: 8 },
+            dayGridDay: { dayMaxEvents: false, dayMaxEventRows: false },
+            listWeek: {
+                type: 'list',
+                duration: { weeks: 1 },
+                listDayFormat: false,
+                listDaySideFormat: false,
+                listDayHeaderContent: renderIntestazioneGiornoSettimanaMobile
+            }
         },
         eventOrder: 'order',
         headerToolbar: isVistaMobileCalendario()
@@ -1173,7 +1135,6 @@ function initCalendario() {
         nowIndicator: false,
         eventContent: renderEventContent,
         eventDidMount: applicaColoriEventoCalendario,
-        dayCellDidMount: dayCellDidMountMobile,
         eventClick(info) {
             info.jsEvent.preventDefault();
             const id = info.event.id;
@@ -1182,7 +1143,6 @@ function initCalendario() {
         },
         datesSet() {
             aggiornaEventiCalendario();
-            requestAnimationFrame(() => applicaLayoutSettimanaMobile());
         }
     });
 
@@ -1195,10 +1155,7 @@ function impostaVista(nomeVista) {
     document.querySelectorAll('.btn-vista').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.vista === nomeVista);
     });
-    if (calendar) {
-        calendar.changeView(nomeVista);
-        requestAnimationFrame(() => applicaLayoutSettimanaMobile());
-    }
+    if (calendar) calendar.changeView(vistaCalendarioEffettiva(nomeVista));
 }
 
 let listenersCalendarioOk = false;
