@@ -1043,7 +1043,9 @@ function initCalendario() {
         dayMaxEvents: 8,
         moreLinkClick: 'popover',
         eventOrder: 'order',
-        headerToolbar: { left: 'prev,next today', center: 'title', right: '' },
+        headerToolbar: isVistaMobileCalendario()
+            ? { left: 'prev today next', center: 'title', right: '' }
+            : { left: 'prev,next today', center: 'title', right: '' },
         buttonText: { today: 'Oggi' },
         nowIndicator: false,
         eventContent: renderEventContent,

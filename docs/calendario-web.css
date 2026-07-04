@@ -219,14 +219,19 @@
     }
 
     .web-calendario-app #calendario-mount {
-        padding: 8px;
+        padding: 10px;
         border-radius: 10px;
+        min-height: calc(100vh - 200px);
+    }
+
+    .web-calendario-app #calendario-mount .fc-view-harness {
+        min-height: calc(100vh - 280px);
     }
 
     .web-calendario-app #calendario-mount .fc-header-toolbar {
         flex-direction: column;
         align-items: stretch;
-        gap: 8px;
+        gap: 10px;
         margin-bottom: 10px !important;
     }
 
@@ -243,40 +248,63 @@
         white-space: normal;
     }
 
+    /* Navigazione: ← OGGI → */
     .web-calendario-app #calendario-mount .fc-toolbar-chunk:first-child {
         display: flex;
-        flex-direction: row;
-        flex-wrap: nowrap;
         justify-content: center;
-        align-items: center;
-        gap: 8px;
         width: 100%;
     }
 
     .web-calendario-app #calendario-mount .fc-toolbar-chunk:first-child .fc-button-group {
-        display: inline-flex;
-        flex-shrink: 0;
+        display: flex;
+        width: 100%;
+        max-width: 320px;
+        gap: 6px;
     }
 
-    .web-calendario-app #calendario-mount .fc-button {
+    .web-calendario-app #calendario-mount .fc-toolbar-chunk:first-child .fc-button {
         min-height: 44px;
-        min-width: 44px;
-        padding: 10px 14px;
+        padding: 10px 12px;
         font-size: 14px;
+        font-weight: 700;
+        border-radius: 6px !important;
+        margin: 0 !important;
     }
 
-    .web-calendario-app #calendario-mount .fc-toolbar-chunk:first-child > .fc-button {
+    .web-calendario-app #calendario-mount .fc-prev-button,
+    .web-calendario-app #calendario-mount .fc-next-button {
+        flex: 0 0 52px;
+        min-width: 52px;
+        background-color: #2d6a4f !important;
+        border-color: #1b4332 !important;
+    }
+
+    .web-calendario-app #calendario-mount .fc-today-button {
         flex: 1;
-        max-width: 120px;
+        background-color: #2d7a32 !important;
+        border-color: #256829 !important;
+        color: #fff !important;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .web-calendario-app #calendario-mount .fc-today-button:hover,
+    .web-calendario-app #calendario-mount .fc-today-button:active {
+        background-color: #256829 !important;
+        border-color: #1e5623 !important;
     }
 
     .web-calendario-app #calendario-mount .fc-col-header-cell-cushion {
-        padding: 8px 4px;
-        font-size: 0.95rem;
+        padding: 10px 4px;
+        font-size: 1rem;
     }
 
     .web-calendario-app #calendario-mount .fc-dayGridDay-view .fc-daygrid-day-frame {
-        min-height: 200px;
+        min-height: calc(100vh - 340px);
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridDay-view .fc-scrollgrid-sync-table {
+        min-height: calc(100vh - 340px);
     }
 
     .web-calendario-app #calendario-mount .fc-daygrid-block-event .fc-event-main {
