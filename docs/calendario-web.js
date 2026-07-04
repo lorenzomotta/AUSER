@@ -24,10 +24,13 @@ function isVistaMobileCalendario() {
 }
 
 function vistaCalendarioEffettiva(nomeVista) {
-    if (isVistaMobileCalendario() && nomeVista === 'dayGridWeek') {
-        return 'listWeek';
-    }
+    if (!isVistaMobileCalendario()) return nomeVista;
+    if (nomeVista === 'dayGridWeek') return 'listWeek';
     return nomeVista;
+}
+
+function isVistaListaMobile(viewType) {
+    return viewType === 'listWeek';
 }
 
 function configuraVistaInizialeMobile() {
@@ -664,8 +667,8 @@ function htmlIntestazioneGiornoMobile(date) {
     </div>`;
 }
 
-function dayHeaderDidMountListWeek(arg) {
-    if (!isVistaMobileCalendario() || arg.view?.type !== 'listWeek') return;
+function dayHeaderDidMountListaMobile(arg) {
+    if (!isVistaMobileCalendario() || !isVistaListaMobile(arg.view?.type)) return;
     if (arg.el) arg.el.innerHTML = htmlIntestazioneGiornoMobile(arg.date);
 }
 
@@ -677,8 +680,8 @@ function dataDaElementoGiornoList(el) {
     return new Date(y, m - 1, d);
 }
 
-function applicaIntestazioniGiornoSettimanaMobile() {
-    if (!isVistaMobileCalendario() || !calendar || calendar.view?.type !== 'listWeek') return;
+function applicaIntestazioniGiornoListaMobile() {
+    if (!isVistaMobileCalendario() || !calendar || !isVistaListaMobile(calendar.view?.type)) return;
     const mount = document.getElementById('calendario-mount');
     if (!mount) return;
     mount.querySelectorAll('.fc-listWeek-view .fc-list-day').forEach((dayEl) => {
@@ -695,7 +698,7 @@ function renderEventContent(arg) {
     const socio = s.socio_trasportato || '';
     const op = s.operatore || '';
 
-    if (isVistaMobileCalendario() && arg.view?.type === 'listWeek') {
+    if (isVistaMobileCalendario() && isVistaListaMobile(arg.view?.type)) {
         const parti = [ora, socio, op].filter(p => p.trim() !== '');
         const riga = parti.length ? parti.map(p => escapeHtml(p)).join(' · ') : '—';
         return { html: `<div class="cal-event cal-event-week-row" title="${riga}">${riga}</div>` };
@@ -747,7 +750,7 @@ async function aggiornaEventiCalendario() {
         calendar.addEventSource(eventi);
         aggiornaContatore(eventi.length);
         setLoading(false);
-        requestAnimationFrame(() => applicaIntestazioniGiornoSettimanaMobile());
+        requestAnimationFrame(() => applicaIntestazioniGiornoListaMobile());
     } catch (error) {
         if (reqId !== loadRequestId) return;
         console.error('Errore aggiornamento calendario:', error);
@@ -1158,7 +1161,7 @@ function initCalendario() {
         nowIndicator: false,
         eventContent: renderEventContent,
         eventDidMount: applicaColoriEventoCalendario,
-        dayHeaderDidMount: dayHeaderDidMountListWeek,
+        dayHeaderDidMount: dayHeaderDidMountListaMobile,
         eventClick(info) {
             info.jsEvent.preventDefault();
             const id = info.event.id;
@@ -1167,7 +1170,7 @@ function initCalendario() {
         },
         datesSet() {
             aggiornaEventiCalendario();
-            requestAnimationFrame(() => applicaIntestazioniGiornoSettimanaMobile());
+            requestAnimationFrame(() => applicaIntestazioniGiornoListaMobile());
         }
     });
 
@@ -1182,7 +1185,7 @@ function impostaVista(nomeVista) {
     });
     if (calendar) {
         calendar.changeView(vistaCalendarioEffettiva(nomeVista));
-        requestAnimationFrame(() => applicaIntestazioniGiornoSettimanaMobile());
+        requestAnimationFrame(() => applicaIntestazioniGiornoListaMobile());
     }
 }
 

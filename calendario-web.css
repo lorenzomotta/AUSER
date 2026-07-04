@@ -299,7 +299,62 @@
         font-size: 1rem;
     }
 
-    /* Vista settimana mobile: lista verticale nativa FullCalendar (listWeek) */
+    /* Vista mese mobile: griglia intera con font compatti */
+    .web-calendario-app #calendario-mount .fc-dayGridMonth-view .fc-col-header-cell-cushion {
+        padding: 4px 1px;
+        font-size: 0.62rem;
+        font-weight: 600;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridMonth-view .fc-daygrid-day-number {
+        font-size: 0.65rem;
+        padding: 1px 3px;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridMonth-view .fc-daygrid-day-frame {
+        min-height: 64px !important;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridMonth-view .fc-daygrid-day-top {
+        margin-bottom: 0;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridMonth-view .fc-daygrid-block-event .fc-event-main {
+        padding: 0 1px;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridMonth-view .fc-daygrid-event-harness {
+        margin-top: 0 !important;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridMonth-view .fc-daygrid-event {
+        margin-bottom: 0;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridMonth-view .cal-event {
+        font-size: 7px;
+        line-height: 1.15;
+        padding: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridMonth-view .fc-more-link {
+        font-size: 0.58rem;
+        padding: 0 2px;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridMonth-view .fc-scrollgrid {
+        border-width: 1px;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridMonth-view td,
+    .web-calendario-app #calendario-mount .fc-dayGridMonth-view th {
+        border-width: 1px;
+    }
+
+    /* Vista settimana mobile: lista verticale (listWeek) */
     .web-calendario-app #calendario-mount .fc-listWeek-view .fc-list-day {
         display: block;
         width: 100%;
