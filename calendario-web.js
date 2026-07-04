@@ -18,6 +18,16 @@ let allAutomezzi = [];
 const serviziPerAnnoCache = {};
 const serviziById = new Map();
 let vistaCorrente = 'dayGridMonth';
+
+function isVistaMobileCalendario() {
+    return window.matchMedia('(max-width: 768px)').matches;
+}
+
+function configuraVistaInizialeMobile() {
+    if (isVistaMobileCalendario()) {
+        vistaCorrente = 'dayGridDay';
+    }
+}
 let loadRequestId = 0;
 let calendarioInizializzato = false;
 let servizioCorrente = null;
@@ -1084,8 +1094,13 @@ function setupEventListenersCalendario() {
 
 async function avviaCalendario(user, perm) {
     mostraCalendario(etichettaUtente(user, perm));
+    configuraVistaInizialeMobile();
     initCalendario();
     setupEventListenersCalendario();
+    if (isVistaMobileCalendario() && calendar) {
+        impostaVista('dayGridDay');
+        calendar.today();
+    }
     setLoading(true);
     await caricaNominativi();
     await caricaAutomezzi();
