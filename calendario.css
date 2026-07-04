@@ -193,20 +193,31 @@ body {
 }
 
 /* Eventi servizio nel calendario — colori per stato */
+#calendario-mount .fc-event,
+#calendario-mount .fc-daygrid-event {
+    --fc-event-text-color: #1a1a1a;
+}
+
 #calendario-mount .fc-event.cal-stato-da-eseguire,
 #calendario-mount .fc-daygrid-event.cal-stato-da-eseguire {
+    --fc-event-bg-color: #ffd966 !important;
+    --fc-event-border-color: #d4a800 !important;
     background-color: #ffd966 !important;
     border-color: #d4a800 !important;
 }
 
 #calendario-mount .fc-event.cal-stato-eseguito,
 #calendario-mount .fc-daygrid-event.cal-stato-eseguito {
+    --fc-event-bg-color: #5cb85c !important;
+    --fc-event-border-color: #449d44 !important;
     background-color: #5cb85c !important;
     border-color: #449d44 !important;
 }
 
 #calendario-mount .fc-event.cal-stato-annullato,
 #calendario-mount .fc-daygrid-event.cal-stato-annullato {
+    --fc-event-bg-color: #bdbdbd !important;
+    --fc-event-border-color: #9e9e9e !important;
     background-color: #bdbdbd !important;
     border-color: #9e9e9e !important;
 }

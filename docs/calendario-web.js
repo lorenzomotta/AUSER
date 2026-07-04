@@ -585,6 +585,17 @@ function costruisciStringaMezzo(servizio) {
 
 // ─── UI Calendario ───────────────────────────────────────────────────────────
 
+function coloriStatoServizioCalendario(stato) {
+    const s = String(stato || 'DA ESEGUIRE').trim().toUpperCase();
+    if (s === 'ESEGUITO') {
+        return { backgroundColor: '#5cb85c', borderColor: '#449d44', textColor: '#1a1a1a' };
+    }
+    if (s === 'ANNULLATO') {
+        return { backgroundColor: '#bdbdbd', borderColor: '#9e9e9e', textColor: '#424242' };
+    }
+    return { backgroundColor: '#ffd966', borderColor: '#d4a800', textColor: '#1a1a1a' };
+}
+
 function classeStatoServizioCalendario(stato) {
     const s = String(stato || 'DA ESEGUIRE').trim().toUpperCase();
     if (s === 'ESEGUITO') return 'cal-stato-eseguito';
@@ -595,12 +606,16 @@ function classeStatoServizioCalendario(stato) {
 function servizioToEvent(servizio) {
     const start = dataOraToIso(servizio.data_prelievo, null);
     if (!start) return null;
+    const colori = coloriStatoServizioCalendario(servizio.stato_servizio);
     return {
         id: String(servizio.id || `tmp-${Math.random()}`),
         title: servizio.socio_trasportato || 'Servizio',
         start,
         allDay: true,
         order: minutiDaOra(servizio.ora_inizio),
+        backgroundColor: colori.backgroundColor,
+        borderColor: colori.borderColor,
+        textColor: colori.textColor,
         classNames: [classeStatoServizioCalendario(servizio.stato_servizio)],
         extendedProps: { servizio }
     };
