@@ -212,6 +212,31 @@ body {
     height: auto !important;
 }
 
+/* Vista giorno desktop: servizi più grandi e leggibili */
+@media (min-width: 769px) {
+    #calendario-mount .fc-dayGridDay-view .fc-daygrid-event {
+        margin-bottom: 6px;
+    }
+
+    #calendario-mount .fc-dayGridDay-view .fc-daygrid-event-harness {
+        margin-top: 4px !important;
+    }
+
+    #calendario-mount .fc-dayGridDay-view .fc-daygrid-block-event .fc-event-main {
+        padding: 10px 14px;
+        min-height: 40px;
+    }
+
+    #calendario-mount .fc-dayGridDay-view .cal-event {
+        font-size: 15px;
+        line-height: 1.45;
+        padding: 2px 4px;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+    }
+}
+
 /* Eventi servizio nel calendario — colori per stato */
 #calendario-mount .fc-event,
 #calendario-mount .fc-daygrid-event {
