@@ -522,6 +522,26 @@ function rowToServizioCompleto(row) {
     };
 }
 
+const SUPABASE_PAGE_SIZE = 1000;
+const SUPABASE_MAX_PAGES = 100;
+
+async function scaricaRighePaginate(buildQuery) {
+    const tutte = [];
+    for (let page = 0; page < SUPABASE_MAX_PAGES; page++) {
+        const from = page * SUPABASE_PAGE_SIZE;
+        const to = from + SUPABASE_PAGE_SIZE - 1;
+        const { data, error } = await buildQuery(from, to);
+        if (error) throw error;
+        const batch = data || [];
+        tutte.push(...batch);
+        if (batch.length < SUPABASE_PAGE_SIZE) break;
+    }
+    if (tutte.length >= SUPABASE_PAGE_SIZE * SUPABASE_MAX_PAGES) {
+        console.warn('Supabase: raggiunto limite massimo righe scaricate per tabella servizi');
+    }
+    return tutte;
+}
+
 async function fetchServiziAnno(anno, forceRefresh = false) {
     if (!forceRefresh && serviziPerAnnoCache[anno]) return serviziPerAnnoCache[anno];
 
@@ -529,17 +549,26 @@ async function fetchServiziAnno(anno, forceRefresh = false) {
     const inizio = `${anno}-01-01`;
     const fine = `${anno}-12-31`;
 
-    let { data, error } = await supabaseClient
-        .from(serviziTable)
-        .select('*')
-        .gte('Prelievo_Data', inizio)
-        .lte('Prelievo_Data', fine);
-
-    if (error) {
-        console.warn('Filtro anno fallito, scarico tutti i servizi:', error.message);
-        const res = await supabaseClient.from(serviziTable).select('*');
-        if (res.error) throw new Error(res.error.message);
-        data = res.data;
+    let data;
+    try {
+        data = await scaricaRighePaginate((from, to) =>
+            supabaseClient
+                .from(serviziTable)
+                .select('*')
+                .gte('Prelievo_Data', inizio)
+                .lte('Prelievo_Data', fine)
+                .order('Prelievo_Data', { ascending: true })
+                .range(from, to)
+        );
+    } catch (error) {
+        console.warn('Filtro anno fallito, scarico tutti i servizi con paginazione:', error.message);
+        data = await scaricaRighePaginate((from, to) =>
+            supabaseClient
+                .from(serviziTable)
+                .select('*')
+                .order('Prelievo_Data', { ascending: true })
+                .range(from, to)
+        );
     }
 
     const servizi = (data || [])
