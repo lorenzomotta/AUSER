@@ -666,6 +666,19 @@ function renderIntestazioneGiornoSettimanaMobile(arg) {
     };
 }
 
+function listDayDidMountMobile(arg) {
+    if (!isVistaMobileCalendario() || arg.view?.type !== 'listWeek') return;
+    const { data, giorno } = formattaGiornoMobile(arg.date);
+    const cushion = arg.el.querySelector('.fc-list-day-cushion');
+    if (cushion) {
+        cushion.innerHTML = `
+            <div class="cal-week-day-header">
+                <div class="cal-week-day-data">${escapeHtml(data)}</div>
+                <div class="cal-week-day-nome">${escapeHtml(giorno)}</div>
+            </div>`;
+    }
+}
+
 function renderEventContent(arg) {
     const s = arg.event.extendedProps.servizio || {};
     const ora = s.ora_inizio || '';
@@ -1122,8 +1135,6 @@ function initCalendario() {
             listWeek: {
                 type: 'list',
                 duration: { weeks: 1 },
-                listDayFormat: false,
-                listDaySideFormat: false,
                 listDayHeaderContent: renderIntestazioneGiornoSettimanaMobile
             }
         },
@@ -1135,6 +1146,7 @@ function initCalendario() {
         nowIndicator: false,
         eventContent: renderEventContent,
         eventDidMount: applicaColoriEventoCalendario,
+        listDayDidMount: listDayDidMountMobile,
         eventClick(info) {
             info.jsEvent.preventDefault();
             const id = info.event.id;

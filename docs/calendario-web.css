@@ -315,11 +315,16 @@
     .web-calendario-app #calendario-mount .fc-listWeek-view .fc-list-day-cushion {
         background: transparent;
         padding: 0;
+        width: 100%;
     }
 
-    .web-calendario-app #calendario-mount .fc-listWeek-view .fc-list-day-side-text,
-    .web-calendario-app #calendario-mount .fc-listWeek-view .fc-list-day-text {
+    .web-calendario-app #calendario-mount .fc-listWeek-view .fc-list-day-text,
+    .web-calendario-app #calendario-mount .fc-listWeek-view .fc-list-day-side-text {
         display: none;
+    }
+
+    .web-calendario-app #calendario-mount .fc-listWeek-view .fc-list-day-cushion .cal-week-day-header {
+        display: flex;
     }
 
     .web-calendario-app .cal-week-day-header {
