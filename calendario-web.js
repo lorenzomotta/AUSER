@@ -356,8 +356,32 @@ function resolveOperatoreNome(row) {
     return idOp;
 }
 
+function trovaColonnaRow(row, candidates) {
+    if (!row || typeof row !== 'object') return candidates[0];
+    for (const name of candidates) {
+        if (Object.prototype.hasOwnProperty.call(row, name)) return name;
+    }
+    const keys = Object.keys(row);
+    for (const name of candidates) {
+        const found = keys.find(k => k.toLowerCase() === name.toLowerCase());
+        if (found) return found;
+    }
+    return candidates[0];
+}
+
+function colonneIdServizio() {
+    return ['idservizio', 'IdServizio', 'Id_Servizio', 'IDSERVIZIO', 'id_servizio'];
+}
+
+function valoriIdPerFiltro(id) {
+    const vals = [String(id).trim()];
+    const n = parseInt(String(id), 10);
+    if (!Number.isNaN(n)) vals.push(n);
+    return [...new Set(vals)];
+}
+
 function rowToServizioCompleto(row) {
-    const id = getFieldAny(row, ['idservizio', 'IdServizio', 'Id_Servizio', 'IDSERVIZIO', 'id_servizio']);
+    const id = getFieldAny(row, colonneIdServizio());
     if (!id) return null;
 
     const incassato = getFieldAny(row, ['Incassato', 'INCASSATO']);
@@ -365,6 +389,10 @@ function rowToServizioCompleto(row) {
 
     return {
         id: String(id),
+        idColonna: trovaColonnaRow(row, colonneIdServizio()),
+        _colKm: trovaColonnaRow(row, ['Km', 'KM']),
+        _colTempo: trovaColonnaRow(row, ['Tempo', 'TEMPO', 'TEMPO_ORE']),
+        _colNote: trovaColonnaRow(row, ['NoteFineServizio', 'NOTAFINESERVIZIO', 'NOTE_FINE_SERVIZIO']),
         data_prelievo: formatDateItalian(getFieldAny(row, ['Prelievo_Data', 'DATA_PRELIEVO', 'Data_Prelievo'])),
         idsocio: getFieldAny(row, ['IdSocio', 'IDSOCIO']),
         socio_trasportato: getFieldAny(row, ['Trasportato', 'TRASP', 'Trasp']),
@@ -538,10 +566,63 @@ function normalizzaTempoPerSupabase(tempoStr) {
     return `${h}:${m}:${sec}`;
 }
 
-function invalidaCacheServizio(servizio) {
-    if (!servizio?.data_prelievo) return;
-    const data = parseDataItaliana(servizio.data_prelievo);
-    if (data) delete serviziPerAnnoCache[data.getFullYear()];
+function buildPayloadFineServizio(servizio, km, tempoRaw, note) {
+    const payload = {};
+    payload[servizio._colKm || 'Km'] = km;
+    payload[servizio._colNote || 'NoteFineServizio'] = note;
+    const colTempo = servizio._colTempo || 'Tempo';
+    const tempoNorm = normalizzaTempoPerSupabase(tempoRaw);
+    if (tempoNorm !== null) payload[colTempo] = tempoNorm;
+    return payload;
+}
+
+function messaggioErroreSalvataggio(error) {
+    const msg = error?.message || String(error);
+    if (/policy|permission|42501|403|JWT/i.test(msg)) {
+        return `${msg}\n\nVerifica di aver eseguito su Supabase la policy UPDATE (file supabase-calendario-web.sql).`;
+    }
+    return msg;
+}
+
+async function patchFineServizioSupabase(servizio, km, tempoRaw, note) {
+    const table = tabella('servizi');
+    const payload = buildPayloadFineServizio(servizio, km, tempoRaw, note);
+    const idCols = [
+        servizio.idColonna,
+        ...colonneIdServizio().filter(c => c !== servizio.idColonna)
+    ].filter(Boolean);
+    const selectCols = [...new Set([
+        ...idCols,
+        servizio._colKm || 'Km',
+        servizio._colTempo || 'Tempo',
+        servizio._colNote || 'NoteFineServizio'
+    ])].join(', ');
+
+    let ultimoErrore = null;
+
+    for (const idCol of idCols) {
+        for (const idVal of valoriIdPerFiltro(servizio.id)) {
+            const { data, error } = await supabaseClient
+                .from(table)
+                .update(payload)
+                .eq(idCol, idVal)
+                .select(selectCols);
+
+            if (error) {
+                ultimoErrore = error;
+                continue;
+            }
+            if (data && data.length > 0) {
+                const aggiornato = rowToServizioCompleto(data[0]);
+                if (aggiornato) return aggiornato;
+            }
+        }
+    }
+
+    if (ultimoErrore) throw ultimoErrore;
+    throw new Error(
+        'Nessuna riga aggiornata su Supabase. Controlla permessi UPDATE (SQL operatori_aggiornano_servizi) e idservizio.'
+    );
 }
 
 function aggiornaServizioInCache(servizioAggiornato) {
@@ -699,36 +780,21 @@ async function salvaDatiFineServizio() {
     mostraErroreCompila('');
     if (btn) btn.disabled = true;
 
-    const payload = {
-        Km: km,
-        NoteFineServizio: note
-    };
-    const tempoNorm = normalizzaTempoPerSupabase(tempoRaw);
-    if (tempoNorm !== null) payload.Tempo = tempoNorm;
-
     try {
-        const { error } = await supabaseClient
-            .from(tabella('servizi'))
-            .update(payload)
-            .eq('idservizio', servizioCorrente.id);
+        const aggiornato = await patchFineServizioSupabase(servizioCorrente, km, tempoRaw, note);
 
-        if (error) throw error;
-
-        const aggiornato = {
-            ...servizioCorrente,
-            km,
-            tempo: tempoRaw ? formatTimeIso(tempoNorm || tempoRaw) : '',
-            note_fine_servizio: note
-        };
         servizioCorrente = aggiornato;
         aggiornaServizioInCache(aggiornato);
-        invalidaCacheServizio(aggiornato);
+        if (calendar) {
+            const ev = calendar.getEventById(String(aggiornato.id));
+            if (ev) ev.setExtendedProp('servizio', aggiornato);
+        }
 
         chiudiModalCompila();
         apriModalServizio(aggiornato);
     } catch (err) {
         console.error('Errore salvataggio fine servizio:', err);
-        mostraErroreCompila(err.message || 'Errore nel salvataggio. Riprova.');
+        mostraErroreCompila(messaggioErroreSalvataggio(err));
     } finally {
         if (btn) btn.disabled = false;
     }
@@ -757,7 +823,8 @@ function initCalendario() {
         eventContent: renderEventContent,
         eventClick(info) {
             info.jsEvent.preventDefault();
-            const servizio = info.event.extendedProps.servizio;
+            const id = info.event.id;
+            const servizio = (id && serviziById.get(String(id))) || info.event.extendedProps.servizio;
             if (servizio) apriModalServizio(servizio);
         },
         datesSet() {
