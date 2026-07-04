@@ -15,7 +15,7 @@ let publicConfig = null;
 let nominativiMap = {};
 let calendar = null;
 let allAutomezzi = [];
-const serviziPerAnnoCache = {};
+const serviziPerRangeCache = new Map();
 const serviziById = new Map();
 let vistaCorrente = 'dayGridMonth';
 
@@ -237,21 +237,36 @@ function normalizzaNumero(val) {
     return s;
 }
 
-function getAnnoCorrente() {
-    return new Date().getFullYear();
+function dateToIsoGiorno(date) {
+    const d = date instanceof Date ? date : new Date(date);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
 }
 
-function anniNelRange(start, end) {
-    const anni = new Set();
-    const cur = new Date(start);
-    cur.setDate(1);
-    const fine = new Date(end);
-    while (cur <= fine) {
-        anni.add(cur.getFullYear());
-        cur.setMonth(cur.getMonth() + 1);
-    }
-    anni.add(fine.getFullYear());
-    return [...anni].sort((a, b) => a - b);
+/** FullCalendar usa activeEnd esclusivo: ultimo giorno visibile = end - 1 ms */
+function fineRangeInclusive(endEsclusivo) {
+    const d = new Date(endEsclusivo);
+    d.setMilliseconds(d.getMilliseconds() - 1);
+    return dateToIsoGiorno(d);
+}
+
+function chiaveRangeCache(start, endEsclusivo) {
+    return `${dateToIsoGiorno(start)}_${dateToIsoGiorno(endEsclusivo)}`;
+}
+
+function servizioNelRange(servizio, start, endEsclusivo) {
+    const d = parseDataItaliana(servizio.data_prelievo);
+    if (!d) return false;
+    const giorno = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const startT = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+    const endT = new Date(endEsclusivo.getFullYear(), endEsclusivo.getMonth(), endEsclusivo.getDate()).getTime();
+    return giorno >= startT && giorno < endT;
+}
+
+function invalidaCacheServizi() {
+    serviziPerRangeCache.clear();
 }
 
 // ─── Config e Supabase ─────────────────────────────────────────────────────
@@ -400,7 +415,7 @@ async function gestisciLogin(event) {
 
 async function gestisciLogout() {
     await supabaseClient.auth.signOut();
-    Object.keys(serviziPerAnnoCache).forEach(k => delete serviziPerAnnoCache[k]);
+    invalidaCacheServizi();
     serviziById.clear();
     nominativiMap = {};
     mostraSchermataLogin();
@@ -542,12 +557,15 @@ async function scaricaRighePaginate(buildQuery) {
     return tutte;
 }
 
-async function fetchServiziAnno(anno, forceRefresh = false) {
-    if (!forceRefresh && serviziPerAnnoCache[anno]) return serviziPerAnnoCache[anno];
+async function fetchServiziRange(start, endEsclusivo, forceRefresh = false) {
+    const key = chiaveRangeCache(start, endEsclusivo);
+    if (!forceRefresh && serviziPerRangeCache.has(key)) {
+        return serviziPerRangeCache.get(key);
+    }
 
     const serviziTable = tabella('servizi');
-    const inizio = `${anno}-01-01`;
-    const fine = `${anno}-12-31`;
+    const inizio = dateToIsoGiorno(start);
+    const fine = fineRangeInclusive(endEsclusivo);
 
     let data;
     try {
@@ -561,7 +579,7 @@ async function fetchServiziAnno(anno, forceRefresh = false) {
                 .range(from, to)
         );
     } catch (error) {
-        console.warn('Filtro anno fallito, scarico tutti i servizi con paginazione:', error.message);
+        console.warn('Filtro periodo fallito, scarico con paginazione:', error.message);
         data = await scaricaRighePaginate((from, to) =>
             supabaseClient
                 .from(serviziTable)
@@ -574,12 +592,9 @@ async function fetchServiziAnno(anno, forceRefresh = false) {
     const servizi = (data || [])
         .map(rowToServizioCompleto)
         .filter(Boolean)
-        .filter(s => {
-            const d = parseDataItaliana(s.data_prelievo);
-            return d && d.getFullYear() === anno;
-        });
+        .filter(s => servizioNelRange(s, start, endEsclusivo));
 
-    serviziPerAnnoCache[anno] = servizi;
+    serviziPerRangeCache.set(key, servizi);
     return servizi;
 }
 
@@ -597,17 +612,12 @@ async function caricaAutomezzi() {
     }));
 }
 
-async function caricaServiziPerRange(start, end) {
-    const anni = anniNelRange(start, end);
-    const risultati = await Promise.all(anni.map(a => fetchServiziAnno(a)));
-    const tutti = [];
-    risultati.forEach(lista => {
-        lista.forEach(s => {
-            if (s.id) serviziById.set(String(s.id), s);
-            tutti.push(s);
-        });
+async function caricaServiziPerRange(start, endEsclusivo) {
+    const servizi = await fetchServiziRange(start, endEsclusivo);
+    servizi.forEach(s => {
+        if (s.id) serviziById.set(String(s.id), s);
     });
-    return tutti;
+    return servizi;
 }
 
 function costruisciStringaMezzo(servizio) {
@@ -798,10 +808,8 @@ function normalizzaTempoPerSupabase(tempoStr) {
     return `${h}:${m}:${sec}`;
 }
 
-function invalidaCacheAnnoServizio(servizio) {
-    if (!servizio?.data_prelievo) return;
-    const data = parseDataItaliana(servizio.data_prelievo);
-    if (data) delete serviziPerAnnoCache[data.getFullYear()];
+function invalidaCachePeriodoServizio() {
+    invalidaCacheServizi();
 }
 
 async function ricaricaServizioDaSupabase(servizio) {
@@ -890,18 +898,6 @@ async function ricaricaServizioDaSupabase(servizio) {
         }
     }
 
-    const dataPrelievo = parseDataItaliana(servizio.data_prelievo);
-    if (dataPrelievo) {
-        const anno = dataPrelievo.getFullYear();
-        delete serviziPerAnnoCache[anno];
-        const lista = await fetchServiziAnno(anno, true);
-        const trovato = lista.find(s => String(s.id) === id);
-        if (trovato) {
-            aggiornaServizioInCache(trovato);
-            return trovato;
-        }
-    }
-
     console.warn('Servizio non ricaricato da Supabase, id=', id, errOr?.message || '');
     return servizio;
 }
@@ -962,8 +958,7 @@ async function patchFineServizioSupabase(servizio, km, tempoRaw, note) {
 function aggiornaServizioInCache(servizioAggiornato) {
     if (!servizioAggiornato?.id) return;
     serviziById.set(String(servizioAggiornato.id), servizioAggiornato);
-    Object.keys(serviziPerAnnoCache).forEach(anno => {
-        const lista = serviziPerAnnoCache[anno];
+    serviziPerRangeCache.forEach((lista) => {
         if (!Array.isArray(lista)) return;
         const idx = lista.findIndex(s => String(s.id) === String(servizioAggiornato.id));
         if (idx >= 0) lista[idx] = { ...lista[idx], ...servizioAggiornato };
@@ -1140,7 +1135,7 @@ async function salvaDatiFineServizio() {
 
         servizioCorrente = aggiornato;
         aggiornaServizioInCache(aggiornato);
-        invalidaCacheAnnoServizio(aggiornato);
+        invalidaCachePeriodoServizio();
         if (calendar) {
             const ev = calendar.getEventById(String(aggiornato.id));
             if (ev) ev.setExtendedProp('servizio', aggiornato);
