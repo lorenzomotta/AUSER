@@ -585,6 +585,13 @@ function costruisciStringaMezzo(servizio) {
 
 // ─── UI Calendario ───────────────────────────────────────────────────────────
 
+function classeStatoServizioCalendario(stato) {
+    const s = String(stato || 'DA ESEGUIRE').trim().toUpperCase();
+    if (s === 'ESEGUITO') return 'cal-stato-eseguito';
+    if (s === 'ANNULLATO') return 'cal-stato-annullato';
+    return 'cal-stato-da-eseguire';
+}
+
 function servizioToEvent(servizio) {
     const start = dataOraToIso(servizio.data_prelievo, null);
     if (!start) return null;
@@ -594,6 +601,7 @@ function servizioToEvent(servizio) {
         start,
         allDay: true,
         order: minutiDaOra(servizio.ora_inizio),
+        classNames: [classeStatoServizioCalendario(servizio.stato_servizio)],
         extendedProps: { servizio }
     };
 }

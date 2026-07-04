@@ -192,11 +192,28 @@ body {
     min-height: 320px;
 }
 
-/* Eventi servizio nel calendario — sfondo giallo */
-#calendario-mount .fc-event,
-#calendario-mount .fc-daygrid-event {
+/* Eventi servizio nel calendario — colori per stato */
+#calendario-mount .fc-event.cal-stato-da-eseguire,
+#calendario-mount .fc-daygrid-event.cal-stato-da-eseguire {
     background-color: #ffd966 !important;
     border-color: #d4a800 !important;
+}
+
+#calendario-mount .fc-event.cal-stato-eseguito,
+#calendario-mount .fc-daygrid-event.cal-stato-eseguito {
+    background-color: #5cb85c !important;
+    border-color: #449d44 !important;
+}
+
+#calendario-mount .fc-event.cal-stato-annullato,
+#calendario-mount .fc-daygrid-event.cal-stato-annullato {
+    background-color: #bdbdbd !important;
+    border-color: #9e9e9e !important;
+}
+
+#calendario-mount .fc-event.cal-stato-annullato .fc-event-main,
+#calendario-mount .fc-event.cal-stato-annullato .cal-event {
+    color: #424242;
 }
 
 #calendario-mount .fc-event .fc-event-main {
