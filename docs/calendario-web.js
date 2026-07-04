@@ -171,6 +171,26 @@ function anniNelRange(start, end) {
 
 // ─── Config e Supabase ─────────────────────────────────────────────────────
 
+/** Chiavi sb_publishable_ vanno solo nell'header apikey, non in Authorization Bearer. */
+function creaFetchSupabase(apiKey) {
+    const isLegacyJwt = apiKey.startsWith('eyJ');
+    return (input, init = {}) => {
+        const headers = new Headers(init.headers || {});
+        headers.set('apikey', apiKey);
+        if (isLegacyJwt) {
+            if (!headers.has('Authorization')) {
+                headers.set('Authorization', `Bearer ${apiKey}`);
+            }
+        } else {
+            const auth = headers.get('Authorization');
+            if (auth === `Bearer ${apiKey}`) {
+                headers.delete('Authorization');
+            }
+        }
+        return fetch(input, { ...init, headers });
+    };
+}
+
 async function caricaConfigPubblica() {
     const risposta = await fetch('config.public.json', { cache: 'no-store' });
     if (!risposta.ok) {
@@ -193,7 +213,9 @@ async function caricaConfigPubblica() {
     if (typeof window.supabase?.createClient !== 'function') {
         throw new Error('Libreria Supabase non caricata');
     }
-    supabaseClient = window.supabase.createClient(url, key);
+    supabaseClient = window.supabase.createClient(url, key, {
+        global: { fetch: creaFetchSupabase(key) },
+    });
 }
 
 function tabella(nome) {
