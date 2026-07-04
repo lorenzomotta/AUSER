@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario Servizi — Accesso Operatori</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="calendario.css">
+    <link rel="stylesheet" href="calendario-web.css">
+</head>
+<body>
+    <!-- Schermata login operatori -->
+    <div id="web-login-screen" class="web-login-screen">
+        <div class="web-login-card">
+            <div class="web-login-logo">auser Asti</div>
+            <h1 class="web-login-title">Calendario servizi</h1>
+            <p class="web-login-subtitle">Accesso riservato agli operatori</p>
+
+            <form id="web-login-form" class="web-login-form" autocomplete="on">
+                <div class="web-login-field">
+                    <label for="web-login-email">Email</label>
+                    <input type="email" id="web-login-email" class="web-login-input" required
+                        autocomplete="username" placeholder="nome@esempio.it">
+                </div>
+                <div class="web-login-field">
+                    <label for="web-login-password">Password</label>
+                    <input type="password" id="web-login-password" class="web-login-input" required
+                        autocomplete="current-password" placeholder="Password">
+                </div>
+                <p id="web-login-errore" class="web-login-errore" role="alert" hidden></p>
+                <button type="submit" id="web-login-submit" class="web-login-btn">ACCEDI</button>
+            </form>
+
+            <p class="web-login-hint">
+                Se non riesci ad accedere, contatta l'amministratore per l'attivazione dell'account operatore.
+            </p>
+        </div>
+    </div>
+
+    <!-- Calendario (visibile dopo login) -->
+    <div id="web-calendario-app" class="web-calendario-app" hidden>
+        <div class="calendario-container">
+            <header class="calendario-header">
+                <div class="header-left">
+                    <button type="button" class="btn btn-chiudi" id="btn-logout">ESCI</button>
+                </div>
+                <div class="header-center">
+                    <h1 class="page-title">CALENDARIO SERVIZI</h1>
+                    <span class="servizi-count" id="calendario-count">(0 servizi)</span>
+                    <span class="web-user-label" id="web-user-label"></span>
+                </div>
+                <div class="header-right">
+                    <div class="vista-buttons" role="group" aria-label="Vista calendario">
+                        <button type="button" class="btn-vista active" data-vista="dayGridMonth">MESE</button>
+                        <button type="button" class="btn-vista" data-vista="dayGridWeek">SETTIMANA</button>
+                        <button type="button" class="btn-vista" data-vista="dayGridDay">GIORNO</button>
+                    </div>
+                </div>
+            </header>
+
+            <div id="calendario-loading" class="calendario-loading">Caricamento servizi...</div>
+            <div id="calendario-mount"></div>
+        </div>
+    </div>
+
+    <div id="modal-servizio" class="modal-servizio-overlay" style="display: none;" aria-hidden="true">
+        <div class="modal-servizio-content" role="dialog" aria-labelledby="modal-servizio-title">
+            <div class="modal-servizio-header">
+                <h2 id="modal-servizio-title">DETTAGLIO SERVIZIO</h2>
+                <button type="button" class="modal-close-btn" id="btn-close-modal" aria-label="Chiudi">&times;</button>
+            </div>
+            <div class="modal-servizio-body" id="modal-servizio-body"></div>
+            <div class="modal-servizio-footer">
+                <button type="button" class="btn btn-chiudi-modal" id="btn-chiudi-modal">CHIUDI</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.15/locales/it.global.min.js"></script>
+    <script src="calendario-web.js"></script>
+</body>
+</html>

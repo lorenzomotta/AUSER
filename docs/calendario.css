@@ -1,0 +1,376 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #d8d6d3;
+    padding: 16px;
+    min-height: 100vh;
+}
+
+.calendario-container {
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+.calendario-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 3px solid #9ea09e;
+    flex-wrap: wrap;
+}
+
+.header-left,
+.header-right {
+    flex: 0 0 auto;
+}
+
+.header-center {
+    flex: 1;
+    text-align: center;
+    min-width: 200px;
+}
+
+.page-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #2c3e2c;
+    margin: 0;
+}
+
+.servizi-count {
+    font-size: 0.95rem;
+    color: #555;
+}
+
+.btn-chiudi {
+    padding: 10px 24px;
+    font-size: 14px;
+    font-weight: bold;
+    background-color: #ff0019;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-chiudi:hover {
+    background-color: #e00015;
+}
+
+.vista-buttons {
+    display: flex;
+    gap: 6px;
+}
+
+.btn-vista {
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: bold;
+    background-color: #e8e6e3;
+    color: #333;
+    border: 2px solid #9ea09e;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-vista:hover {
+    background-color: #d0cec9;
+}
+
+.btn-vista.active {
+    background-color: #2d6a4f;
+    color: white;
+    border-color: #1b4332;
+}
+
+.calendario-loading {
+    text-align: center;
+    padding: 24px;
+    color: #555;
+    font-size: 1rem;
+}
+
+.calendario-loading.hidden {
+    display: none;
+}
+
+#calendario-mount {
+    background: #fff;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* FullCalendar personalizzazioni */
+#calendario-mount .fc {
+    --fc-border-color: #c5c5c5;
+    --fc-today-bg-color: #f0f0f0;
+    --fc-button-bg-color: #2d6a4f;
+    --fc-button-border-color: #1b4332;
+    --fc-button-hover-bg-color: #1b4332;
+    --fc-button-active-bg-color: #14532d;
+    font-size: 0.9rem;
+}
+
+#calendario-mount .fc-toolbar-title {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: #2c3e2c;
+}
+
+/* Sfondo grigio chiaro e cornice per i giorni della settimana (LUN, MAR, ...) */
+#calendario-mount .fc-col-header-cell {
+    background-color: #e8e8e8;
+    border: 1px solid #888;
+}
+
+#calendario-mount .fc-col-header-cell-cushion {
+    display: block;
+    padding: 6px 4px;
+    font-weight: bold;
+    color: #333;
+    text-decoration: none;
+}
+
+#calendario-mount .fc-daygrid-day-number {
+    color: #000;
+    text-decoration: none;
+    background: transparent;
+}
+
+#calendario-mount .fc-daygrid-day-top {
+    background-color: transparent;
+}
+
+#calendario-mount .fc-day-today .fc-daygrid-day-frame {
+    background-color: #f0f0f0;
+}
+
+#calendario-mount .fc-day-today .fc-daygrid-day-top {
+    background-color: transparent;
+}
+
+/* Celle giorno più alte (4-5 servizi) */
+#calendario-mount .fc-daygrid-day-frame {
+    min-height: 118px;
+}
+
+#calendario-mount .fc-daygrid-day-events {
+    margin-bottom: 2px;
+}
+
+#calendario-mount .fc-daygrid-event-harness {
+    margin-top: 1px !important;
+}
+
+#calendario-mount .fc-daygrid-event {
+    margin-top: 0;
+    margin-bottom: 1px;
+}
+
+#calendario-mount .fc-daygrid-block-event .fc-event-main {
+    padding: 0 2px;
+}
+
+/* Vista settimana: colonne giorno più alte */
+#calendario-mount .fc-dayGridWeek-view .fc-daygrid-day-frame {
+    min-height: 200px;
+}
+
+/* Vista giorno: unica colonna, più spazio verticale */
+#calendario-mount .fc-dayGridDay-view .fc-daygrid-day-frame {
+    min-height: 320px;
+}
+
+/* Eventi servizio nel calendario — sfondo giallo */
+#calendario-mount .fc-event,
+#calendario-mount .fc-daygrid-event {
+    background-color: #ffd966 !important;
+    border-color: #d4a800 !important;
+}
+
+#calendario-mount .fc-event .fc-event-main {
+    color: #1a1a1a;
+}
+
+.cal-event {
+    padding: 0 3px;
+    line-height: 1.15;
+    font-size: 10px;
+    color: #1a1a1a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+/* Modale dettaglio */
+.modal-servizio-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 16px;
+}
+
+.modal-servizio-content {
+    background: #f5f4f2;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 1200px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+.modal-servizio-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 2px solid #9ea09e;
+    background: #e8e6e3;
+    border-radius: 8px 8px 0 0;
+}
+
+.modal-servizio-header h2 {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #2c3e2c;
+    margin: 0;
+}
+
+.modal-close-btn {
+    background: none;
+    border: none;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    color: #666;
+    padding: 0 4px;
+}
+
+.modal-close-btn:hover {
+    color: #000;
+}
+
+.modal-servizio-body {
+    padding: 16px 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.modal-servizio-footer {
+    padding: 12px 20px;
+    border-top: 1px solid #ccc;
+    text-align: right;
+    background: #e8e6e3;
+    border-radius: 0 0 8px 8px;
+}
+
+.btn-chiudi-modal {
+    padding: 8px 20px;
+    font-weight: bold;
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.btn-chiudi-modal:hover {
+    background-color: #5a6268;
+}
+
+/* Griglia campi nel modale (stile simile a elenco servizi) */
+.dettaglio-section {
+    margin-bottom: 12px;
+}
+
+.dettaglio-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.dettaglio-field {
+    display: flex;
+    flex-direction: column;
+    min-width: 100px;
+    flex: 1;
+}
+
+.dettaglio-field.field-small {
+    flex: 0 0 90px;
+    min-width: 80px;
+}
+
+.dettaglio-field.field-medium {
+    flex: 0 0 140px;
+}
+
+.dettaglio-field.field-large {
+    flex: 2 1 200px;
+}
+
+.dettaglio-field.field-note {
+    flex: 1 1 100%;
+}
+
+.dettaglio-field label {
+    font-size: 11px;
+    font-weight: bold;
+    color: #555;
+    margin-bottom: 3px;
+    text-transform: uppercase;
+}
+
+.dettaglio-field input,
+.dettaglio-field textarea {
+    padding: 6px 8px;
+    border: 1px solid #bbb;
+    border-radius: 4px;
+    background: #fff;
+    font-size: 13px;
+    color: #222;
+    width: 100%;
+}
+
+.dettaglio-field textarea {
+    min-height: 56px;
+    resize: vertical;
+}
+
+@media (max-width: 768px) {
+    .calendario-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .header-center {
+        order: -1;
+    }
+
+    .vista-buttons {
+        justify-content: center;
+    }
+
+    #calendario-mount {
+        padding: 6px;
+    }
+}

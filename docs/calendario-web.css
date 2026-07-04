@@ -1,0 +1,150 @@
+/* Calendario web — schermata login e piccoli aggiustamenti */
+
+.web-login-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    background: linear-gradient(160deg, #e8f5e9 0%, #d8d6d3 45%, #c8e6c9 100%);
+}
+
+.web-login-card {
+    width: min(100%, 400px);
+    background: #fff;
+    border: 1px solid #bdbdbd;
+    border-radius: 10px;
+    padding: 28px 24px 22px;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.12);
+}
+
+.web-login-logo {
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #2d7a32;
+    margin-bottom: 6px;
+    text-transform: lowercase;
+}
+
+.web-login-title {
+    text-align: center;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #2c3e2c;
+    margin: 0 0 4px;
+}
+
+.web-login-subtitle {
+    text-align: center;
+    font-size: 0.92rem;
+    color: #666;
+    margin: 0 0 22px;
+}
+
+.web-login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.web-login-field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    color: #444;
+    margin-bottom: 4px;
+    letter-spacing: 0.03em;
+}
+
+.web-login-input {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    border: 1px solid #aaa;
+    border-radius: 5px;
+    font-family: inherit;
+}
+
+.web-login-input:focus {
+    outline: none;
+    border-color: #2d7a32;
+    box-shadow: 0 0 0 2px rgba(45, 122, 50, 0.2);
+}
+
+.web-login-errore {
+    margin: 0;
+    padding: 10px 12px;
+    font-size: 13px;
+    color: #a31515;
+    background: #fff5f5;
+    border: 1px solid #f5c2c2;
+    border-radius: 5px;
+}
+
+.web-login-errore[hidden] {
+    display: none !important;
+}
+
+.web-login-btn {
+    margin-top: 4px;
+    padding: 11px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    background: #2d7a32;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.web-login-btn:hover:not(:disabled) {
+    background: #256829;
+}
+
+.web-login-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.web-login-hint {
+    margin: 18px 0 0;
+    font-size: 12px;
+    color: #777;
+    text-align: center;
+    line-height: 1.4;
+}
+
+.web-calendario-app[hidden] {
+    display: none !important;
+}
+
+.web-calendario-app {
+    display: block;
+}
+
+.web-user-label {
+    display: block;
+    font-size: 0.82rem;
+    color: #2d7a32;
+    margin-top: 2px;
+}
+
+#btn-logout {
+    background-color: #555;
+}
+
+#btn-logout:hover {
+    background-color: #333;
+}
+
+@media (max-width: 600px) {
+    .web-login-card {
+        padding: 22px 18px 18px;
+    }
+
+    .web-user-label {
+        font-size: 0.75rem;
+    }
+}

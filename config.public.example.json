@@ -1,0 +1,12 @@
+{
+  "supabase": {
+    "url": "https://TUO-PROGETTO.supabase.co",
+    "anon_key": "LA-TUA-ANON-KEY-PUBBLICA",
+    "tables": {
+      "servizi": "Servizi_supa",
+      "automezzi": "Automezzi_Supa",
+      "user_permissions": "user_permissions",
+      "tesserati": "tesserati_supa"
+    }
+  }
+}
