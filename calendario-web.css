@@ -154,18 +154,32 @@
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
+    flex-shrink: 0;
+}
+
+.modal-servizio-footer-actions .btn-compila-modal,
+.modal-servizio-footer-actions .btn-chiudi-modal {
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.2;
+    -webkit-appearance: none;
+    appearance: none;
+    box-sizing: border-box;
 }
 
 .btn-compila-modal {
-    padding: 8px 16px;
+    padding: 10px 18px;
     font-weight: bold;
     background-color: #2d7a32;
     color: #fff;
     border: none;
     border-radius: 5px;
     cursor: pointer;
+    display: inline-block;
+    text-align: center;
+    white-space: nowrap;
 }
 
 .btn-compila-modal:hover {
@@ -311,4 +325,43 @@
 .btn-salva-compila:disabled {
     opacity: 0.65;
     cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+    .modal-servizio-footer-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        padding: 10px 14px;
+    }
+
+    .modal-servizio-footer-actions .btn-compila-modal,
+    .modal-servizio-footer-actions .btn-chiudi-modal {
+        width: 100%;
+        padding: 14px 16px;
+        font-size: 15px;
+    }
+
+    .modal-compila-footer {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+    .modal-compila-footer .btn-annulla-compila,
+    .modal-compila-footer .btn-salva-compila {
+        width: 100%;
+        padding: 14px 16px;
+        font-size: 15px;
+        -webkit-appearance: none;
+        appearance: none;
+    }
+
+    .modal-compila-content {
+        max-height: 92vh;
+        overflow-y: auto;
+    }
+
+    .modal-servizio-content {
+        max-height: 92vh;
+    }
 }

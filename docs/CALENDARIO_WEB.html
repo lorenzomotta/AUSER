@@ -7,7 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
     <link rel="stylesheet" href="calendario.css">
-    <link rel="stylesheet" href="calendario-web.css">
+    <link rel="stylesheet" href="calendario-web.css?v=2">
 </head>
 <body>
     <!-- Schermata login operatori -->
@@ -72,8 +72,8 @@
             </div>
             <div class="modal-servizio-body" id="modal-servizio-body"></div>
             <div class="modal-servizio-footer modal-servizio-footer-actions">
-                <button type="button" class="btn btn-compila-modal" id="btn-compila-fine-servizio">COMPILA KM / TEMPO / NOTE</button>
-                <button type="button" class="btn btn-chiudi-modal" id="btn-chiudi-modal">CHIUDI</button>
+                <button type="button" class="btn-compila-modal" id="btn-compila-fine-servizio">COMPILA DATI</button>
+                <button type="button" class="btn-chiudi-modal" id="btn-chiudi-modal">CHIUDI</button>
             </div>
         </div>
     </div>
@@ -105,8 +105,8 @@
                 <p id="modal-compila-errore" class="modal-compila-errore" role="alert" hidden></p>
             </div>
             <div class="modal-compila-footer">
-                <button type="button" class="btn btn-annulla-compila" id="btn-annulla-compila">ANNULLA</button>
-                <button type="button" class="btn btn-salva-compila" id="btn-salva-compila">SALVA</button>
+                <button type="button" class="btn-annulla-compila" id="btn-annulla-compila">ANNULLA</button>
+                <button type="button" class="btn-salva-compila" id="btn-salva-compila">SALVA</button>
             </div>
         </div>
     </div>
@@ -114,6 +114,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.15/locales/it.global.min.js"></script>
-    <script src="calendario-web.js?v=4"></script>
+    <script src="calendario-web.js?v=5"></script>
 </body>
 </html>
