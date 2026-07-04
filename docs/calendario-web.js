@@ -603,6 +603,18 @@ function classeStatoServizioCalendario(stato) {
     return 'cal-stato-da-eseguire';
 }
 
+function applicaColoriEventoCalendario(info) {
+    const servizio = info.event.extendedProps?.servizio;
+    const colori = coloriStatoServizioCalendario(servizio?.stato_servizio);
+    const el = info.el;
+    el.style.setProperty('--fc-event-bg-color', colori.backgroundColor);
+    el.style.setProperty('--fc-event-border-color', colori.borderColor);
+    el.style.backgroundColor = colori.backgroundColor;
+    el.style.borderColor = colori.borderColor;
+    el.style.color = colori.textColor;
+    el.classList.add(classeStatoServizioCalendario(servizio?.stato_servizio));
+}
+
 function servizioToEvent(servizio) {
     const start = dataOraToIso(servizio.data_prelievo, null);
     if (!start) return null;
@@ -1072,6 +1084,7 @@ function initCalendario() {
         buttonText: { today: 'Oggi' },
         nowIndicator: false,
         eventContent: renderEventContent,
+        eventDidMount: applicaColoriEventoCalendario,
         eventClick(info) {
             info.jsEvent.preventDefault();
             const id = info.event.id;
