@@ -633,13 +633,57 @@ function servizioToEvent(servizio) {
     };
 }
 
+const MESI_ITALIANI = [
+    'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
+    'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'
+];
+const GIORNI_SETTIMANA = [
+    'Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'
+];
+
+function formattaGiornoMobile(date) {
+    const d = date instanceof Date ? date : new Date(date);
+    return {
+        data: `${d.getDate()} ${MESI_ITALIANI[d.getMonth()]} ${d.getFullYear()}`,
+        giorno: GIORNI_SETTIMANA[d.getDay()]
+    };
+}
+
+function dayCellDidMountMobile(arg) {
+    if (!isVistaMobileCalendario() || arg.view?.type !== 'dayGridWeek') return;
+
+    const top = arg.el.querySelector('.fc-daygrid-day-top');
+    if (top) top.style.display = 'none';
+
+    const frame = arg.el.querySelector('.fc-daygrid-day-frame');
+    if (!frame) return;
+
+    frame.querySelector('.cal-week-day-header')?.remove();
+
+    const { data, giorno } = formattaGiornoMobile(arg.date);
+    const header = document.createElement('div');
+    header.className = 'cal-week-day-header';
+    header.innerHTML = `
+        <div class="cal-week-day-data">${escapeHtml(data)}</div>
+        <div class="cal-week-day-nome">${escapeHtml(giorno)}</div>
+    `;
+    frame.insertBefore(header, frame.firstChild);
+    arg.el.classList.add('cal-week-day-stacked');
+}
+
 function renderEventContent(arg) {
     const s = arg.event.extendedProps.servizio || {};
     const ora = s.ora_inizio || '';
     const socio = s.socio_trasportato || '';
     const op = s.operatore || '';
 
-    if (isVistaMobileCalendario() && (arg.view?.type === 'dayGridDay' || arg.view?.type === 'dayGridWeek')) {
+    if (isVistaMobileCalendario() && arg.view?.type === 'dayGridWeek') {
+        const parti = [ora, socio, op].filter(p => p.trim() !== '');
+        const riga = parti.length ? parti.map(p => escapeHtml(p)).join(' · ') : '—';
+        return { html: `<div class="cal-event cal-event-week-row" title="${riga}">${riga}</div>` };
+    }
+
+    if (isVistaMobileCalendario() && arg.view?.type === 'dayGridDay') {
         const righe = [
             ora ? `<span class="cal-event-ora">${escapeHtml(ora)}</span>` : '',
             socio ? `<span class="cal-event-socio">${escapeHtml(socio)}</span>` : '',
@@ -1092,6 +1136,7 @@ function initCalendario() {
         nowIndicator: false,
         eventContent: renderEventContent,
         eventDidMount: applicaColoriEventoCalendario,
+        dayCellDidMount: dayCellDidMountMobile,
         eventClick(info) {
             info.jsEvent.preventDefault();
             const id = info.event.id;
