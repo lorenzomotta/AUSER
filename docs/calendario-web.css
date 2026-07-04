@@ -301,30 +301,26 @@
 
     /* Vista settimana mobile: lista verticale nativa FullCalendar (listWeek) */
     .web-calendario-app #calendario-mount .fc-listWeek-view .fc-list-day {
+        display: block;
+        width: 100%;
         border-bottom: 4px solid #9ea09e;
         margin-bottom: 16px;
         padding-bottom: 10px;
+    }
+
+    .web-calendario-app #calendario-mount .fc-listWeek-view .fc-list-day > th,
+    .web-calendario-app #calendario-mount .fc-listWeek-view .fc-list-day-cushion {
+        display: block;
+        width: 100%;
+        padding: 0;
+        border: none;
+        background: transparent;
     }
 
     .web-calendario-app #calendario-mount .fc-listWeek-view .fc-list-day:last-child {
         border-bottom: none;
         margin-bottom: 0;
         padding-bottom: 0;
-    }
-
-    .web-calendario-app #calendario-mount .fc-listWeek-view .fc-list-day-cushion {
-        background: transparent;
-        padding: 0;
-        width: 100%;
-    }
-
-    .web-calendario-app #calendario-mount .fc-listWeek-view .fc-list-day-text,
-    .web-calendario-app #calendario-mount .fc-listWeek-view .fc-list-day-side-text {
-        display: none;
-    }
-
-    .web-calendario-app #calendario-mount .fc-listWeek-view .fc-list-day-cushion .cal-week-day-header {
-        display: flex;
     }
 
     .web-calendario-app .cal-week-day-header {

@@ -656,27 +656,37 @@ function formattaGiornoMobile(date) {
     };
 }
 
-function renderIntestazioneGiornoSettimanaMobile(arg) {
-    const { data, giorno } = formattaGiornoMobile(arg.date);
-    return {
-        html: `<div class="cal-week-day-header">
-            <div class="cal-week-day-data">${escapeHtml(data)}</div>
-            <div class="cal-week-day-nome">${escapeHtml(giorno)}</div>
-        </div>`
-    };
+function htmlIntestazioneGiornoMobile(date) {
+    const { data, giorno } = formattaGiornoMobile(date);
+    return `<div class="cal-week-day-header">
+        <div class="cal-week-day-data">${escapeHtml(data)}</div>
+        <div class="cal-week-day-nome">${escapeHtml(giorno)}</div>
+    </div>`;
 }
 
-function listDayDidMountMobile(arg) {
+function dayHeaderDidMountListWeek(arg) {
     if (!isVistaMobileCalendario() || arg.view?.type !== 'listWeek') return;
-    const { data, giorno } = formattaGiornoMobile(arg.date);
-    const cushion = arg.el.querySelector('.fc-list-day-cushion');
-    if (cushion) {
-        cushion.innerHTML = `
-            <div class="cal-week-day-header">
-                <div class="cal-week-day-data">${escapeHtml(data)}</div>
-                <div class="cal-week-day-nome">${escapeHtml(giorno)}</div>
-            </div>`;
-    }
+    if (arg.el) arg.el.innerHTML = htmlIntestazioneGiornoMobile(arg.date);
+}
+
+function dataDaElementoGiornoList(el) {
+    if (!el?.classList) return null;
+    const cls = [...el.classList].find(c => /^fc-day-\d{4}-\d{2}-\d{2}$/.test(c));
+    if (!cls) return null;
+    const [y, m, d] = cls.replace('fc-day-', '').split('-').map(Number);
+    return new Date(y, m - 1, d);
+}
+
+function applicaIntestazioniGiornoSettimanaMobile() {
+    if (!isVistaMobileCalendario() || !calendar || calendar.view?.type !== 'listWeek') return;
+    const mount = document.getElementById('calendario-mount');
+    if (!mount) return;
+    mount.querySelectorAll('.fc-listWeek-view .fc-list-day').forEach((dayEl) => {
+        const data = dataDaElementoGiornoList(dayEl);
+        const cushion = dayEl.querySelector('.fc-list-day-cushion');
+        if (!data || !cushion) return;
+        cushion.innerHTML = htmlIntestazioneGiornoMobile(data);
+    });
 }
 
 function renderEventContent(arg) {
@@ -737,6 +747,7 @@ async function aggiornaEventiCalendario() {
         calendar.addEventSource(eventi);
         aggiornaContatore(eventi.length);
         setLoading(false);
+        requestAnimationFrame(() => applicaIntestazioniGiornoSettimanaMobile());
     } catch (error) {
         if (reqId !== loadRequestId) return;
         console.error('Errore aggiornamento calendario:', error);
@@ -1135,7 +1146,8 @@ function initCalendario() {
             listWeek: {
                 type: 'list',
                 duration: { weeks: 1 },
-                listDayHeaderContent: renderIntestazioneGiornoSettimanaMobile
+                listDayFormat: false,
+                listDaySideFormat: false
             }
         },
         eventOrder: 'order',
@@ -1146,7 +1158,7 @@ function initCalendario() {
         nowIndicator: false,
         eventContent: renderEventContent,
         eventDidMount: applicaColoriEventoCalendario,
-        listDayDidMount: listDayDidMountMobile,
+        dayHeaderDidMount: dayHeaderDidMountListWeek,
         eventClick(info) {
             info.jsEvent.preventDefault();
             const id = info.event.id;
@@ -1155,6 +1167,7 @@ function initCalendario() {
         },
         datesSet() {
             aggiornaEventiCalendario();
+            requestAnimationFrame(() => applicaIntestazioniGiornoSettimanaMobile());
         }
     });
 
@@ -1167,7 +1180,10 @@ function impostaVista(nomeVista) {
     document.querySelectorAll('.btn-vista').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.vista === nomeVista);
     });
-    if (calendar) calendar.changeView(vistaCalendarioEffettiva(nomeVista));
+    if (calendar) {
+        calendar.changeView(vistaCalendarioEffettiva(nomeVista));
+        requestAnimationFrame(() => applicaIntestazioniGiornoSettimanaMobile());
+    }
 }
 
 let listenersCalendarioOk = false;
