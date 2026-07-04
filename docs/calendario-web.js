@@ -87,18 +87,34 @@ function buildTempoDaRow(row) {
     return '';
 }
 
+function formatKmDaRow(row) {
+    const key = trovaChiaveRow(row, ['km']) || 'Km';
+    const v = row?.[key];
+    if (v === undefined || v === null || v === '') return '';
+    const n = Number(v);
+    if (!Number.isNaN(n) && Number.isFinite(n)) {
+        return String(Number.isInteger(n) ? n : n);
+    }
+    return String(v).trim();
+}
+
+function formatTempoDaRow(row) {
+    const key = trovaChiaveRow(row, ['tempo']) || 'Tempo';
+    const v = row?.[key];
+    if (v === undefined || v === null || v === '') return buildTempoDaRow(row);
+    return formatTimeIso(v);
+}
+
 function leggiCampiFineServizioDaRow(row) {
-    const kKm = trovaChiaveRow(row, ['km', 'chilometr']);
-    const kTempo = trovaChiaveRow(row, ['tempo']);
     const kNote = trovaChiaveRow(row, [
-        'notefineservizio', 'note_fine_servizio', 'notafineservizio', 'note fine'
+        'notefineservizio', 'note_fine_servizio', 'notafineservizio'
     ]);
     return {
-        km: kKm ? valoreCampoRow(row, kKm) : '',
-        tempo: kTempo ? formatTimeIso(row[kTempo]) : buildTempoDaRow(row),
+        km: formatKmDaRow(row),
+        tempo: formatTempoDaRow(row),
         note_fine_servizio: kNote ? valoreCampoRow(row, kNote) : '',
-        _colKm: kKm || 'Km',
-        _colTempo: kTempo || 'Tempo',
+        _colKm: trovaChiaveRow(row, ['km']) || 'Km',
+        _colTempo: trovaChiaveRow(row, ['tempo']) || 'Tempo',
         _colNote: kNote || 'NoteFineServizio'
     };
 }
@@ -460,8 +476,8 @@ function rowToServizioCompleto(row) {
         operatore_2: getFieldAny(row, ['Oper2', 'OPER2']),
         mezzo_usato: '',
         mezzo: getFieldAny(row, ['Mezzo', 'MEZZO']),
-        tempo: buildTempoDaRow(row),
-        km: getFieldAny(row, ['Km', 'KM']),
+        tempo: formatTempoDaRow(row),
+        km: formatKmDaRow(row),
         tipo_pagamento: getFieldAny(row, ['TipoPagamento', 'TIPOPAGAMENTO']),
         data_bonifico: formatDateItalian(getFieldAny(row, ['Bonifico_Data', 'DATABONIFICO'])),
         data_ricevuta: formatDateItalian(getFieldAny(row, ['Ricevuta_Data', 'DATARICEVUTA'])),
@@ -639,13 +655,34 @@ async function ricaricaServizioDaSupabase(servizio) {
     const id = String(servizio.id).trim();
     const idNum = parseInt(id, 10);
 
+    // idservizio è numerico in Supabase — prova prima con numero
+    if (!Number.isNaN(idNum)) {
+        const { data, error } = await supabaseClient
+            .from(table)
+            .select('*')
+            .eq('idservizio', idNum)
+            .limit(1);
+
+        if (!error && data?.length) {
+            const completo = rowToServizioCompleto(data[0]);
+            if (completo) {
+                aggiornaServizioInCache(completo);
+                if (calendar) {
+                    const ev = calendar.getEventById(String(completo.id));
+                    if (ev) ev.setExtendedProp('servizio', completo);
+                }
+                return completo;
+            }
+        }
+        if (error) console.warn('Ricarica idservizio numerico:', error.message);
+    }
+
     const filtriOr = [
         `idservizio.eq.${id}`,
-        `IdServizio.eq.${id}`,
-        `IDSERVIZIO.eq.${id}`
+        `IdServizio.eq.${id}`
     ];
     if (!Number.isNaN(idNum)) {
-        filtriOr.push(`idservizio.eq.${idNum}`, `IdServizio.eq.${idNum}`, `IDSERVIZIO.eq.${idNum}`);
+        filtriOr.push(`idservizio.eq.${idNum}`, `IdServizio.eq.${idNum}`);
     }
 
     const { data: righeOr, error: errOr } = await supabaseClient
