@@ -187,9 +187,29 @@ body {
     min-height: 200px;
 }
 
-/* Vista giorno: unica colonna, più spazio verticale */
+/* Vista giorno: unica colonna, tutti i servizi visibili con scroll pagina */
 #calendario-mount .fc-dayGridDay-view .fc-daygrid-day-frame {
     min-height: 320px;
+    height: auto !important;
+}
+
+#calendario-mount .fc-dayGridDay-view .fc-daygrid-day-events {
+    overflow: visible;
+    margin-bottom: 8px;
+}
+
+#calendario-mount .fc-dayGridDay-view .fc-more-link {
+    display: none !important;
+}
+
+#calendario-mount .fc-dayGridDay-view .fc-scroller-harness,
+#calendario-mount .fc-dayGridDay-view .fc-scroller {
+    overflow: visible !important;
+    height: auto !important;
+}
+
+#calendario-mount .fc-dayGridDay-view .fc-view-harness {
+    height: auto !important;
 }
 
 /* Eventi servizio nel calendario — colori per stato */

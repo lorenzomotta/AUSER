@@ -301,10 +301,27 @@
 
     .web-calendario-app #calendario-mount .fc-dayGridDay-view .fc-daygrid-day-frame {
         min-height: calc(100vh - 340px);
+        height: auto !important;
     }
 
     .web-calendario-app #calendario-mount .fc-dayGridDay-view .fc-scrollgrid-sync-table {
         min-height: calc(100vh - 340px);
+        height: auto !important;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridDay-view .fc-daygrid-day-events {
+        overflow: visible;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridDay-view .fc-more-link {
+        display: none !important;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridDay-view .fc-scroller-harness,
+    .web-calendario-app #calendario-mount .fc-dayGridDay-view .fc-scroller,
+    .web-calendario-app #calendario-mount .fc-dayGridDay-view .fc-view-harness {
+        overflow: visible !important;
+        height: auto !important;
     }
 
     .web-calendario-app #calendario-mount .fc-daygrid-block-event .fc-event-main {

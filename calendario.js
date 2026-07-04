@@ -418,8 +418,12 @@ function initCalendario() {
         firstDay: 1,
         height: 'auto',
         dayMinHeight: 118,
-        dayMaxEvents: 8,
         moreLinkClick: 'popover',
+        views: {
+            dayGridMonth: { dayMaxEvents: 8 },
+            dayGridWeek: { dayMaxEvents: 8 },
+            dayGridDay: { dayMaxEvents: false, dayMaxEventRows: false }
+        },
         eventOrder: 'order',
         headerToolbar: {
             left: '',
