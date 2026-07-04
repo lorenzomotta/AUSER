@@ -412,7 +412,7 @@ function rowToServizioCompleto(row) {
         operatore_2: getFieldAny(row, ['Oper2', 'OPER2']),
         mezzo_usato: '',
         mezzo: getFieldAny(row, ['Mezzo', 'MEZZO']),
-        tempo: getFieldAny(row, ['Tempo', 'TEMPO']),
+        tempo: formatTimeIso(getFieldAny(row, ['Tempo', 'TEMPO', 'TEMPO_ORE', 'Tempo_Ore'])),
         km: getFieldAny(row, ['Km', 'KM']),
         tipo_pagamento: getFieldAny(row, ['TipoPagamento', 'TIPOPAGAMENTO']),
         data_bonifico: formatDateItalian(getFieldAny(row, ['Bonifico_Data', 'DATABONIFICO'])),
@@ -421,13 +421,15 @@ function rowToServizioCompleto(row) {
         stato_servizio: getFieldAny(row, ['StatoServizio', 'STATOSERVIZIO']),
         note_prelievo: getFieldAny(row, ['Prelievo_Note', 'PRELIEVO_NOTE']),
         note_arrivo: getFieldAny(row, ['Destinazione_Note', 'DESTINAZIONE_NOTE']),
-        note_fine_servizio: getFieldAny(row, ['NoteFineServizio', 'NOTAFINESERVIZIO']),
+        note_fine_servizio: getFieldAny(row, [
+            'NoteFineServizio', 'NOTAFINESERVIZIO', 'NOTE_FINE_SERVIZIO', 'NotaFineServizio'
+        ]),
         archivia: getFieldAny(row, ['Archiviazione', 'ARCHIVIAZIONE'])
     };
 }
 
-async function fetchServiziAnno(anno) {
-    if (serviziPerAnnoCache[anno]) return serviziPerAnnoCache[anno];
+async function fetchServiziAnno(anno, forceRefresh = false) {
+    if (!forceRefresh && serviziPerAnnoCache[anno]) return serviziPerAnnoCache[anno];
 
     const serviziTable = tabella('servizi');
     const inizio = `${anno}-01-01`;
@@ -566,6 +568,49 @@ function normalizzaTempoPerSupabase(tempoStr) {
     return `${h}:${m}:${sec}`;
 }
 
+function invalidaCacheAnnoServizio(servizio) {
+    if (!servizio?.data_prelievo) return;
+    const data = parseDataItaliana(servizio.data_prelievo);
+    if (data) delete serviziPerAnnoCache[data.getFullYear()];
+}
+
+async function ricaricaServizioDaSupabase(servizio) {
+    if (!servizio?.id || !supabaseClient) return servizio;
+
+    const table = tabella('servizi');
+    const idCols = [...new Set([
+        servizio.idColonna,
+        ...colonneIdServizio()
+    ].filter(Boolean))];
+
+    for (const idCol of idCols) {
+        for (const idVal of valoriIdPerFiltro(servizio.id)) {
+            const { data, error } = await supabaseClient
+                .from(table)
+                .select('*')
+                .eq(idCol, idVal)
+                .maybeSingle();
+
+            if (error) {
+                console.warn('Ricarica servizio fallita:', idCol, error.message);
+                continue;
+            }
+            if (data) {
+                const completo = rowToServizioCompleto(data);
+                if (completo) {
+                    aggiornaServizioInCache(completo);
+                    if (calendar) {
+                        const ev = calendar.getEventById(String(completo.id));
+                        if (ev) ev.setExtendedProp('servizio', completo);
+                    }
+                    return completo;
+                }
+            }
+        }
+    }
+    return servizio;
+}
+
 function buildPayloadFineServizio(servizio, km, tempoRaw, note) {
     const payload = {};
     payload[servizio._colKm || 'Km'] = km;
@@ -591,12 +636,6 @@ async function patchFineServizioSupabase(servizio, km, tempoRaw, note) {
         servizio.idColonna,
         ...colonneIdServizio().filter(c => c !== servizio.idColonna)
     ].filter(Boolean);
-    const selectCols = [...new Set([
-        ...idCols,
-        servizio._colKm || 'Km',
-        servizio._colTempo || 'Tempo',
-        servizio._colNote || 'NoteFineServizio'
-    ])].join(', ');
 
     let ultimoErrore = null;
 
@@ -606,7 +645,7 @@ async function patchFineServizioSupabase(servizio, km, tempoRaw, note) {
                 .from(table)
                 .update(payload)
                 .eq(idCol, idVal)
-                .select(selectCols);
+                .select('*');
 
             if (error) {
                 ultimoErrore = error;
@@ -655,6 +694,19 @@ function apriModalServizio(servizio) {
     const body = document.getElementById('modal-servizio-body');
     const title = document.getElementById('modal-servizio-title');
     if (!modal || !body) return;
+
+    servizioCorrente = servizio;
+    if (title) title.textContent = `SERVIZIO ${servizio.id || ''} — ${servizio.socio_trasportato || ''}`;
+
+    body.innerHTML = '<p class="modal-caricamento">Caricamento dati servizio...</p>';
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+}
+
+function renderModalServizio(servizio) {
+    const body = document.getElementById('modal-servizio-body');
+    const title = document.getElementById('modal-servizio-title');
+    if (!body) return;
 
     servizioCorrente = servizio;
     const mezzo = costruisciStringaMezzo(servizio);
@@ -706,9 +758,17 @@ function apriModalServizio(servizio) {
             </div>
         </div>
     `;
+}
 
-    modal.style.display = 'flex';
-    modal.setAttribute('aria-hidden', 'false');
+async function apriModalServizioConRefresh(servizio) {
+    apriModalServizio(servizio);
+    try {
+        const fresco = await ricaricaServizioDaSupabase(servizio);
+        renderModalServizio(fresco);
+    } catch (err) {
+        console.error('Errore ricarica servizio:', err);
+        renderModalServizio(servizio);
+    }
 }
 
 function chiudiModalServizio() {
@@ -785,13 +845,14 @@ async function salvaDatiFineServizio() {
 
         servizioCorrente = aggiornato;
         aggiornaServizioInCache(aggiornato);
+        invalidaCacheAnnoServizio(aggiornato);
         if (calendar) {
             const ev = calendar.getEventById(String(aggiornato.id));
             if (ev) ev.setExtendedProp('servizio', aggiornato);
         }
 
         chiudiModalCompila();
-        apriModalServizio(aggiornato);
+        renderModalServizio(aggiornato);
     } catch (err) {
         console.error('Errore salvataggio fine servizio:', err);
         mostraErroreCompila(messaggioErroreSalvataggio(err));
@@ -825,7 +886,7 @@ function initCalendario() {
             info.jsEvent.preventDefault();
             const id = info.event.id;
             const servizio = (id && serviziById.get(String(id))) || info.event.extendedProps.servizio;
-            if (servizio) apriModalServizio(servizio);
+            if (servizio) apriModalServizioConRefresh(servizio);
         },
         datesSet() {
             aggiornaEventiCalendario();

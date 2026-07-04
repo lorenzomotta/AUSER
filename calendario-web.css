@@ -327,6 +327,14 @@
     cursor: not-allowed;
 }
 
+.modal-caricamento {
+    margin: 0;
+    padding: 24px 12px;
+    text-align: center;
+    color: #555;
+    font-size: 14px;
+}
+
 @media (max-width: 600px) {
     .modal-servizio-footer-actions {
         flex-direction: column;
