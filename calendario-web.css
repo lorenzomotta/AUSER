@@ -139,6 +139,190 @@
     background-color: #333;
 }
 
+/* Layout header calendario web (desktop: invariato) */
+.web-calendario-app .header-toolbar {
+    display: contents;
+}
+
+/* ─── Layout mobile calendario web ─────────────────────────────────────── */
+@media (max-width: 768px) {
+    body {
+        padding: 8px;
+    }
+
+    .web-calendario-app .calendario-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        margin-bottom: 10px;
+        padding-bottom: 10px;
+    }
+
+    .web-calendario-app .header-center {
+        order: 0;
+        min-width: 0;
+        text-align: center;
+    }
+
+    .web-calendario-app .page-title {
+        font-size: 1.15rem;
+        line-height: 1.25;
+    }
+
+    .web-calendario-app .servizi-count {
+        display: block;
+        font-size: 0.82rem;
+        margin-top: 2px;
+    }
+
+    .web-calendario-app .web-user-label {
+        font-size: 0.78rem;
+        margin-top: 2px;
+    }
+
+    .web-calendario-app .header-toolbar {
+        display: flex;
+        align-items: stretch;
+        gap: 8px;
+        width: 100%;
+    }
+
+    .web-calendario-app .header-left {
+        flex: 0 0 auto;
+    }
+
+    .web-calendario-app .header-right {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .web-calendario-app #btn-logout {
+        height: 100%;
+        min-height: 44px;
+        padding: 10px 16px;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+
+    .web-calendario-app .vista-buttons {
+        display: flex;
+        width: 100%;
+        gap: 6px;
+    }
+
+    .web-calendario-app .btn-vista {
+        flex: 1;
+        min-height: 44px;
+        padding: 10px 6px;
+        font-size: 11px;
+        letter-spacing: 0.02em;
+    }
+
+    .web-calendario-app #calendario-mount {
+        padding: 8px;
+        border-radius: 10px;
+    }
+
+    .web-calendario-app #calendario-mount .fc-header-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        margin-bottom: 10px !important;
+    }
+
+    .web-calendario-app #calendario-mount .fc-toolbar-chunk:nth-child(2) {
+        order: -1;
+        display: flex;
+        justify-content: center;
+    }
+
+    .web-calendario-app #calendario-mount .fc-toolbar-title {
+        font-size: 1.05rem;
+        line-height: 1.3;
+        text-align: center;
+        white-space: normal;
+    }
+
+    .web-calendario-app #calendario-mount .fc-toolbar-chunk:first-child {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+    }
+
+    .web-calendario-app #calendario-mount .fc-toolbar-chunk:first-child .fc-button-group {
+        display: inline-flex;
+        flex-shrink: 0;
+    }
+
+    .web-calendario-app #calendario-mount .fc-button {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 10px 14px;
+        font-size: 14px;
+    }
+
+    .web-calendario-app #calendario-mount .fc-toolbar-chunk:first-child > .fc-button {
+        flex: 1;
+        max-width: 120px;
+    }
+
+    .web-calendario-app #calendario-mount .fc-col-header-cell-cushion {
+        padding: 8px 4px;
+        font-size: 0.95rem;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridDay-view .fc-daygrid-day-frame {
+        min-height: 200px;
+    }
+
+    .web-calendario-app #calendario-mount .fc-daygrid-block-event .fc-event-main {
+        padding: 6px 8px;
+    }
+
+    .web-calendario-app .cal-event {
+        font-size: 13px;
+        line-height: 1.35;
+        padding: 2px 0;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridDay-view .fc-daygrid-event {
+        margin-bottom: 8px;
+    }
+
+    .web-calendario-app #calendario-mount .fc-daygrid-event-harness {
+        margin-top: 4px !important;
+    }
+
+    .web-calendario-app .cal-event-mobile {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        padding: 2px 0;
+    }
+
+    .web-calendario-app .cal-event-mobile .cal-event-ora {
+        font-weight: 700;
+        font-size: 14px;
+    }
+
+    .web-calendario-app .cal-event-mobile .cal-event-socio {
+        font-weight: 600;
+        font-size: 13px;
+    }
+
+    .web-calendario-app .cal-event-mobile .cal-event-op {
+        font-size: 12px;
+        opacity: 0.9;
+    }
+}
+
 @media (max-width: 600px) {
     .web-login-card {
         padding: 22px 18px 18px;

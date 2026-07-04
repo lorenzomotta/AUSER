@@ -7,7 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
     <link rel="stylesheet" href="calendario.css">
-    <link rel="stylesheet" href="calendario-web.css?v=3">
+    <link rel="stylesheet" href="calendario-web.css?v=4">
 </head>
 <body>
     <!-- Schermata login operatori -->
@@ -42,19 +42,21 @@
     <div id="web-calendario-app" class="web-calendario-app" hidden>
         <div class="calendario-container">
             <header class="calendario-header">
-                <div class="header-left">
-                    <button type="button" class="btn btn-chiudi" id="btn-logout">ESCI</button>
-                </div>
                 <div class="header-center">
                     <h1 class="page-title">CALENDARIO SERVIZI</h1>
                     <span class="servizi-count" id="calendario-count">(0 servizi)</span>
                     <span class="web-user-label" id="web-user-label"></span>
                 </div>
-                <div class="header-right">
-                    <div class="vista-buttons" role="group" aria-label="Vista calendario">
-                        <button type="button" class="btn-vista active" data-vista="dayGridMonth">MESE</button>
-                        <button type="button" class="btn-vista" data-vista="dayGridWeek">SETTIMANA</button>
-                        <button type="button" class="btn-vista" data-vista="dayGridDay">GIORNO</button>
+                <div class="header-toolbar">
+                    <div class="header-left">
+                        <button type="button" class="btn btn-chiudi" id="btn-logout">ESCI</button>
+                    </div>
+                    <div class="header-right">
+                        <div class="vista-buttons" role="group" aria-label="Vista calendario">
+                            <button type="button" class="btn-vista active" data-vista="dayGridMonth">MESE</button>
+                            <button type="button" class="btn-vista" data-vista="dayGridWeek">SETTIMANA</button>
+                            <button type="button" class="btn-vista" data-vista="dayGridDay">GIORNO</button>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -114,6 +116,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.15/locales/it.global.min.js"></script>
-    <script src="calendario-web.js?v=10"></script>
+    <script src="calendario-web.js?v=11"></script>
 </body>
 </html>

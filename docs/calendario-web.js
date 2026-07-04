@@ -600,7 +600,23 @@ function servizioToEvent(servizio) {
 
 function renderEventContent(arg) {
     const s = arg.event.extendedProps.servizio || {};
-    const parti = [s.ora_inizio || '', s.socio_trasportato || '', s.operatore || ''].filter(p => p.trim() !== '');
+    const ora = s.ora_inizio || '';
+    const socio = s.socio_trasportato || '';
+    const op = s.operatore || '';
+
+    if (isVistaMobileCalendario() && arg.view?.type === 'dayGridDay') {
+        const righe = [
+            ora ? `<span class="cal-event-ora">${escapeHtml(ora)}</span>` : '',
+            socio ? `<span class="cal-event-socio">${escapeHtml(socio)}</span>` : '',
+            op ? `<span class="cal-event-op">${escapeHtml(op)}</span>` : ''
+        ].filter(Boolean);
+        const html = righe.length
+            ? `<div class="cal-event cal-event-mobile">${righe.join('')}</div>`
+            : '<div class="cal-event cal-event-mobile">—</div>';
+        return { html };
+    }
+
+    const parti = [ora, socio, op].filter(p => p.trim() !== '');
     const riga = parti.length ? parti.map(p => escapeHtml(p)).join(' · ') : '—';
     return { html: `<div class="cal-event" title="${riga}">${riga}</div>` };
 }
