@@ -1,7 +1,7 @@
 {
   "supabase": {
     "url": "https://vhswonrmnklaqwpeutne.supabase.co",
-    "anon_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoc3dvbnJtbmtsYXF3cGV1dG5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxOTAyNTksImV4cCI6MjA5NDc2NjI1OX0.uMbtZHr6N0rDWXeSgW_-zyCf1DgiIcPS40tai3Gep9k",
+    "publishable_key": "sb_publishable_a3u6F-YGCcXrtyrwSDD69A_Ns7YzhpK",
     "tables": {
       "servizi": "Servizi_supa",
       "automezzi": "Automezzi_Supa",

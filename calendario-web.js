@@ -180,9 +180,15 @@ async function caricaConfigPubblica() {
     }
     publicConfig = await risposta.json();
     const url = publicConfig?.supabase?.url?.trim();
-    const key = publicConfig?.supabase?.anon_key?.trim();
+    const key = (
+        publicConfig?.supabase?.publishable_key ||
+        publicConfig?.supabase?.anon_key ||
+        ''
+    ).trim();
     if (!url || !key) {
-        throw new Error('config.public.json incompleto: servono supabase.url e supabase.anon_key');
+        throw new Error(
+            'config.public.json incompleto: servono supabase.url e publishable_key (sb_publishable_...)'
+        );
     }
     if (typeof window.supabase?.createClient !== 'function') {
         throw new Error('Libreria Supabase non caricata');
