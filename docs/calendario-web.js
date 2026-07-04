@@ -639,7 +639,7 @@ function renderEventContent(arg) {
     const socio = s.socio_trasportato || '';
     const op = s.operatore || '';
 
-    if (isVistaMobileCalendario() && arg.view?.type === 'dayGridDay') {
+    if (isVistaMobileCalendario() && (arg.view?.type === 'dayGridDay' || arg.view?.type === 'dayGridWeek')) {
         const righe = [
             ora ? `<span class="cal-event-ora">${escapeHtml(ora)}</span>` : '',
             socio ? `<span class="cal-event-socio">${escapeHtml(socio)}</span>` : '',
@@ -1078,7 +1078,10 @@ function initCalendario() {
         moreLinkClick: 'popover',
         views: {
             dayGridMonth: { dayMaxEvents: 8 },
-            dayGridWeek: { dayMaxEvents: 8 },
+            dayGridWeek: {
+                dayMaxEvents: isVistaMobileCalendario() ? false : 8,
+                dayMaxEventRows: isVistaMobileCalendario() ? false : true
+            },
             dayGridDay: { dayMaxEvents: false, dayMaxEventRows: false }
         },
         eventOrder: 'order',

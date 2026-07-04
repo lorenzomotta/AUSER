@@ -299,6 +299,92 @@
         font-size: 1rem;
     }
 
+    /* Vista settimana mobile: giorni impilati in una colonna a tutta larghezza */
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-scrollgrid {
+        display: block;
+        width: 100%;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-scrollgrid tbody {
+        display: block;
+        width: 100%;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-scrollgrid-section-header {
+        display: none;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-scrollgrid-section-body {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-scrollgrid-section-body > td {
+        display: block;
+        width: 100% !important;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-scrollgrid-shrink,
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-scrollgrid-shrink-frame {
+        display: none !important;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-daygrid-day {
+        width: 100% !important;
+        border-left: none;
+        border-right: none;
+        border-top: 2px solid #9ea09e;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-daygrid-day-frame {
+        min-height: 72px;
+        height: auto !important;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-daygrid-day-top {
+        flex-direction: row;
+        justify-content: flex-start;
+        padding: 10px 12px;
+        background: #e8e8e8;
+        border-bottom: 1px solid #bbb;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-daygrid-day-number {
+        float: none;
+        font-size: 1.05rem;
+        font-weight: 700;
+        padding: 0;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-day-mon .fc-daygrid-day-number::before { content: 'Lunedì '; }
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-day-tue .fc-daygrid-day-number::before { content: 'Martedì '; }
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-day-wed .fc-daygrid-day-number::before { content: 'Mercoledì '; }
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-day-thu .fc-daygrid-day-number::before { content: 'Giovedì '; }
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-day-fri .fc-daygrid-day-number::before { content: 'Venerdì '; }
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-day-sat .fc-daygrid-day-number::before { content: 'Sabato '; }
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-day-sun .fc-daygrid-day-number::before { content: 'Domenica '; }
+
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-daygrid-day-events {
+        overflow: visible;
+        padding: 6px 8px 10px;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-more-link {
+        display: none !important;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-scroller-harness,
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-scroller,
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-view-harness {
+        overflow: visible !important;
+        height: auto !important;
+    }
+
+    .web-calendario-app #calendario-mount .fc-dayGridWeek-view .fc-daygrid-event {
+        margin-bottom: 8px;
+    }
+
     .web-calendario-app #calendario-mount .fc-dayGridDay-view .fc-daygrid-day-frame {
         min-height: calc(100vh - 340px);
         height: auto !important;
