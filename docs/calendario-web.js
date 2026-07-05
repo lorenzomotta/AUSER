@@ -1070,6 +1070,35 @@ function chiudiModalServizio() {
     servizioCorrente = null;
 }
 
+function parseNumeroKm(val) {
+    const s = String(val || '').trim().replace(',', '.');
+    if (!s) return null;
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : null;
+}
+
+function formattaKmCalcolato(n) {
+    return String(Math.trunc(n) === n ? Math.trunc(n) : n);
+}
+
+/** Se partenza e arrivo sono entrambi compilati, imposta KM = arrivo - partenza */
+function aggiornaKmCalcolatoDaPartenzaArrivo() {
+    const partenzaEl = document.getElementById('compila-km-partenza');
+    const arrivoEl = document.getElementById('compila-km-arrivo');
+    const kmEl = document.getElementById('compila-km');
+    if (!partenzaEl || !arrivoEl || !kmEl) return;
+
+    const partenzaRaw = partenzaEl.value.trim();
+    const arrivoRaw = arrivoEl.value.trim();
+    if (!partenzaRaw || !arrivoRaw) return;
+
+    const partenza = parseNumeroKm(partenzaRaw);
+    const arrivo = parseNumeroKm(arrivoRaw);
+    if (partenza === null || arrivo === null) return;
+
+    kmEl.value = formattaKmCalcolato(arrivo - partenza);
+}
+
 function mostraErroreCompila(msg) {
     const el = document.getElementById('modal-compila-errore');
     if (!el) return;
@@ -1088,6 +1117,8 @@ function apriModalCompila() {
     const modal = document.getElementById('modal-compila-servizio');
     const info = document.getElementById('modal-compila-info');
     const kmInput = document.getElementById('compila-km');
+    const kmPartenzaInput = document.getElementById('compila-km-partenza');
+    const kmArrivoInput = document.getElementById('compila-km-arrivo');
     const tempoInput = document.getElementById('compila-tempo');
     const noteInput = document.getElementById('compila-note');
     if (!modal || !kmInput || !tempoInput || !noteInput) return;
@@ -1096,6 +1127,8 @@ function apriModalCompila() {
     if (info) {
         info.textContent = `Servizio ${s.id} — ${s.socio_trasportato || ''} del ${s.data_prelievo || ''}`;
     }
+    if (kmPartenzaInput) kmPartenzaInput.value = '';
+    if (kmArrivoInput) kmArrivoInput.value = '';
     kmInput.value = s.km || '';
     tempoInput.value = formatTimeIso(s.tempo) || '';
     noteInput.value = s.note_fine_servizio || '';
@@ -1118,7 +1151,6 @@ async function salvaDatiFineServizio() {
     if (!servizioCorrente?.id) return;
 
     const btn = document.getElementById('btn-salva-compila');
-    const km = document.getElementById('compila-km')?.value.trim() ?? '';
     const tempoRaw = document.getElementById('compila-tempo')?.value.trim() ?? '';
     const note = document.getElementById('compila-note')?.value.trim() ?? '';
 
@@ -1131,6 +1163,8 @@ async function salvaDatiFineServizio() {
     if (btn) btn.disabled = true;
 
     try {
+        aggiornaKmCalcolatoDaPartenzaArrivo();
+        const km = document.getElementById('compila-km')?.value.trim() ?? '';
         const aggiornato = await patchFineServizioSupabase(servizioCorrente, km, tempoRaw, note);
 
         servizioCorrente = aggiornato;
@@ -1229,6 +1263,9 @@ function setupEventListenersCalendario() {
     document.getElementById('btn-close-compila')?.addEventListener('click', chiudiModalCompila);
     document.getElementById('btn-annulla-compila')?.addEventListener('click', chiudiModalCompila);
     document.getElementById('btn-salva-compila')?.addEventListener('click', salvaDatiFineServizio);
+
+    document.getElementById('compila-km-partenza')?.addEventListener('input', aggiornaKmCalcolatoDaPartenzaArrivo);
+    document.getElementById('compila-km-arrivo')?.addEventListener('input', aggiornaKmCalcolatoDaPartenzaArrivo);
 
     const modal = document.getElementById('modal-servizio');
     modal?.addEventListener('click', (e) => {

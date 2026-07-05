@@ -612,6 +612,12 @@
     line-height: 1.4;
 }
 
+.modal-compila-km-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
 .modal-compila-field label {
     display: block;
     font-size: 11px;
@@ -740,6 +746,10 @@
     .modal-compila-content {
         max-height: 92vh;
         overflow-y: auto;
+    }
+
+    .modal-compila-km-row {
+        grid-template-columns: 1fr;
     }
 
     .modal-servizio-content {
