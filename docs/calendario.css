@@ -401,6 +401,22 @@ body {
     flex: 2 1 200px;
 }
 
+.dettaglio-field.field-trasportato {
+    flex: 1.2 1 180px;
+    min-width: 160px;
+    max-width: 260px;
+}
+
+.dettaglio-field.field-tipo-servizio {
+    flex: 1.5 1 150px;
+    min-width: 130px;
+}
+
+.dettaglio-field.field-carrozzina {
+    flex: 1.3 1 120px;
+    min-width: 110px;
+}
+
 .dettaglio-field.field-note {
     flex: 1 1 100%;
 }
@@ -429,6 +445,63 @@ body {
     resize: vertical;
 }
 
+.dettaglio-row-tratta {
+    width: 100%;
+}
+
+.cal-tratta-riepilogo,
+.dettaglio-row-tratta .ns-tratta-selezionata {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 2px;
+    padding: 10px 12px;
+    background: #e3f2fd;
+    border: 1px solid #64b5f6;
+    border-radius: 6px;
+}
+
+.cal-tratta-riepilogo .ns-tratta-selezionata-titolo,
+.dettaglio-row-tratta .ns-tratta-selezionata-titolo {
+    font-size: 12px;
+    font-weight: 800;
+    color: #0d47a1;
+    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+}
+
+.cal-tratta-riepilogo .ns-tratta-selezionata-grid,
+.dettaglio-row-tratta .ns-tratta-selezionata-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 6px 10px;
+}
+
+.cal-tratta-riepilogo .ns-tratta-campo-label,
+.dettaglio-row-tratta .ns-tratta-campo-label {
+    display: block;
+    font-size: 9px;
+    font-weight: 700;
+    color: #546e7a;
+    margin-bottom: 1px;
+}
+
+.cal-tratta-riepilogo .ns-tratta-campo-val,
+.dettaglio-row-tratta .ns-tratta-campo-val {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1565c0;
+    word-break: break-word;
+}
+
+.cal-tratta-riepilogo .ns-tratta-note,
+.dettaglio-row-tratta .ns-tratta-note {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #37474f;
+    line-height: 1.35;
+}
+
 @media (max-width: 768px) {
     .calendario-header {
         flex-direction: column;
@@ -445,5 +518,30 @@ body {
 
     #calendario-mount {
         padding: 6px;
+    }
+
+    .dettaglio-field {
+        min-width: 100%;
+        flex: 1 1 100%;
+    }
+
+    .dettaglio-field.field-small,
+    .dettaglio-field.field-medium,
+    .dettaglio-field.field-large,
+    .dettaglio-field.field-trasportato,
+    .dettaglio-field.field-tipo-servizio,
+    .dettaglio-field.field-carrozzina {
+        flex: 1 1 100%;
+        min-width: 100%;
+        max-width: none;
+    }
+
+    .dettaglio-field.field-note textarea {
+        min-height: 72px;
+    }
+
+    .cal-tratta-riepilogo .ns-tratta-selezionata-grid,
+    .dettaglio-row-tratta .ns-tratta-selezionata-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }

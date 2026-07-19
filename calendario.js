@@ -1,5 +1,28 @@
 // Calendario Servizi — dati da Supabase via backend Tauri
+import {
+    testoNoteFineVisibile,
+    parseTrattaDaNote,
+    normalizzaPayloadTratta,
+    htmlContenutoRiepilogoTratta
+} from './tratta-riepilogo.js';
+
 let invoke, appWindow;
+
+/** Riga riepilogo tratta (come in elenco servizi), solo se la donazione deriva da una tratta */
+function htmlRigaTrattaSePresente(servizio) {
+    const trattaSalvata = normalizzaPayloadTratta(servizio?.tratta_fuori_asti)
+        || parseTrattaDaNote(servizio?.note_fine_servizio).tratta;
+    if (!trattaSalvata) return '';
+    const has = !!(trattaSalvata.comune || trattaSalvata.localita
+        || (trattaSalvata.id !== '' && trattaSalvata.id != null));
+    if (!has) return '';
+    return `
+            <div class="dettaglio-row dettaglio-row-tratta">
+                <div class="ns-tratta-selezionata cal-tratta-riepilogo">
+                    ${htmlContenutoRiepilogoTratta(trattaSalvata)}
+                </div>
+            </div>`;
+}
 
 async function initTauri() {
     try {
@@ -354,27 +377,32 @@ function apriModalServizio(servizio) {
                 ${creaCampoDettaglio('IDSERVIZIO', servizio.id, 'field-small')}
                 ${creaCampoDettaglio('IDSOCIO', servizio.idsocio, 'field-small')}
                 ${creaCampoDettaglio('DATA PRELIEVO', servizio.data_prelievo, 'field-medium')}
-                ${creaCampoDettaglio('ORA PRELIEVO (O.S.C.)', servizio.ora_inizio, 'field-small')}
+                ${creaCampoDettaglio('ORA SOTTOCASA', servizio.ora_inizio, 'field-small')}
                 ${creaCampoDettaglio('COMUNE PRELIEVO', servizio.comune_prelievo)}
                 ${creaCampoDettaglio('LUOGO PRELIEVO', servizio.luogo_prelievo, 'field-large')}
             </div>
             <div class="dettaglio-row">
-                ${creaCampoDettaglio('TRASPORTATO', servizio.socio_trasportato, 'field-large')}
+                ${creaNotaDettaglio('NOTE PRELIEVO', servizio.note_prelievo)}
+            </div>
+            <div class="dettaglio-row">
+                ${creaCampoDettaglio('TRASPORTATO', servizio.socio_trasportato, 'field-trasportato')}
                 ${creaCampoDettaglio('RICHIEDENTE', servizio.richiedente)}
-                ${creaCampoDettaglio('TIPO SERVIZIO', servizio.tipo_servizio)}
-                ${creaCampoDettaglio('CARROZZINA', servizio.carrozzina)}
+                ${creaCampoDettaglio('TIPO SERVIZIO', servizio.tipo_servizio, 'field-tipo-servizio')}
+                ${creaCampoDettaglio('CARROZZINA', servizio.carrozzina, 'field-carrozzina')}
                 ${creaCampoDettaglio('MOTIVAZIONE', servizio.motivazione, 'field-large')}
             </div>
             <div class="dettaglio-row">
-                ${creaCampoDettaglio('ORA ARRIVO (O.A.D.)', servizio.ora_arrivo, 'field-small')}
+                ${creaCampoDettaglio('ORA ARRIVO', servizio.ora_arrivo, 'field-small')}
                 ${creaCampoDettaglio('COMUNE DESTINAZIONE', servizio.comune_destinazione)}
                 ${creaCampoDettaglio('LUOGO DESTINAZIONE', servizio.luogo_destinazione, 'field-large')}
                 ${creaCampoDettaglio('STATO INCASSO', servizio.stato_incasso)}
                 ${creaCampoDettaglio('TIPO PAGAMENTO', servizio.tipo_pagamento)}
             </div>
             <div class="dettaglio-row">
+                ${creaNotaDettaglio('NOTE ARRIVO', servizio.note_arrivo)}
+            </div>
+            <div class="dettaglio-row">
                 ${creaCampoDettaglio('OPERATORE', servizio.operatore, 'field-large')}
-                ${creaCampoDettaglio('OPERATORE 2', servizio.operatore_2)}
                 ${creaCampoDettaglio('MEZZO USATO', mezzo, 'field-large')}
                 ${creaCampoDettaglio('TEMPO', servizio.tempo, 'field-small')}
                 ${creaCampoDettaglio('KM', servizio.km, 'field-small')}
@@ -386,10 +414,9 @@ function apriModalServizio(servizio) {
                 ${creaCampoDettaglio('STATO SERVIZIO', servizio.stato_servizio)}
                 ${creaCampoDettaglio('ARCHIVIA', servizio.archivia)}
             </div>
+            ${htmlRigaTrattaSePresente(servizio)}
             <div class="dettaglio-row">
-                ${creaNotaDettaglio('NOTE PRELIEVO', servizio.note_prelievo)}
-                ${creaNotaDettaglio('NOTE ARRIVO', servizio.note_arrivo)}
-                ${creaNotaDettaglio('NOTE FINE SERVIZIO', servizio.note_fine_servizio)}
+                ${creaNotaDettaglio('NOTE FINE SERVIZIO', testoNoteFineVisibile(servizio.note_fine_servizio))}
             </div>
         </div>
     `;

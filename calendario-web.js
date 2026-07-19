@@ -7,8 +7,16 @@
  * 3. Tabella user_permissions: user_id + Calendario = true (o is_admin = true)
  * 4. Esegui supabase-calendario-web.sql per le policy RLS
  * 5. Pubblica su GitHub Pages i file: CALENDARIO_WEB.html, calendario-web.css,
- *    calendario-web.js, calendario.css, config.public.json
+ *    calendario-web.js, calendario.css, tratta-riepilogo.js, config.public.json
  */
+
+import {
+    testoNoteFineVisibile,
+    parseTrattaDaNote,
+    normalizzaPayloadTratta,
+    htmlContenutoRiepilogoTratta,
+    mergeTrattaInNote
+} from './tratta-riepilogo.js';
 
 let supabaseClient = null;
 let publicConfig = null;
@@ -18,6 +26,29 @@ let allAutomezzi = [];
 const serviziPerRangeCache = new Map();
 const serviziById = new Map();
 let vistaCorrente = 'dayGridMonth';
+
+/** Rimette il blocco tratta nascosto dopo la modifica delle note utente */
+function mergeNoteFineConTratta(noteUtente, noteOriginali) {
+    const parsed = parseTrattaDaNote(noteOriginali);
+    if (!parsed.tratta) return String(noteUtente || '').trim();
+    return mergeTrattaInNote(noteUtente, parsed.tratta);
+}
+
+/** Riga riepilogo tratta (come in elenco servizi), solo se la donazione deriva da una tratta */
+function htmlRigaTrattaSePresente(servizio) {
+    const trattaSalvata = normalizzaPayloadTratta(servizio?.tratta_fuori_asti)
+        || parseTrattaDaNote(servizio?.note_fine_servizio).tratta;
+    if (!trattaSalvata) return '';
+    const has = !!(trattaSalvata.comune || trattaSalvata.localita
+        || (trattaSalvata.id !== '' && trattaSalvata.id != null));
+    if (!has) return '';
+    return `
+            <div class="dettaglio-row dettaglio-row-tratta">
+                <div class="ns-tratta-selezionata cal-tratta-riepilogo">
+                    ${htmlContenutoRiepilogoTratta(trattaSalvata)}
+                </div>
+            </div>`;
+}
 
 function isVistaMobileCalendario() {
     return window.matchMedia('(max-width: 768px)').matches;
@@ -129,11 +160,17 @@ function leggiCampiFineServizioDaRow(row) {
     const kNote = trovaChiaveRow(row, [
         'notefineservizio', 'note_fine_servizio', 'notafineservizio'
     ]);
+    const kUscita = trovaChiaveRow(row, ['km_uscita', 'kmuscita']) || 'Km_uscita';
+    const kRientro = trovaChiaveRow(row, ['km_rientro', 'kmrientro']) || 'Km_rientro';
     return {
         km: formatKmDaRow(row),
+        km_uscita: valoreCampoRow(row, kUscita),
+        km_rientro: valoreCampoRow(row, kRientro),
         tempo: formatTempoDaRow(row),
         note_fine_servizio: kNote ? valoreCampoRow(row, kNote) : '',
         _colKm: trovaChiaveRow(row, ['km']) || 'Km',
+        _colKmUscita: kUscita,
+        _colKmRientro: kRientro,
         _colTempo: trovaChiaveRow(row, ['tempo']) || 'Tempo',
         _colNote: kNote || 'NoteFineServizio'
     };
@@ -292,7 +329,8 @@ function creaFetchSupabase(apiKey) {
 }
 
 async function caricaConfigPubblica() {
-    const risposta = await fetch('config.public.json', { cache: 'no-store' });
+    // Percorso relativo: funziona sia in GitHub Pages sia nell'app Tauri installata
+    const risposta = await fetch('./config.public.json', { cache: 'no-store' });
     if (!risposta.ok) {
         throw new Error(
             'File config.public.json non trovato. Copia config.public.example.json e inserisci url e anon_key Supabase.'
@@ -513,6 +551,8 @@ function rowToServizioCompleto(row) {
         mezzo: getFieldAny(row, ['Mezzo', 'MEZZO']),
         tempo: formatTempoDaRow(row),
         km: formatKmDaRow(row),
+        km_uscita: getFieldAny(row, ['Km_uscita', 'KM_USCITA', 'km_uscita']),
+        km_rientro: getFieldAny(row, ['Km_rientro', 'KM_RIENTRO', 'km_rientro']),
         tipo_pagamento: getFieldAny(row, ['TipoPagamento', 'TIPOPAGAMENTO']),
         data_bonifico: formatDateItalian(getFieldAny(row, ['Bonifico_Data', 'DATABONIFICO'])),
         data_ricevuta: formatDateItalian(getFieldAny(row, ['Ricevuta_Data', 'DATARICEVUTA'])),
@@ -529,9 +569,13 @@ function rowToServizioCompleto(row) {
     return {
         ...base,
         km: fine.km || base.km,
+        km_uscita: fine.km_uscita || base.km_uscita,
+        km_rientro: fine.km_rientro || base.km_rientro,
         tempo: fine.tempo || base.tempo,
         note_fine_servizio: fine.note_fine_servizio || base.note_fine_servizio,
         _colKm: fine._colKm || base._colKm,
+        _colKmUscita: fine._colKmUscita || 'Km_uscita',
+        _colKmRientro: fine._colKmRientro || 'Km_rientro',
         _colTempo: fine._colTempo || base._colTempo,
         _colNote: fine._colNote || base._colNote
     };
@@ -902,9 +946,11 @@ async function ricaricaServizioDaSupabase(servizio) {
     return servizio;
 }
 
-function buildPayloadFineServizio(servizio, km, tempoRaw, note) {
+function buildPayloadFineServizio(servizio, km, kmUscita, kmRientro, tempoRaw, note) {
     const payload = {};
     payload[servizio._colKm || 'Km'] = km;
+    payload[servizio._colKmUscita || 'Km_uscita'] = kmUscita;
+    payload[servizio._colKmRientro || 'Km_rientro'] = kmRientro;
     payload[servizio._colNote || 'NoteFineServizio'] = note;
     const colTempo = servizio._colTempo || 'Tempo';
     const tempoNorm = normalizzaTempoPerSupabase(tempoRaw);
@@ -920,9 +966,9 @@ function messaggioErroreSalvataggio(error) {
     return msg;
 }
 
-async function patchFineServizioSupabase(servizio, km, tempoRaw, note) {
+async function patchFineServizioSupabase(servizio, km, kmUscita, kmRientro, tempoRaw, note) {
     const table = tabella('servizi');
-    const payload = buildPayloadFineServizio(servizio, km, tempoRaw, note);
+    const payload = buildPayloadFineServizio(servizio, km, kmUscita, kmRientro, tempoRaw, note);
     const idCols = [
         servizio.idColonna,
         ...colonneIdServizio().filter(c => c !== servizio.idColonna)
@@ -1008,27 +1054,32 @@ function renderModalServizio(servizio) {
                 ${creaCampoDettaglio('IDSERVIZIO', servizio.id, 'field-small')}
                 ${creaCampoDettaglio('IDSOCIO', servizio.idsocio, 'field-small')}
                 ${creaCampoDettaglio('DATA PRELIEVO', servizio.data_prelievo, 'field-medium')}
-                ${creaCampoDettaglio('ORA PRELIEVO (O.S.C.)', servizio.ora_inizio, 'field-small')}
+                ${creaCampoDettaglio('ORA SOTTOCASA', servizio.ora_inizio, 'field-small')}
                 ${creaCampoDettaglio('COMUNE PRELIEVO', servizio.comune_prelievo)}
                 ${creaCampoDettaglio('LUOGO PRELIEVO', servizio.luogo_prelievo, 'field-large')}
             </div>
             <div class="dettaglio-row">
-                ${creaCampoDettaglio('TRASPORTATO', servizio.socio_trasportato, 'field-large')}
+                ${creaNotaDettaglio('NOTE PRELIEVO', servizio.note_prelievo)}
+            </div>
+            <div class="dettaglio-row">
+                ${creaCampoDettaglio('TRASPORTATO', servizio.socio_trasportato, 'field-trasportato')}
                 ${creaCampoDettaglio('RICHIEDENTE', servizio.richiedente)}
-                ${creaCampoDettaglio('TIPO SERVIZIO', servizio.tipo_servizio)}
-                ${creaCampoDettaglio('CARROZZINA', servizio.carrozzina)}
+                ${creaCampoDettaglio('TIPO SERVIZIO', servizio.tipo_servizio, 'field-tipo-servizio')}
+                ${creaCampoDettaglio('CARROZZINA', servizio.carrozzina, 'field-carrozzina')}
                 ${creaCampoDettaglio('MOTIVAZIONE', servizio.motivazione, 'field-large')}
             </div>
             <div class="dettaglio-row">
-                ${creaCampoDettaglio('ORA ARRIVO (O.A.D.)', servizio.ora_arrivo, 'field-small')}
+                ${creaCampoDettaglio('ORA ARRIVO', servizio.ora_arrivo, 'field-small')}
                 ${creaCampoDettaglio('COMUNE DESTINAZIONE', servizio.comune_destinazione)}
                 ${creaCampoDettaglio('LUOGO DESTINAZIONE', servizio.luogo_destinazione, 'field-large')}
                 ${creaCampoDettaglio('STATO INCASSO', servizio.stato_incasso)}
                 ${creaCampoDettaglio('TIPO PAGAMENTO', servizio.tipo_pagamento)}
             </div>
             <div class="dettaglio-row">
+                ${creaNotaDettaglio('NOTE ARRIVO', servizio.note_arrivo)}
+            </div>
+            <div class="dettaglio-row">
                 ${creaCampoDettaglio('OPERATORE', servizio.operatore, 'field-large')}
-                ${creaCampoDettaglio('OPERATORE 2', servizio.operatore_2)}
                 ${creaCampoDettaglio('MEZZO USATO', mezzo, 'field-large')}
                 ${creaCampoDettaglio('TEMPO', servizio.tempo, 'field-small')}
                 ${creaCampoDettaglio('KM', servizio.km, 'field-small')}
@@ -1041,10 +1092,9 @@ function renderModalServizio(servizio) {
                 ${creaCampoDettaglio('STATO SERVIZIO', servizio.stato_servizio)}
                 ${creaCampoDettaglio('ARCHIVIA', servizio.archivia)}
             </div>
+            ${htmlRigaTrattaSePresente(servizio)}
             <div class="dettaglio-row">
-                ${creaNotaDettaglio('NOTE PRELIEVO', servizio.note_prelievo)}
-                ${creaNotaDettaglio('NOTE ARRIVO', servizio.note_arrivo)}
-                ${creaNotaDettaglio('NOTE FINE SERVIZIO', servizio.note_fine_servizio)}
+                ${creaNotaDettaglio('NOTE FINE SERVIZIO', testoNoteFineVisibile(servizio.note_fine_servizio))}
             </div>
         </div>
     `;
@@ -1081,22 +1131,22 @@ function formattaKmCalcolato(n) {
     return String(Math.trunc(n) === n ? Math.trunc(n) : n);
 }
 
-/** Se partenza e arrivo sono entrambi compilati, imposta KM = arrivo - partenza */
-function aggiornaKmCalcolatoDaPartenzaArrivo() {
-    const partenzaEl = document.getElementById('compila-km-partenza');
-    const arrivoEl = document.getElementById('compila-km-arrivo');
+/** Se uscita e rientro sono entrambi compilati, imposta KM = rientro - uscita */
+function aggiornaKmCalcolatoDaUscitaRientro() {
+    const uscitaEl = document.getElementById('compila-km-uscita');
+    const rientroEl = document.getElementById('compila-km-rientro');
     const kmEl = document.getElementById('compila-km');
-    if (!partenzaEl || !arrivoEl || !kmEl) return;
+    if (!uscitaEl || !rientroEl || !kmEl) return;
 
-    const partenzaRaw = partenzaEl.value.trim();
-    const arrivoRaw = arrivoEl.value.trim();
-    if (!partenzaRaw || !arrivoRaw) return;
+    const uscitaRaw = uscitaEl.value.trim();
+    const rientroRaw = rientroEl.value.trim();
+    if (!uscitaRaw || !rientroRaw) return;
 
-    const partenza = parseNumeroKm(partenzaRaw);
-    const arrivo = parseNumeroKm(arrivoRaw);
-    if (partenza === null || arrivo === null) return;
+    const uscita = parseNumeroKm(uscitaRaw);
+    const rientro = parseNumeroKm(rientroRaw);
+    if (uscita === null || rientro === null) return;
 
-    kmEl.value = formattaKmCalcolato(arrivo - partenza);
+    kmEl.value = formattaKmCalcolato(rientro - uscita);
 }
 
 function mostraErroreCompila(msg) {
@@ -1117,8 +1167,8 @@ function apriModalCompila() {
     const modal = document.getElementById('modal-compila-servizio');
     const info = document.getElementById('modal-compila-info');
     const kmInput = document.getElementById('compila-km');
-    const kmPartenzaInput = document.getElementById('compila-km-partenza');
-    const kmArrivoInput = document.getElementById('compila-km-arrivo');
+    const kmUscitaInput = document.getElementById('compila-km-uscita');
+    const kmRientroInput = document.getElementById('compila-km-rientro');
     const tempoInput = document.getElementById('compila-tempo');
     const noteInput = document.getElementById('compila-note');
     if (!modal || !kmInput || !tempoInput || !noteInput) return;
@@ -1127,11 +1177,11 @@ function apriModalCompila() {
     if (info) {
         info.textContent = `Servizio ${s.id} — ${s.socio_trasportato || ''} del ${s.data_prelievo || ''}`;
     }
-    if (kmPartenzaInput) kmPartenzaInput.value = '';
-    if (kmArrivoInput) kmArrivoInput.value = '';
+    if (kmUscitaInput) kmUscitaInput.value = s.km_uscita || '';
+    if (kmRientroInput) kmRientroInput.value = s.km_rientro || '';
     kmInput.value = s.km || '';
     tempoInput.value = formatTimeIso(s.tempo) || '';
-    noteInput.value = s.note_fine_servizio || '';
+    noteInput.value = testoNoteFineVisibile(s.note_fine_servizio);
     mostraErroreCompila('');
 
     modal.style.display = 'flex';
@@ -1152,7 +1202,10 @@ async function salvaDatiFineServizio() {
 
     const btn = document.getElementById('btn-salva-compila');
     const tempoRaw = document.getElementById('compila-tempo')?.value.trim() ?? '';
-    const note = document.getElementById('compila-note')?.value.trim() ?? '';
+    const note = mergeNoteFineConTratta(
+        document.getElementById('compila-note')?.value ?? '',
+        servizioCorrente?.note_fine_servizio || ''
+    );
 
     if (tempoRaw && !/^\d{1,2}:\d{2}(:\d{2})?$/.test(tempoRaw)) {
         mostraErroreCompila('Formato TEMPO non valido. Usa ore:minuti, es. 01:30');
@@ -1163,9 +1216,11 @@ async function salvaDatiFineServizio() {
     if (btn) btn.disabled = true;
 
     try {
-        aggiornaKmCalcolatoDaPartenzaArrivo();
+        aggiornaKmCalcolatoDaUscitaRientro();
         const km = document.getElementById('compila-km')?.value.trim() ?? '';
-        const aggiornato = await patchFineServizioSupabase(servizioCorrente, km, tempoRaw, note);
+        const kmUscita = document.getElementById('compila-km-uscita')?.value.trim() ?? '';
+        const kmRientro = document.getElementById('compila-km-rientro')?.value.trim() ?? '';
+        const aggiornato = await patchFineServizioSupabase(servizioCorrente, km, kmUscita, kmRientro, tempoRaw, note);
 
         servizioCorrente = aggiornato;
         aggiornaServizioInCache(aggiornato);
@@ -1264,8 +1319,8 @@ function setupEventListenersCalendario() {
     document.getElementById('btn-annulla-compila')?.addEventListener('click', chiudiModalCompila);
     document.getElementById('btn-salva-compila')?.addEventListener('click', salvaDatiFineServizio);
 
-    document.getElementById('compila-km-partenza')?.addEventListener('input', aggiornaKmCalcolatoDaPartenzaArrivo);
-    document.getElementById('compila-km-arrivo')?.addEventListener('input', aggiornaKmCalcolatoDaPartenzaArrivo);
+    document.getElementById('compila-km-uscita')?.addEventListener('input', aggiornaKmCalcolatoDaUscitaRientro);
+    document.getElementById('compila-km-rientro')?.addEventListener('input', aggiornaKmCalcolatoDaUscitaRientro);
 
     const modal = document.getElementById('modal-servizio');
     modal?.addEventListener('click', (e) => {

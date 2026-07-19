@@ -7,8 +7,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/@fullcalendar/list@6.1.15/index.global.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="calendario.css?v=5">
-    <link rel="stylesheet" href="calendario-web.css?v=16">
+    <link rel="stylesheet" href="calendario.css?v=8">
+    <link rel="stylesheet" href="calendario-web.css?v=17">
 </head>
 <body>
     <!-- Schermata login operatori -->
@@ -92,20 +92,20 @@
                 <p id="modal-compila-info" class="modal-compila-info"></p>
                 <div class="modal-compila-km-row">
                     <div class="modal-compila-field">
-                        <label for="compila-km-partenza">KM PARTENZA</label>
-                        <input type="text" id="compila-km-partenza" class="modal-compila-input" inputmode="decimal"
+                        <label for="compila-km-uscita">KM USCITA</label>
+                        <input type="text" id="compila-km-uscita" class="modal-compila-input" inputmode="decimal"
                             placeholder="Es. 12500" autocomplete="off">
                     </div>
                     <div class="modal-compila-field">
-                        <label for="compila-km-arrivo">KM ARRIVO</label>
-                        <input type="text" id="compila-km-arrivo" class="modal-compila-input" inputmode="decimal"
+                        <label for="compila-km-rientro">KM RIENTRO</label>
+                        <input type="text" id="compila-km-rientro" class="modal-compila-input" inputmode="decimal"
                             placeholder="Es. 12545" autocomplete="off">
                     </div>
                 </div>
                 <div class="modal-compila-field">
                     <label for="compila-km">KM</label>
                     <input type="text" id="compila-km" class="modal-compila-input" inputmode="decimal"
-                        placeholder="Es. 45 (o calcolato da partenza/arrivo)" autocomplete="off">
+                        placeholder="Es. 45 (o calcolato da uscita/rientro)" autocomplete="off">
                 </div>
                 <div class="modal-compila-field">
                     <label for="compila-tempo">TEMPO (ore:minuti)</label>
@@ -129,6 +129,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.15/locales/it.global.min.js"></script>
-    <script src="calendario-web.js?v=29"></script>
+    <script type="module" src="calendario-web.js"></script>
 </body>
 </html>
