@@ -1090,7 +1090,6 @@ function renderModalServizio(servizio) {
                 ${creaCampoDettaglio('DATA RICEVUTA', servizio.data_ricevuta)}
                 ${creaCampoDettaglio('NUMERO RICEVUTA', servizio.numero_ricevuta)}
                 ${creaCampoDettaglio('STATO SERVIZIO', servizio.stato_servizio)}
-                ${creaCampoDettaglio('ARCHIVIA', servizio.archivia)}
             </div>
             ${htmlRigaTrattaSePresente(servizio)}
             <div class="dettaglio-row">
