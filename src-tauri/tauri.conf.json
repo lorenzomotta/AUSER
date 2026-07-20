@@ -31,16 +31,18 @@
       "http": {
         "all": true,
         "request": true,
-        "scope": ["https://**"]
+        "scope": [
+          "https://**"
+        ]
       }
     },
     "updater": {
       "active": true,
       "endpoints": [
-        "https://github.com/YOUR_USERNAME/auser-tauri-app/releases/latest/download/updater.json"
+        "https://github.com/lorenzomotta/AUSER/releases/latest/download/latest.json"
       ],
       "dialog": true,
-      "pubkey": "YOUR_PUBLIC_KEY_HERE"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJDNDUwMDJFNDhDMjE3MTUKUldRVkY4SklMZ0JGdkFBZUowM0lBd1lPYTBoc0lzWjlLVisrczRUaWZPODZRRUVlQnJBd3BzN08K"
     },
     "bundle": {
       "active": true,
@@ -59,22 +61,30 @@
       "dangerousRemoteDomainIpcAccess": [
         {
           "domain": "https://login.microsoftonline.com",
-          "windows": ["oauth-auth"],
+          "windows": [
+            "oauth-auth"
+          ],
           "enableTauriAPI": true
         },
         {
           "domain": "https://login.microsoft.com",
-          "windows": ["oauth-auth"],
+          "windows": [
+            "oauth-auth"
+          ],
           "enableTauriAPI": true
         },
         {
           "domain": "https://account.microsoft.com",
-          "windows": ["oauth-auth"],
+          "windows": [
+            "oauth-auth"
+          ],
           "enableTauriAPI": true
         },
         {
           "domain": "https://astiauser.sharepoint.com",
-          "windows": ["calendario-online"],
+          "windows": [
+            "calendario-online"
+          ],
           "enableTauriAPI": true
         }
       ]
@@ -93,4 +103,3 @@
     ]
   }
 }
-

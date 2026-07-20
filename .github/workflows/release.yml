@@ -6,35 +6,42 @@ on:
       - 'v*'
 
 jobs:
-  create-release:
+  publish:
     permissions:
       contents: write
-    runs-on: ubuntu-latest
+    # App Windows: build su runner Windows (installer NSIS + aggiornamenti)
+    runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
-      
+      - uses: actions/checkout@v4
+
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
-      
+          node-version: 20
+
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      
-      - name: Install dependencies
-        run: npm install
-      
-      - name: Build application
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and create release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
           projectPath: .
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
-          releaseBody: 'Vedi i changelog per i dettagli'
-          releaseDraft: true
-          prerelease: false
+          releaseBody: |
+            Installer Windows e aggiornamento automatico.
 
+            Gli utenti con l'app già installata riceveranno un avviso all'avvio
+            e potranno aggiornare con un clic.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          # Preferisci installer NSIS nel latest.json (come i nostri setup)
+          updaterJsonPreferNsis: true

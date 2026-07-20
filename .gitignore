@@ -26,6 +26,12 @@ dist-ssr
 # Tauri
 src-tauri/target
 
+# Chiavi firma aggiornamenti (MAI in git — vedi AGGIORNAMENTI.md)
+keys/
+
 # Configurazione con credenziali sensibili
 config.json
+
+# Installer di distribuzione (contengono config)
+installer/
 

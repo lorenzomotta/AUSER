@@ -81,31 +81,12 @@ Il comando creerà:
 
 ## Configurazione Aggiornamenti Automatici
 
-### Setup GitHub Releases:
+Vedi il file **[AGGIORNAMENTI.md](AGGIORNAMENTI.md)** per la guida completa
+(chiavi, secret GitHub, come pubblicare una nuova versione).
 
-1. **Genera una chiave per gli aggiornamenti**:
-   ```bash
-   npm run tauri signer generate -w ~/.tauri/myapp.key
-   ```
-
-2. **Ottieni la chiave pubblica**:
-   ```bash
-   npm run tauri signer generate -w ~/.tauri/myapp.key
-   ```
-
-3. **Aggiorna `tauri.conf.json`**:
-   - Sostituisci `YOUR_USERNAME` con il tuo username GitHub
-   - Sostituisci `YOUR_PUBLIC_KEY_HERE` con la chiave pubblica generata
-
-4. **Configura GitHub Actions**:
-   - Il file `.github/workflows/release.yml` è già configurato
-   - Assicurati di avere i permessi per creare releases sul repository
-
-5. **Pubblica una release**:
-   - Crea un tag: `git tag v1.0.0`
-   - Push del tag: `git push origin v1.0.0`
-   - GitHub Actions creerà automaticamente la release con gli aggiornamenti
-
+In sintesi: l'updater Tauri è attivo; dopo aver impostato il secret
+`TAURI_PRIVATE_KEY` su GitHub, pubblica un tag `v1.0.1` e gli utenti
+riceveranno l'avviso di aggiornamento.
 ## Risoluzione Problemi
 
 ### Errore "Rust not found"
