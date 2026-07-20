@@ -29,6 +29,9 @@ let currentPage = 1;
 let searchDebounceTimer = null;
 let filterScaduteOnly = false;
 let showArchiviatiOnly = false;
+/** Criteri ricerca avanzata (anagrafica). null = nessun filtro avanzato */
+let advancedFilterCriteria = null;
+const RICERCA_FILTRO_STORAGE_KEY = 'auser-ricerca-filtro-criteri';
 /** Set di IdSocio che hanno almeno un servizio collegato */
 let idsocioConServizi = new Set();
 
@@ -120,6 +123,131 @@ async function openNuovoSocioAnagrafica() {
         console.error('Errore apertura nuovo socio:', error);
         alert(`Impossibile aprire l'anagrafica nuovo socio: ${error.message || error}`);
     }
+}
+
+/** Apre Anagrafica in modalità ricerca / filtro */
+async function openRicercaAvanzata() {
+    try {
+        if (advancedFilterCriteria) {
+            localStorage.setItem(RICERCA_FILTRO_STORAGE_KEY, JSON.stringify(advancedFilterCriteria));
+        }
+    } catch (_) { /* ignore */ }
+
+    const url = 'ANAGRAFICASOCI.html?modo=ricerca';
+    const title = 'Ricerca soci — AUSER';
+
+    if (!isTauri()) {
+        window.open(url, '_blank');
+        return;
+    }
+
+    try {
+        const { WebviewWindow } = await import('@tauri-apps/api/window');
+        const label = 'anagrafica-ricerca-soci';
+
+        const existing = WebviewWindow.getByLabel(label);
+        if (existing) {
+            try {
+                await existing.close();
+            } catch (_) { /* ok */ }
+        }
+
+        const webview = new WebviewWindow(label, {
+            url,
+            title,
+            width: 1100,
+            height: 480,
+            resizable: true,
+            maximized: false,
+            decorations: true,
+            center: true
+        });
+
+        webview.setFocus().catch((err) => {
+            console.warn('setFocus ricerca:', err);
+        });
+    } catch (error) {
+        console.error('Errore apertura ricerca avanzata:', error);
+        alert(`Impossibile aprire la ricerca: ${error.message || error}`);
+    }
+}
+
+function hasAdvancedFilter() {
+    return advancedFilterCriteria && Object.keys(advancedFilterCriteria).length > 0;
+}
+
+function updateRicercaAvanzataUI() {
+    const btnRicerca = document.getElementById('btn-ricerca-avanzata');
+    const btnRimuovi = document.getElementById('btn-rimuovi-filtro');
+    const active = hasAdvancedFilter();
+    if (btnRicerca) btnRicerca.classList.toggle('active', active);
+    if (btnRimuovi) btnRimuovi.hidden = !active;
+}
+
+function clearAdvancedFilter() {
+    advancedFilterCriteria = null;
+    try {
+        localStorage.removeItem(RICERCA_FILTRO_STORAGE_KEY);
+    } catch (_) { /* ignore */ }
+    updateRicercaAvanzataUI();
+    currentPage = 1;
+    renderSociView();
+}
+
+function applyAdvancedFilterCriteria(criteri) {
+    if (!criteri || typeof criteri !== 'object' || Object.keys(criteri).length === 0) {
+        clearAdvancedFilter();
+        return;
+    }
+    advancedFilterCriteria = { ...criteri };
+    try {
+        localStorage.setItem(RICERCA_FILTRO_STORAGE_KEY, JSON.stringify(advancedFilterCriteria));
+    } catch (_) { /* ignore */ }
+    updateRicercaAvanzataUI();
+    currentPage = 1;
+    renderSociView();
+}
+
+function matchesAdvancedFilter(tesserato, criteri) {
+    if (!criteri) return true;
+
+    const contains = (value, needle) => {
+        if (!needle) return true;
+        return String(value || '').toLowerCase().includes(String(needle).toLowerCase());
+    };
+
+    const textFields = [
+        'idsocio',
+        'nominativo',
+        'codicefiscale',
+        'sesso',
+        'nascita_comune',
+        'nascita_data',
+        'residenza_indirizzo',
+        'residenza_civico',
+        'residenza_cap',
+        'residenza_comune',
+        'residenza_provincia',
+        'telefono',
+        'tipologiasocio',
+        'notaaggiuntiva'
+    ];
+
+    for (const key of textFields) {
+        if (criteri[key] && !contains(tesserato[key], criteri[key])) {
+            return false;
+        }
+    }
+
+    if (criteri.operatore === true && !isTruthyFlag(tesserato.operatore)) return false;
+    if (criteri.attivo === true && !isTruthyFlag(tesserato.attivo)) return false;
+    if (criteri.archivia === true && !isTruthyFlag(tesserato.archivia)) return false;
+
+    const disp = String(tesserato.disponibilita || '').toUpperCase();
+    if (criteri.disp_autista === true && !disp.includes('AUTISTA')) return false;
+    if (criteri.disp_centralista === true && !disp.includes('CENTRALISTA')) return false;
+
+    return true;
 }
 
 // Apre la maschera anagrafica del socio in una nuova finestra Tauri
@@ -352,7 +480,15 @@ async function loadAllTesserati() {
             attivo: 'SI',
             archivia: 'false',
             disponibilita: 'AUTISTA',
-            notaaggiuntiva: 'Note aggiuntive per questo socio'
+            notaaggiuntiva: 'Note aggiuntive per questo socio',
+            sesso: 'M',
+            nascita_comune: 'ASTI',
+            nascita_data: '01/01/1980',
+            residenza_indirizzo: 'Via Roma',
+            residenza_civico: '10',
+            residenza_cap: '14100',
+            residenza_comune: 'ASTI',
+            residenza_provincia: 'AT'
         };
         allTesserati = [tesseratoDemo];
         updateArchiviatiButtonUI();
@@ -487,6 +623,10 @@ function getDisplayedTesserati() {
         list = list.filter(t => isTesseraScaduta(t.scadenzatessera));
     }
 
+    if (hasAdvancedFilter()) {
+        list = list.filter(t => matchesAdvancedFilter(t, advancedFilterCriteria));
+    }
+
     const searchTerm = getSearchTerm();
     if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
@@ -515,11 +655,19 @@ function renderSociView() {
     }
 
     const searchTerm = getSearchTerm();
-    updateSociCount(displayed.length, searchTerm, filterScaduteOnly, showArchiviatiOnly);
+    updateSociCount(
+        displayed.length,
+        searchTerm,
+        filterScaduteOnly,
+        showArchiviatiOnly,
+        hasAdvancedFilter()
+    );
 
     if (displayed.length === 0) {
         let emptyMsg = 'Nessun tesserato trovato';
-        if (showArchiviatiOnly && searchTerm) {
+        if (hasAdvancedFilter()) {
+            emptyMsg = 'Nessun socio trovato con i criteri di ricerca avanzata';
+        } else if (showArchiviatiOnly && searchTerm) {
             emptyMsg = `Nessun socio archiviato trovato per: "${escapeHtml(searchTerm)}"`;
         } else if (showArchiviatiOnly) {
             emptyMsg = 'Nessun socio archiviato';
@@ -699,10 +847,12 @@ function escapeHtml(text) {
 }
 
 // Funzione per aggiornare il conteggio visualizzato
-function updateSociCount(count, searchTerm = '', scaduteFilter = false, archiviatiView = false) {
+function updateSociCount(count, searchTerm = '', scaduteFilter = false, archiviatiView = false, advancedFilter = false) {
     const countElement = document.getElementById('soci-count');
     if (countElement) {
-        if (archiviatiView && !searchTerm) {
+        if (advancedFilter) {
+            countElement.textContent = `(${count} filtrati)`;
+        } else if (archiviatiView && !searchTerm) {
             countElement.textContent = `(${count} archiviati)`;
         } else if (scaduteFilter && !searchTerm) {
             countElement.textContent = `(${count} scadute)`;
@@ -815,11 +965,20 @@ function applySocioUpdateFromAnagrafica(data) {
 }
 
 async function setupSocioAnagraficaListener() {
+    window.addEventListener('message', (event) => {
+        if (event?.data?.type === 'socio-ricerca-filtro') {
+            applyAdvancedFilterCriteria(event.data.criteri || {});
+        }
+    });
+
     if (!isTauri()) return;
     try {
         const { listen } = await import('@tauri-apps/api/event');
         await listen('socio-anagrafica-saved', (event) => {
             applySocioUpdateFromAnagrafica(event.payload);
+        });
+        await listen('socio-ricerca-filtro', (event) => {
+            applyAdvancedFilterCriteria(event.payload || {});
         });
     } catch (err) {
         console.warn('Listener aggiornamento anagrafica:', err);
@@ -833,6 +992,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Inizializza Tauri
     await initTauri();
     await setupSocioAnagraficaListener();
+
+    // Ripristina eventuale filtro avanzato dalla sessione precedente
+    try {
+        const raw = localStorage.getItem(RICERCA_FILTRO_STORAGE_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+                advancedFilterCriteria = parsed;
+            }
+        }
+    } catch (_) { /* ignore */ }
+    updateRicercaAvanzataUI();
 
     // Prima gli IdSocio con servizi, poi la lista soci (per abilitare/disabilitare SERVIZI)
     await loadIdsocioConServizi();
@@ -861,6 +1032,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     document.getElementById('btn-nuovo-socio')?.addEventListener('click', openNuovoSocioAnagrafica);
+    document.getElementById('btn-ricerca-avanzata')?.addEventListener('click', openRicercaAvanzata);
+    document.getElementById('btn-rimuovi-filtro')?.addEventListener('click', clearAdvancedFilter);
     
     // Event listener per la ricerca in tempo reale
     const searchInput = document.getElementById('search-input');

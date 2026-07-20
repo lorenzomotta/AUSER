@@ -9,6 +9,9 @@ let isAnagraficaEditMode = false;
 let anagraficaEditSnapshot = null;
 let allTipologieSocio = [];
 let isNuovoSocioMode = false;
+let isRicercaMode = false;
+
+const RICERCA_FILTRO_STORAGE_KEY = 'auser-ricerca-filtro-criteri';
 
 const ANAGRAFICA_FLAG_IDS = [
     'field-operatore',
@@ -45,6 +48,12 @@ function getIdsocioFromUrl() {
 function isNuovoSocioFromUrl() {
     const params = new URLSearchParams(window.location.search);
     return params.get('nuovo') === '1' || params.get('nuovo') === 'true';
+}
+
+function isRicercaFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const modo = (params.get('modo') || '').trim().toLowerCase();
+    return modo === 'ricerca' || params.get('ricerca') === '1';
 }
 
 function createNuovoSocioTemplate(idsocio) {
@@ -182,6 +191,17 @@ function syncOperatoreDisponibilitaFlags() {
     const autista = document.getElementById('field-disp-autista');
     const centralista = document.getElementById('field-disp-centralista');
     if (!operatore || !attivo || !autista || !centralista) return;
+
+    // In ricerca i flag sono indipendenti (ognuno è un criterio opzionale)
+    if (isRicercaMode) {
+        attivo.disabled = !isAnagraficaEditMode;
+        autista.disabled = !isAnagraficaEditMode;
+        centralista.disabled = !isAnagraficaEditMode;
+        attivo.closest('.flag-item')?.classList.remove('flag-item-disabled');
+        autista.closest('.flag-item')?.classList.remove('flag-item-disabled');
+        centralista.closest('.flag-item')?.classList.remove('flag-item-disabled');
+        return;
+    }
 
     const isOperatore = operatore.checked;
     const flagsEnabled = isAnagraficaEditMode && isOperatore;
@@ -422,14 +442,21 @@ function setAnagraficaEditMode(editing) {
 
     const container = document.querySelector('.anagrafica-container');
     if (container) {
-        container.classList.toggle('mode-readonly', !editing);
-        container.classList.toggle('mode-editing', editing);
+        container.classList.toggle('mode-readonly', !editing && !isRicercaMode);
+        container.classList.toggle('mode-editing', editing && !isRicercaMode);
+        container.classList.toggle('mode-ricerca', isRicercaMode);
     }
 
     const form = document.getElementById('form-anagrafica');
     if (form) {
         form.querySelectorAll('input, select, textarea').forEach((el) => {
-            if (el.id === 'field-row-id' || el.id === 'field-idsocio') {
+            if (el.id === 'field-row-id') {
+                el.readOnly = true;
+                el.disabled = false;
+                return;
+            }
+            // In ricerca anche ID socio è editabile (filtro)
+            if (el.id === 'field-idsocio' && !isRicercaMode) {
                 el.readOnly = true;
                 el.disabled = false;
                 return;
@@ -455,18 +482,33 @@ function setAnagraficaEditMode(editing) {
     const btnModifica = document.getElementById('btn-modifica-anagrafica');
     const btnSalva = document.getElementById('btn-salva-anagrafica');
     const btnAnnulla = document.getElementById('btn-annulla-anagrafica');
-    if (btnModifica) btnModifica.hidden = editing || isNuovoSocioMode;
-    if (btnSalva) btnSalva.hidden = !editing;
-    if (btnAnnulla) btnAnnulla.hidden = !editing;
+    const btnCerca = document.getElementById('btn-cerca-filtro');
+    const btnAzzera = document.getElementById('btn-azzera-filtro');
+
+    if (isRicercaMode) {
+        if (btnModifica) btnModifica.hidden = true;
+        if (btnSalva) btnSalva.hidden = true;
+        if (btnAnnulla) btnAnnulla.hidden = true;
+        if (btnCerca) btnCerca.hidden = false;
+        if (btnAzzera) btnAzzera.hidden = false;
+    } else {
+        if (btnModifica) btnModifica.hidden = editing || isNuovoSocioMode;
+        if (btnSalva) btnSalva.hidden = !editing;
+        if (btnAnnulla) btnAnnulla.hidden = !editing;
+        if (btnCerca) btnCerca.hidden = true;
+        if (btnAzzera) btnAzzera.hidden = true;
+    }
 
     const btnNuovo = document.getElementById('btn-nuovo-tesseramento');
-    if (btnNuovo) btnNuovo.hidden = !editing;
+    if (btnNuovo) btnNuovo.hidden = !editing || isRicercaMode;
 
     if (!editing) {
         hideTesseramentoEditor();
     }
 
-    renderStoricoTesseramenti();
+    if (!isRicercaMode) {
+        renderStoricoTesseramenti();
+    }
     setupTipologiaSocioField(editing);
 }
 
@@ -756,6 +798,11 @@ async function loadSocioData() {
     const sectionAnag = document.getElementById('section-anagrafica');
     const sectionTess = document.getElementById('section-tesseramenti');
 
+    if (isRicercaFromUrl()) {
+        await loadRicercaMode();
+        return;
+    }
+
     if (isNuovoSocioFromUrl()) {
         await loadNuovoSocio();
         return;
@@ -792,6 +839,167 @@ async function loadSocioData() {
         if (loading) loading.textContent = `Errore: ${error}`;
         setSaveStatus('Impossibile caricare i dati', true);
     }
+}
+
+function readStoredRicercaCriteri() {
+    try {
+        const raw = localStorage.getItem(RICERCA_FILTRO_STORAGE_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw);
+    } catch (_) {
+        return null;
+    }
+}
+
+function clearRicercaForm() {
+    populateAnagrafica(createNuovoSocioTemplate(''));
+    document.getElementById('field-operatore').checked = false;
+    document.getElementById('field-attivo').checked = false;
+    document.getElementById('field-archivia').checked = false;
+    setDisponibilitaCheckboxes([]);
+    const nominativo = document.getElementById('field-nominativo');
+    if (nominativo) nominativo.required = false;
+}
+
+function collectRicercaCriteri() {
+    const payload = collectAnagraficaPayload();
+    const criteri = {
+        idsocio: payload.idsocio,
+        nominativo: payload.nominativo,
+        codicefiscale: payload.codicefiscale,
+        sesso: payload.sesso,
+        nascita_comune: payload.nascita_comune,
+        nascita_data: payload.nascita_data,
+        residenza_indirizzo: payload.residenza_indirizzo,
+        residenza_civico: payload.residenza_civico,
+        residenza_cap: payload.residenza_cap,
+        residenza_comune: payload.residenza_comune,
+        residenza_provincia: payload.residenza_provincia,
+        telefono: payload.telefono,
+        tipologiasocio: payload.tipologiasocio,
+        notaaggiuntiva: payload.notaaggiuntiva,
+        // Flag: solo se spuntati (altrimenti "non filtrare")
+        operatore: document.getElementById('field-operatore')?.checked === true,
+        attivo: document.getElementById('field-attivo')?.checked === true,
+        archivia: document.getElementById('field-archivia')?.checked === true,
+        disp_autista: document.getElementById('field-disp-autista')?.checked === true,
+        disp_centralista: document.getElementById('field-disp-centralista')?.checked === true
+    };
+
+    // Rimuovi stringhe vuote dai criteri testo
+    Object.keys(criteri).forEach((key) => {
+        if (typeof criteri[key] === 'string' && !criteri[key].trim()) {
+            delete criteri[key];
+        }
+        if (typeof criteri[key] === 'boolean' && criteri[key] === false) {
+            delete criteri[key];
+        }
+    });
+
+    return criteri;
+}
+
+async function applyRicercaFiltro() {
+    const criteri = collectRicercaCriteri();
+    try {
+        localStorage.setItem(RICERCA_FILTRO_STORAGE_KEY, JSON.stringify(criteri));
+    } catch (_) { /* ignore */ }
+
+    if (isTauri()) {
+        try {
+            const { emit } = await import('@tauri-apps/api/event');
+            await emit('socio-ricerca-filtro', criteri);
+        } catch (err) {
+            console.warn('Emit filtro ricerca:', err);
+        }
+    } else if (window.opener && !window.opener.closed) {
+        try {
+            window.opener.postMessage({ type: 'socio-ricerca-filtro', criteri }, '*');
+        } catch (err) {
+            console.warn('postMessage filtro ricerca:', err);
+        }
+    }
+
+    const n = Object.keys(criteri).length;
+    setSaveStatus(n === 0 ? 'Filtro rimosso' : `Filtro applicato (${n} criteri)`);
+    await closeAnagraficaWindow();
+}
+
+async function loadRicercaMode() {
+    const loading = document.getElementById('loading-message');
+    const sectionAnag = document.getElementById('section-anagrafica');
+    const sectionTess = document.getElementById('section-tesseramenti');
+    const main = document.getElementById('anagrafica-main');
+
+    isRicercaMode = true;
+    isNuovoSocioMode = false;
+    currentIdsocio = '';
+
+    document.title = 'Ricerca soci - AUSER Asti';
+    const titleEl = document.querySelector('.page-title');
+    if (titleEl) titleEl.textContent = 'RICERCA SOCI';
+
+    const subtitle = document.getElementById('socio-subtitle');
+    if (subtitle) {
+        subtitle.textContent = 'Compila i campi da cercare, poi premi CERCA';
+    }
+
+    await ensureInvokeReady();
+    try {
+        await initSupabase();
+        await loadTipologieSocio();
+    } catch (err) {
+        console.warn('Init ricerca (opzionale):', err);
+    }
+
+    const stored = readStoredRicercaCriteri();
+    clearRicercaForm();
+    if (stored && typeof stored === 'object') {
+        populateAnagrafica({
+            id: 0,
+            idsocio: stored.idsocio || '',
+            nominativo: stored.nominativo || '',
+            codicefiscale: stored.codicefiscale || '',
+            sesso: stored.sesso || '',
+            nascita_comune: stored.nascita_comune || '',
+            nascita_data: stored.nascita_data || '',
+            residenza_indirizzo: stored.residenza_indirizzo || '',
+            residenza_civico: stored.residenza_civico || '',
+            residenza_cap: stored.residenza_cap || '',
+            residenza_comune: stored.residenza_comune || '',
+            residenza_provincia: stored.residenza_provincia || '',
+            telefono: stored.telefono || '',
+            tipologiasocio: stored.tipologiasocio || '',
+            operatore: !!stored.operatore,
+            attivo: !!stored.attivo,
+            archivia: !!stored.archivia,
+            disponibilita: [
+                stored.disp_autista ? 'AUTISTA' : '',
+                stored.disp_centralista ? 'CENTRALISTA' : ''
+            ].filter(Boolean).join(', '),
+            notaaggiuntiva: stored.notaaggiuntiva || ''
+        });
+        if (subtitle) {
+            subtitle.textContent = 'Compila i campi da cercare, poi premi CERCA';
+        }
+    }
+
+    if (loading) loading.style.display = 'none';
+    if (sectionAnag) sectionAnag.style.display = 'block';
+    if (sectionTess) sectionTess.style.display = 'none';
+
+    // Hint sotto l'header
+    if (main && !document.getElementById('hint-ricerca')) {
+        const hint = document.createElement('p');
+        hint.id = 'hint-ricerca';
+        hint.className = 'anagraficasoci-hint-ricerca';
+        hint.textContent = 'Modalità ricerca: i campi compilati filtrano l\'elenco soci (anche corrispondenza parziale). Le caselle spuntate richiedono quel flag.';
+        sectionAnag?.parentNode?.insertBefore(hint, sectionAnag);
+    }
+
+    setAnagraficaEditMode(true);
+    const focusEl = document.getElementById('field-residenza-comune') || document.getElementById('field-nominativo');
+    focusEl?.focus();
 }
 
 async function saveAnagrafica() {
@@ -952,10 +1160,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-modifica-anagrafica')?.addEventListener('click', enableAnagraficaEdit);
     document.getElementById('btn-salva-anagrafica')?.addEventListener('click', saveAnagrafica);
     document.getElementById('btn-annulla-anagrafica')?.addEventListener('click', cancelAnagraficaEdit);
+    document.getElementById('btn-cerca-filtro')?.addEventListener('click', applyRicercaFiltro);
+    document.getElementById('btn-azzera-filtro')?.addEventListener('click', () => {
+        clearRicercaForm();
+        setSaveStatus('Campi azzerati');
+        document.getElementById('field-nominativo')?.focus();
+    });
     document.getElementById('form-tesseramento')?.addEventListener('submit', saveTesseramento);
 
     document.getElementById('btn-nuovo-tesseramento')?.addEventListener('click', () => {
-        if (!isAnagraficaEditMode) return;
+        if (!isAnagraficaEditMode || isRicercaMode) return;
         openTesseramentoEditor(-1, true);
     });
 
@@ -967,6 +1181,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         await closeAnagraficaWindow();
+    });
+
+    // Invio = CERCA in modalità ricerca
+    document.getElementById('form-anagrafica')?.addEventListener('keydown', (e) => {
+        if (!isRicercaMode) return;
+        if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+            e.preventDefault();
+            applyRicercaFiltro();
+        }
     });
 
     await loadSocioData();

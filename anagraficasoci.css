@@ -90,6 +90,24 @@ body {
 .btn-salva, .btn-salva-tess { background-color: #2e7d32; color: #fff; }
 .btn-salva:hover, .btn-salva-tess:hover { background-color: #1b5e20; }
 .btn-salva:disabled, .btn-salva-tess:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-cerca-filtro { background-color: #1565c0; color: #fff; }
+.btn-cerca-filtro:hover { background-color: #0d47a1; }
+.btn-azzera-filtro { background-color: #fff; color: #555; border: 1px solid #999; }
+.btn-azzera-filtro:hover { background-color: #eee; }
+
+.anagrafica-container.mode-ricerca .page-title {
+    color: #1565c0;
+}
+
+.anagraficasoci-hint-ricerca {
+    font-size: 12px;
+    color: #1565c0;
+    margin: 0 0 8px;
+    padding: 6px 10px;
+    background: #e3f2fd;
+    border-radius: 4px;
+    border-left: 3px solid #1565c0;
+}
 .btn-nuovo-tesseramento { background-color: #1565c0; color: #fff; }
 .btn-nuovo-tesseramento:hover { background-color: #0d47a1; }
 .btn-annulla-tess,

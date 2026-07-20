@@ -186,6 +186,10 @@ fn supabase_row_to_tesserato(row: &serde_json::Value) -> Option<Tesserato> {
         format_date_iso(&get_field(row, "Tesseramento_Data"))
     };
 
+    let (nascita_comune, nascita_data) = get_nascita_fields(row);
+    let (residenza_indirizzo, residenza_civico, residenza_cap, residenza_comune, residenza_provincia) =
+        get_residenza_fields(row);
+
     Some(Tesserato {
         id,
         idsocio: get_field(row, "IdSocio"),
@@ -210,6 +214,14 @@ fn supabase_row_to_tesserato(row: &serde_json::Value) -> Option<Tesserato> {
         ),
         disponibilita: get_field_any(row, &["Disponibilita", "DISPONIBILITA", "disponibilita"]),
         notaaggiuntiva: get_field_any(row, &["NoteAggiuntive", "NotaAggiuntiva", "NOTAAGGIUNTIVA"]),
+        sesso: get_sesso_field(row),
+        nascita_comune,
+        nascita_data,
+        residenza_indirizzo,
+        residenza_civico,
+        residenza_cap,
+        residenza_comune,
+        residenza_provincia,
     })
 }
 
@@ -892,6 +904,22 @@ struct Tesserato {
     archivia: String,
     disponibilita: String,
     notaaggiuntiva: String,
+    #[serde(default)]
+    sesso: String,
+    #[serde(default)]
+    nascita_comune: String,
+    #[serde(default)]
+    nascita_data: String,
+    #[serde(default)]
+    residenza_indirizzo: String,
+    #[serde(default)]
+    residenza_civico: String,
+    #[serde(default)]
+    residenza_cap: String,
+    #[serde(default)]
+    residenza_comune: String,
+    #[serde(default)]
+    residenza_provincia: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
