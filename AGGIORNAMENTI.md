@@ -31,6 +31,15 @@ Nel repo **lorenzomotta/AUSER** → Settings → Secrets and variables → Actio
 |--------|--------|
 | `TAURI_PRIVATE_KEY` | Contenuto intero del file `keys/auser-updater.key` (tutto il testo) |
 | `TAURI_KEY_PASSWORD` | Lascia vuoto se non hai messo password (o crea il secret vuoto / omettilo) |
+| `APP_CONFIG_JSON` | Contenuto intero del file `config.json` locale (url Supabase, chiavi, tabelle) |
+
+Per `APP_CONFIG_JSON` su Windows (PowerShell):
+
+```powershell
+Get-Content .\config.json -Raw | Set-Clipboard
+```
+
+Poi incolla nel secret su GitHub. Serve perché `config.json` non è nel repository (contiene dati sensibili) ma la build lo richiede.
 
 Come copiare la chiave privata su Windows (PowerShell):
 

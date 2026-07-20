@@ -1,3 +1,21 @@
+import {
+    initModificaServizio,
+    setupModaleModifica,
+    apriModalModifica,
+    caricaDatiModificaServizio
+} from './modifica-servizio.js';
+import {
+    initCompletaServizio,
+    setupModaleCompleta,
+    apriModalCompleta,
+    caricaDatiCompletaServizio
+} from './completa-servizio.js';
+import {
+    richiediSessione,
+    isAdmin,
+    logout
+} from './auth-session.js';
+
 // Import Tauri API
 let invoke, appWindow;
 
@@ -20,6 +38,83 @@ function isTauri() {
     return typeof window !== 'undefined' && 
            (window.__TAURI_INTERNALS__ !== undefined || 
             window.__TAURI_IPC__ !== undefined);
+}
+
+/** Apre (o riporta in primo piano) una finestra popup Tauri 1.x */
+async function apriFinestraPopup(label, options) {
+    const { WebviewWindow } = await import('@tauri-apps/api/window');
+    const shouldMaximize = !!options.maximized;
+    const existing = WebviewWindow.getByLabel(label);
+    if (existing) {
+        try {
+            await existing.unminimize().catch(() => {});
+            await existing.show();
+            if (shouldMaximize) await existing.maximize().catch(() => {});
+            await existing.setFocus();
+            return existing;
+        } catch (err) {
+            console.warn(`Finestra ${label} non riutilizzabile:`, err);
+            try { await existing.close(); } catch (_) { /* ignore */ }
+        }
+    }
+
+    return new Promise((resolve, reject) => {
+        const webview = new WebviewWindow(label, options);
+        const onCreated = async () => {
+            try {
+                if (shouldMaximize) await webview.maximize();
+                await webview.setFocus();
+            } catch (_) { /* ignore */ }
+            resolve(webview);
+        };
+        const onError = (event) => {
+            reject(event?.payload || event || new Error(`Errore creazione finestra ${label}`));
+        };
+        webview.once('tauri://created', onCreated);
+        webview.once('tauri://error', onError);
+    });
+}
+
+/** Chiede conferma prima di chiudere l'applicazione */
+function chiediConfermaUscitaApp() {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById('home-dialog-esci');
+        const btnSi = document.getElementById('home-dialog-esci-si');
+        const btnNo = document.getElementById('home-dialog-esci-no');
+
+        if (!overlay || !btnSi || !btnNo) {
+            resolve(window.confirm("Vuoi davvero uscire dall'applicazione?"));
+            return;
+        }
+
+        overlay.hidden = false;
+        overlay.setAttribute('aria-hidden', 'false');
+
+        const chiudi = (risposta) => {
+            overlay.hidden = true;
+            overlay.setAttribute('aria-hidden', 'true');
+            resolve(risposta);
+        };
+
+        const onSi = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            btnSi.removeEventListener('click', onSi);
+            btnNo.removeEventListener('click', onNo);
+            chiudi(true);
+        };
+
+        const onNo = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            btnSi.removeEventListener('click', onSi);
+            btnNo.removeEventListener('click', onNo);
+            chiudi(false);
+        };
+
+        btnSi.addEventListener('click', onSi);
+        btnNo.addEventListener('click', onNo);
+    });
 }
 
 // Aggiorna data e settimana corrente
@@ -298,10 +393,10 @@ function createServiceEntry(servizio, showCompleta = true) {
     const div = document.createElement('div');
     div.className = 'service-entry';
     
-    const completaButton = showCompleta 
-        ? `<button class="btn btn-completa" onclick="completaServizio(${servizio.id})">COMPLETA</button>`
+    const completaButton = showCompleta
+        ? `<button type="button" class="btn btn-completa">COMPLETA</button>`
         : '';
-    
+
     div.innerHTML = `
         <div class="service-header">
             <div class="service-id">${servizio.id}</div>
@@ -335,12 +430,16 @@ function createServiceEntry(servizio, showCompleta = true) {
             <input type="text" value="${servizio.tipo_servizio || ''}" data-field="tipo_servizio" data-id="${servizio.id}" readonly>
         </div>
         <div class="service-buttons">
-            <button class="btn btn-stampa" onclick="stampaServizio(${servizio.id})">STAMPA</button>
-            <button class="btn btn-modifica" onclick="modificaServizio(${servizio.id})">MODIFICA</button>
+            <button type="button" class="btn btn-stampa">STAMPA</button>
+            <button type="button" class="btn btn-modifica">MODIFICA</button>
             ${completaButton}
         </div>
     `;
-    
+
+    div.querySelector('.btn-stampa')?.addEventListener('click', () => stampaServizio(servizio.id));
+    div.querySelector('.btn-modifica')?.addEventListener('click', () => modificaServizio(servizio.id));
+    div.querySelector('.btn-completa')?.addEventListener('click', () => completaServizio(servizio.id));
+
     // Aggiungi event listener per gli altri campi
     const entryDiv = div;
     setTimeout(() => {
@@ -364,79 +463,205 @@ function createServiceEntry(servizio, showCompleta = true) {
 function createCardEntry(tessera) {
     const div = document.createElement('div');
     div.className = 'card-entry';
-    
+
+    const idsocio = String(tessera.idsocio || tessera.id || '').trim();
+    const idDisplay = escapeHtmlHome(idsocio || tessera.id || '');
+    const descrizione = escapeHtmlHome(tessera.descrizione || '');
+    const nominativoAttr = escapeHtmlHome(tessera.descrizione || '');
+
     div.innerHTML = `
-        <div class="card-id">${tessera.id}</div>
+        <div class="card-id">${idDisplay}</div>
         <div class="card-description">
-            <input type="text" value="${tessera.descrizione || ''}" data-field="descrizione" data-id="${tessera.id}" readonly>
+            <input type="text" value="${descrizione}" data-field="descrizione" data-idsocio="${idDisplay}" readonly>
         </div>
-        <button class="btn btn-nuovo" onclick="nuovaTessera(${tessera.id})">NUOVO</button>
-        <button class="btn btn-arrow" onclick="apriTessera(${tessera.id})">→</button>
+        <button type="button" class="btn btn-nuovo" data-action="nuova-tessera" data-idsocio="${idDisplay}">NUOVO</button>
+        <button type="button" class="btn btn-arrow" data-action="apri-anagrafica" data-idsocio="${idDisplay}" data-nominativo="${nominativoAttr}" title="Apri anagrafica">→</button>
     `;
-    
+
     return div;
+}
+
+function escapeHtmlHome(str) {
+    if (str === undefined || str === null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+async function apriAnagraficaSocioDaHome(idsocio, nominativo) {
+    const id = String(idsocio || '').trim();
+    if (!id) {
+        alert('ID socio non disponibile');
+        return;
+    }
+
+    const url = `ANAGRAFICASOCI.html?idsocio=${encodeURIComponent(id)}`;
+    const title = nominativo
+        ? `Anagrafica — ${nominativo}`
+        : `Anagrafica socio ${id}`;
+
+    if (!isTauri()) {
+        window.open(url, '_blank');
+        return;
+    }
+
+    try {
+        const webview = await apriFinestraPopup(`anagrafica-socio-${id}`, {
+            url,
+            title,
+            width: 1100,
+            height: 540,
+            resizable: true,
+            maximized: false,
+            decorations: true,
+            center: true
+        });
+
+        // Quando chiudi l'anagrafica, aggiorna TESSERE DA FARE
+        if (webview?.once) {
+            webview.once('tauri://destroyed', () => {
+                loadTessereDaFare();
+            });
+        }
+    } catch (error) {
+        console.error('Errore apertura anagrafica:', error);
+        alert(`Impossibile aprire l'anagrafica: ${error.message || error}`);
+    }
+}
+
+async function setupTessereDaFareRefreshListener() {
+    if (!isTauri()) return;
+    try {
+        const { listen } = await import('@tauri-apps/api/event');
+        await listen('socio-anagrafica-saved', () => {
+            // Appena salvi (es. tipologia non più NUOVO), la lista si aggiorna subito
+            loadTessereDaFare();
+        });
+    } catch (err) {
+        console.warn('Listener aggiornamento tessere da fare:', err);
+    }
 }
 
 // Funzioni per i pulsanti
 window.stampaServizio = async function(id) {
-    if (!isTauri() || !invoke) {
-        alert('Stampa avviata per servizio ' + id + ' (modalità demo)');
+    const idNum = parseInt(id, 10);
+    if (!Number.isFinite(idNum) || idNum <= 0) {
+        alert('ID servizio non valido');
         return;
     }
-    
-    try {
-        await invoke('stampa_servizio', { id });
-        alert('Stampa avviata per servizio ' + id);
-    } catch (error) {
-        console.error('Errore nella stampa:', error);
+
+    const url = `SCHEDASERVIZIO.html?id=${encodeURIComponent(idNum)}`;
+
+    if (isTauri()) {
+        try {
+            const { WebviewWindow } = await import('@tauri-apps/api/window');
+            const label = `scheda-servizio-${idNum}`;
+
+            const existing = WebviewWindow.getByLabel(label);
+            if (existing) {
+                try {
+                    await existing.show();
+                    await existing.setFocus();
+                    return;
+                } catch (err) {
+                    console.warn('Finestra scheda non riutilizzabile:', err);
+                    try { await existing.close(); } catch (_) { /* ignore */ }
+                }
+            }
+
+            const webview = new WebviewWindow(label, {
+                url,
+                title: `Scheda servizio ${idNum}`,
+                width: 900,
+                height: 1100,
+                resizable: true,
+                maximized: false,
+                decorations: true,
+                center: true
+            });
+
+            webview.setFocus().catch((err) => console.warn('setFocus scheda:', err));
+            return;
+        } catch (error) {
+            console.error('Errore apertura scheda servizio:', error);
+        }
     }
+
+    window.open(url, `scheda-servizio-${idNum}`, 'width=900,height=1100');
 };
 
-window.modificaServizio = async function(id) {
+async function modificaServizio(id) {
     if (!isTauri() || !invoke) {
-        alert('Modifica servizio ' + id + ' (modalità demo)');
+        console.warn('Modifica servizio (demo):', id);
         return;
     }
-    
+
     try {
-        await invoke('modifica_servizio', { id });
-        // TODO: Aprire finestra/modale di modifica
+        await apriModalModifica(id);
     } catch (error) {
         console.error('Errore nella modifica:', error);
     }
-};
+}
+
+window.modificaServizio = modificaServizio;
 
 window.completaServizio = async function(id) {
     if (!isTauri() || !invoke) {
-        alert('Servizio ' + id + ' completato (modalità demo)');
-        await loadServiziGiorno();
+        console.warn('Completa servizio (demo):', id);
         return;
     }
-    
+
     try {
-        await invoke('completa_servizio', { id });
-        // Ricarica i servizi
-        await loadServiziGiorno();
+        await apriModalCompleta(id);
     } catch (error) {
         console.error('Errore nel completamento:', error);
     }
 };
 
 window.nuovaTessera = async function(id) {
+    const idNum = parseInt(id, 10);
+    if (!Number.isFinite(idNum) || idNum <= 0) {
+        console.warn('Nuova tessera: ID non valido', id);
+        return;
+    }
     try {
-        await invoke('nuova_tessera', { id });
+        await invoke('nuova_tessera', { id: idNum });
     } catch (error) {
         console.error('Errore nella creazione tessera:', error);
     }
 };
 
-window.apriTessera = async function(id) {
-    try {
-        await invoke('apri_tessera', { id });
-    } catch (error) {
-        console.error('Errore nell\'apertura tessera:', error);
-    }
+window.apriTessera = async function(id, nominativo) {
+    await apriAnagraficaSocioDaHome(id, nominativo || '');
 };
+
+function setupTessereDaFareClickHandlers() {
+    const container = document.getElementById('tessere-da-fare');
+    if (!container || container.dataset.handlersBound === '1') return;
+    container.dataset.handlersBound = '1';
+
+    container.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn || !container.contains(btn)) return;
+
+        const action = btn.getAttribute('data-action');
+        const idsocio = btn.getAttribute('data-idsocio') || '';
+        const nominativo = btn.getAttribute('data-nominativo') || '';
+
+        if (action === 'apri-anagrafica') {
+            e.preventDefault();
+            await apriAnagraficaSocioDaHome(idsocio, nominativo);
+            return;
+        }
+
+        if (action === 'nuova-tessera') {
+            e.preventDefault();
+            await window.nuovaTessera(idsocio);
+        }
+    });
+}
 
 // Funzione per aggiornare un campo specifico di un servizio su SharePoint
 window.updateServizioField = async function(id, field, value) {
@@ -482,19 +707,137 @@ async function initApp() {
 // Event listener per chiusura applicazione
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('=== DOMContentLoaded index.html ===');
+
+    // Login obbligatorio
+    const sessione = richiediSessione();
+    if (!sessione) return;
+
+    const admin = isAdmin(sessione);
+    const btnImpostazioni = document.getElementById('btn-impostazioni');
+    const btnUtenti = document.getElementById('btn-utenti');
+    const btnRiepilogoPagamenti = document.getElementById('btn-riepilogo-pagamenti');
+    if (btnImpostazioni) btnImpostazioni.hidden = !admin;
+    if (btnUtenti) btnUtenti.hidden = !admin;
+    if (btnRiepilogoPagamenti) btnRiepilogoPagamenti.hidden = !admin;
+
+    const sidebarUser = document.getElementById('sidebar-user');
+    const sidebarUserLabel = document.getElementById('sidebar-user-label');
+    if (sidebarUser) sidebarUser.hidden = false;
+    if (sidebarUserLabel) {
+        sidebarUserLabel.textContent = sessione.username || sessione.email || 'Utente';
+    }
+    document.getElementById('btn-logout')?.addEventListener('click', () => logout());
     
     const tauriReady = await initApp();
     console.log('Tauri ready per caricamento dati:', tauriReady, 'invoke:', typeof invoke);
+
+    initModificaServizio({
+        getInvoke: () => invoke,
+        isTauriEnv: isTauri,
+        onSaveSuccess: async () => {
+            await loadServiziGiorno();
+            await loadProssimiServizi();
+            await loadServiziInseritiOggi();
+        },
+        onDeleteSuccess: async () => {
+            await loadServiziGiorno();
+            await loadProssimiServizi();
+            await loadServiziInseritiOggi();
+        }
+    });
+    initCompletaServizio({
+        getInvoke: () => invoke,
+        isTauriEnv: isTauri,
+        onSaveSuccess: async () => {
+            await loadServiziGiorno();
+            await loadProssimiServizi();
+            await loadServiziInseritiOggi();
+        }
+    });
+    setupModaleCompleta();
+    if (tauriReady) {
+        await caricaDatiCompletaServizio();
+    }
+
+    setupModaleModifica();
+    if (tauriReady) {
+        await caricaDatiModificaServizio();
+    }
     
     // Imposta il listener per il pulsante di chiusura (header o footer)
     const closeBtn = document.querySelector('.btn-close-app-header') || document.querySelector('.btn-close-app');
     if (closeBtn) {
         closeBtn.addEventListener('click', async () => {
+            const conferma = await chiediConfermaUscitaApp();
+            if (!conferma) return;
+
             if (isTauri() && appWindow) {
                 await appWindow.close();
             } else {
                 // In modalità browser, chiudi la finestra
                 window.close();
+            }
+        });
+    }
+
+    // Pulsante IMPOSTAZIONI (ingranaggio) — solo is_admin
+    const impostazioniBtn = document.getElementById('btn-impostazioni');
+    if (impostazioniBtn) {
+        impostazioniBtn.addEventListener('click', async () => {
+            if (!isAdmin()) {
+                alert('Solo gli amministratori possono aprire Impostazioni.');
+                return;
+            }
+            if (isTauri()) {
+                try {
+                    await apriFinestraPopup('impostazioni', {
+                        url: 'IMPOSTAZIONI.html',
+                        title: 'Impostazioni',
+                        width: 680,
+                        height: 620,
+                        resizable: true,
+                        maximized: false,
+                        decorations: true,
+                        alwaysOnTop: false,
+                        center: true
+                    });
+                } catch (error) {
+                    console.error('Errore apertura impostazioni:', error);
+                    alert('Impossibile aprire le Impostazioni.');
+                }
+            } else {
+                window.open('IMPOSTAZIONI.html', '_blank', 'width=680,height=620');
+            }
+        });
+    }
+
+    // Pulsante GESTIONE UTENTI (persona) — solo is_admin
+    const utentiBtn = document.getElementById('btn-utenti');
+    if (utentiBtn) {
+        utentiBtn.addEventListener('click', async () => {
+            if (!isAdmin()) {
+                alert('Solo gli amministratori possono gestire gli utenti.');
+                return;
+            }
+            if (isTauri()) {
+                try {
+                    await apriFinestraPopup('gestione-utenti', {
+                        url: 'UTENTI.html',
+                        title: 'Gestione utenti',
+                        width: 860,
+                        height: 700,
+                        resizable: true,
+                        maximized: false,
+                        decorations: true,
+                        alwaysOnTop: false,
+                        center: true
+                    });
+                } catch (error) {
+                    console.error('Errore apertura gestione utenti:', error);
+                    alert('Impossibile aprire la Gestione utenti.');
+                }
+            } else {
+                window.open('UTENTI.html', '_blank', 'width=860,height=700');
             }
         });
     }
@@ -505,8 +848,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         calendarioBtn.addEventListener('click', async () => {
             if (isTauri()) {
                 try {
-                    const { Window } = await import('@tauri-apps/api/window');
-                    const webview = await Window.create('calendario-servizi', {
+                    await apriFinestraPopup('calendario-servizi', {
                         url: 'CALENDARIO.html',
                         title: 'Calendario Servizi',
                         width: 1400,
@@ -517,7 +859,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         alwaysOnTop: false,
                         center: true
                     });
-                    await webview.setFocus();
                 } catch (error) {
                     console.error('Errore nella creazione della finestra calendario:', error);
                     window.location.href = 'CALENDARIO.html';
@@ -643,6 +984,37 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
+
+    // Pulsante RIEPILOGO PAGAMENTI — solo is_admin
+    const riepilogoPagamentiBtn = document.getElementById('btn-riepilogo-pagamenti');
+    if (riepilogoPagamentiBtn) {
+        riepilogoPagamentiBtn.addEventListener('click', async () => {
+            if (!isAdmin()) {
+                alert('Solo gli amministratori possono aprire il Riepilogo Pagamenti.');
+                return;
+            }
+            if (isTauri()) {
+                try {
+                    await apriFinestraPopup('riepilogo-pagamenti', {
+                        url: 'RIEPILOGOPAGAMENTI.html',
+                        title: 'Riepilogo Pagamenti',
+                        width: 1400,
+                        height: 900,
+                        resizable: true,
+                        maximized: true,
+                        decorations: true,
+                        alwaysOnTop: false,
+                        center: true
+                    });
+                } catch (error) {
+                    console.error('Errore apertura riepilogo pagamenti:', error);
+                    alert('Impossibile aprire il Riepilogo Pagamenti.');
+                }
+            } else {
+                window.open('RIEPILOGOPAGAMENTI.html', '_blank');
+            }
+        });
+    }
     
     // Imposta il listener per il pulsante ELENCO SERVIZI
     const elencoServiziBtn = document.getElementById('btn-elenco-servizi');
@@ -650,29 +1022,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         elencoServiziBtn.addEventListener('click', async () => {
             if (isTauri()) {
                 try {
-                    // Crea una nuova finestra Tauri per ELENCO SERVIZI
-                    const { Window } = await import('@tauri-apps/api/window');
-                    
-                    const webview = await Window.create('elenco-servizi', {
+                    await apriFinestraPopup('elenco-servizi', {
                         url: 'ELENCOSERVIZI.html',
                         title: 'Elenco Servizi',
                         width: 1400,
                         height: 900,
                         resizable: true,
-                        maximized: false,
+                        maximized: true,
                         decorations: true,
-                        alwaysOnTop: false,
                         center: true
                     });
-                    
-                    await webview.setFocus();
                 } catch (error) {
-                    console.error('Errore nella creazione della finestra:', error);
-                    // Fallback: naviga nella stessa finestra
-                    window.location.href = 'ELENCOSERVIZI.html';
+                    console.error('Errore nella creazione della finestra Elenco Servizi:', error);
                 }
             } else {
-                // In modalità browser, apri in una nuova scheda
                 window.open('ELENCOSERVIZI.html', '_blank');
             }
         });
@@ -776,9 +1139,54 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
+
+    // Pulsante TRATTE FUORI ASTI
+    const tratteBtn = document.getElementById('btn-tratte-fuori-asti');
+    if (tratteBtn) {
+        tratteBtn.addEventListener('click', async () => {
+            if (isTauri()) {
+                try {
+                    const { WebviewWindow } = await import('@tauri-apps/api/window');
+                    const label = 'tratte-fuori-asti';
+
+                    const existing = WebviewWindow.getByLabel(label);
+                    if (existing) {
+                        try {
+                            await existing.show();
+                            await existing.setFocus();
+                            return;
+                        } catch (err) {
+                            console.warn('Finestra tratte non riutilizzabile:', err);
+                            try { await existing.close(); } catch (_) { /* ignore */ }
+                        }
+                    }
+
+                    const webview = new WebviewWindow(label, {
+                        url: 'TRATTEFUORIASTI.html',
+                        title: 'Costo Tratte Fuori Asti',
+                        width: 800,
+                        height: 800,
+                        resizable: true,
+                        maximized: false,
+                        decorations: true,
+                        center: true
+                    });
+
+                    webview.setFocus().catch((err) => console.warn('setFocus tratte:', err));
+                } catch (error) {
+                    console.error('Errore apertura Tratte Fuori Asti:', error);
+                    window.location.href = 'TRATTEFUORIASTI.html';
+                }
+            } else {
+                window.open('TRATTEFUORIASTI.html', '_blank');
+            }
+        });
+    }
     
     // Aggiorna data e settimana
     updateDateInfo();
+    setupTessereDaFareClickHandlers();
+    await setupTessereDaFareRefreshListener();
     
     // Carica i dati
     loadServiziGiorno();

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Riepilogo Chilometri Percorsi - AUSER Asti</title>
+    <link rel="stylesheet" href="reportchilometri.css">
+</head>
+<body>
+    <div class="rc-toolbar no-print">
+        <button type="button" class="rc-btn rc-btn-chiudi" id="btn-chiudi">CHIUDI</button>
+        <div class="rc-title-box">RIEPILOGO CHILOMETRI PERCORSI</div>
+        <button type="button" class="rc-btn rc-btn-stampa" id="btn-stampa">STAMPA</button>
+    </div>
+
+    <div class="rc-page" id="rc-page">
+        <header class="rc-print-header print-only">
+            <h1>RIEPILOGO CHILOMETRI PERCORSI</h1>
+        </header>
+
+        <section class="rc-operatore-riga">
+            <span class="rc-label">OPERATORE</span>
+            <div class="rc-operatore-nome" id="rc-operatore">—</div>
+        </section>
+
+        <section class="rc-periodo">
+            <button type="button" class="rc-nav no-print" id="btn-mese-prev" title="Mese precedente">&lsaquo;</button>
+            <div class="rc-periodo-box" id="rc-mese">—</div>
+            <div class="rc-periodo-box" id="rc-anno">—</div>
+            <button type="button" class="rc-nav no-print" id="btn-mese-next" title="Mese successivo">&rsaquo;</button>
+        </section>
+
+        <div class="rc-loading" id="rc-loading">Caricamento servizi...</div>
+        <div class="rc-errore" id="rc-errore" hidden></div>
+        <div class="rc-contenuto" id="rc-contenuto" hidden>
+            <div class="rc-table-head">
+                <span>DATA</span>
+                <span>SERVIZ</span>
+                <span>TRASPORTATO</span>
+                <span>PRELIEVO</span>
+                <span>DESTINAZIONE</span>
+                <span>KM</span>
+            </div>
+            <div id="rc-gruppi"></div>
+
+            <section class="rc-totali">
+                <div class="rc-totale-riga">
+                    <span class="rc-totale-label">NUMERO SERVIZI MENSILI RIMBORSABILI</span>
+                    <div class="rc-box" id="rc-num-rimborsabili">0</div>
+                    <span class="rc-totale-label">TOTALE KM RIMBORSABILI</span>
+                    <div class="rc-box" id="rc-km-rimborsabili">0</div>
+                </div>
+                <div class="rc-totale-riga">
+                    <span class="rc-totale-label">NUMERO SERVIZI MENSILI NON RIMBORSABILI</span>
+                    <div class="rc-box" id="rc-num-non-rimborsabili">0</div>
+                    <span class="rc-totale-label">TOTALE KM NON RIMBORSABILI</span>
+                    <div class="rc-box" id="rc-km-non-rimborsabili">0</div>
+                </div>
+                <div class="rc-totale-riga">
+                    <span class="rc-totale-label">NUMERO SERVIZI MENSILI COMPLESSIVO</span>
+                    <div class="rc-box" id="rc-num-complessivo">0</div>
+                    <span class="rc-totale-label">TOTALE KM MENSILI</span>
+                    <div class="rc-box" id="rc-km-complessivo">0</div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script type="module" src="reportchilometri.js"></script>
+</body>
+</html>

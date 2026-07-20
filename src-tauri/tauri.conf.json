@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "AUSER Gestione Operativa",
-    "version": "1.0.0"
+    "version": "1.0.1"
   },
   "tauri": {
     "allowlist": {
@@ -31,9 +31,7 @@
       "http": {
         "all": true,
         "request": true,
-        "scope": [
-          "https://**"
-        ]
+        "scope": ["https://**"]
       }
     },
     "updater": {
@@ -54,6 +52,9 @@
         "icons/128x128@2x.png",
         "icons/icon.icns",
         "icons/icon.ico"
+      ],
+      "resources": [
+        "../config.json"
       ]
     },
     "security": {
@@ -61,40 +62,33 @@
       "dangerousRemoteDomainIpcAccess": [
         {
           "domain": "https://login.microsoftonline.com",
-          "windows": [
-            "oauth-auth"
-          ],
+          "windows": ["oauth-auth"],
           "enableTauriAPI": true
         },
         {
           "domain": "https://login.microsoft.com",
-          "windows": [
-            "oauth-auth"
-          ],
+          "windows": ["oauth-auth"],
           "enableTauriAPI": true
         },
         {
           "domain": "https://account.microsoft.com",
-          "windows": [
-            "oauth-auth"
-          ],
+          "windows": ["oauth-auth"],
           "enableTauriAPI": true
         },
         {
           "domain": "https://astiauser.sharepoint.com",
-          "windows": [
-            "calendario-online"
-          ],
+          "windows": ["calendario-online"],
           "enableTauriAPI": true
         }
       ]
     },
     "windows": [
       {
+        "url": "LOGIN.html",
         "fullscreen": false,
         "maximized": true,
         "resizable": true,
-        "title": "AUSER Asti - Gestione Operativa",
+        "title": "AUSER Asti - Accesso",
         "width": 1400,
         "height": 900,
         "minWidth": 1200,
@@ -103,3 +97,4 @@
     ]
   }
 }
+

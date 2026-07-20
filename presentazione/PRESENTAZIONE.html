@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presentazione — AUSER Gestione Operativa</title>
+    <link rel="stylesheet" href="presentazione.css">
+</head>
+<body>
+    <div class="preso-chrome">
+        <div class="preso-brand">auser Asti · Gestione Operativa</div>
+        <div class="preso-progress" id="preso-progress"></div>
+        <div class="preso-counter" id="preso-counter">1 / 1</div>
+    </div>
+
+    <main class="preso-stage" id="preso-stage">
+
+        <!-- 1. Copertina -->
+        <section class="slide slide-cover is-active" data-title="Copertina">
+            <div class="cover-mark">a</div>
+            <p class="cover-org">auser Asti</p>
+            <h1>GESTIONE OPERATIVA</h1>
+            <p class="cover-sub">Presentazione dell’applicazione desktop</p>
+            <p class="cover-hint">Frecce ← → · pulsanti Avanti/Indietro · tasto F per schermo intero</p>
+        </section>
+
+        <!-- 2. A cosa serve -->
+        <section class="slide" data-title="A cosa serve">
+            <h2>A cosa serve</h2>
+            <p class="lead">Un’unica applicazione per gestire i servizi di trasporto AUSER: dalla prenotazione all’incasso.</p>
+            <ul class="feature-list">
+                <li><strong>Organizzare</strong> i servizi del giorno e quelli futuri</li>
+                <li><strong>Assegnare</strong> operatori e mezzi</li>
+                <li><strong>Consultare</strong> calendari, elenchi e report</li>
+                <li><strong>Gestire</strong> soci, operatori, mezzi e tratte fuori Asti</li>
+            </ul>
+        </section>
+
+        <!-- 3. Login -->
+        <section class="slide slide-shot" data-title="Accesso">
+            <div class="slide-text">
+                <h2>1. Accesso sicuro</h2>
+                <p>All’avvio l’app chiede email e password.</p>
+                <ul>
+                    <li>Ogni utente ha i propri permessi</li>
+                    <li>Si può cambiare utente dalla home</li>
+                    <li>Non serve configurare nulla sul PC</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/login.png" alt="Schermata di accesso AUSER">
+                <figcaption>Schermata di login</figcaption>
+            </figure>
+        </section>
+
+        <!-- 4. Home -->
+        <section class="slide slide-shot" data-title="Home">
+            <div class="slide-text">
+                <h2>2. La home</h2>
+                <p>Dopo il login vedi subito le attività della giornata.</p>
+                <ul>
+                    <li>Servizi del giorno</li>
+                    <li>Prossimi servizi</li>
+                    <li>Servizi inseriti oggi</li>
+                    <li>Tessere da fare</li>
+                    <li>Menu a destra per tutte le funzioni</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/home.png" alt="Home Gestione Operativa">
+                <figcaption>Schermata principale</figcaption>
+            </figure>
+        </section>
+
+        <!-- 5. Nuovo servizio -->
+        <section class="slide slide-shot" data-title="Nuovo servizio">
+            <div class="slide-text">
+                <h2>3. Nuovo servizio</h2>
+                <p>Crei un trasporto in pochi passaggi:</p>
+                <ol>
+                    <li>Cerchi il socio trasportato</li>
+                    <li>Compili prelievo e destinazione</li>
+                    <li>Scegli operatore e mezzo</li>
+                    <li>Imposti pagamento e salvi</li>
+                </ol>
+                <p class="tip">Se il mezzo è già usato lo stesso giorno, l’app te lo segnala.</p>
+            </div>
+            <figure class="shot">
+                <img src="videate/nuovo-servizio.png" alt="Form Nuovo Servizio">
+                <figcaption>Inserimento nuovo servizio</figcaption>
+            </figure>
+        </section>
+
+        <!-- 6. Calendario -->
+        <section class="slide slide-shot" data-title="Calendario">
+            <div class="slide-text">
+                <h2>4. Calendario servizi</h2>
+                <p>Vedi i servizi sul calendario:</p>
+                <ul>
+                    <li>Vista mese, settimana o giorno</li>
+                    <li>Click sul servizio per i dettagli</li>
+                    <li>Utile per pianificare la settimana</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/calendario.png" alt="Calendario servizi">
+                <figcaption>Calendario mensile</figcaption>
+            </figure>
+        </section>
+
+        <!-- 7. Elenco servizi -->
+        <section class="slide slide-shot" data-title="Elenco servizi">
+            <div class="slide-text">
+                <h2>5. Elenco e ricerca</h2>
+                <p>Trovi i servizi già registrati:</p>
+                <ul>
+                    <li>Filtri per anno e stato</li>
+                    <li>Ricerca per socio, date, operatore…</li>
+                    <li>Azioni: modifica, completa, stampa</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/elenco-servizi.png" alt="Elenco servizi">
+                <figcaption>Elenco servizi con filtri</figcaption>
+            </figure>
+        </section>
+
+        <!-- 8. Elenco soci -->
+        <section class="slide slide-shot" data-title="Elenco soci">
+            <div class="slide-text">
+                <h2>6. Elenco soci</h2>
+                <p>Gestisci i soci dell’associazione:</p>
+                <ul>
+                    <li>Ricerca e filtri (anche tessere scadute)</li>
+                    <li>Nuovo socio</li>
+                    <li>Apri anagrafica o servizi del socio</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/elenco-soci.png" alt="Elenco soci">
+                <figcaption>Elenco soci</figcaption>
+            </figure>
+        </section>
+
+        <!-- 9. Anagrafica -->
+        <section class="slide slide-shot" data-title="Anagrafica socio">
+            <div class="slide-text">
+                <h2>7. Anagrafica socio</h2>
+                <p>Scheda completa del socio:</p>
+                <ul>
+                    <li>Dati anagrafici e residenza</li>
+                    <li>Ruoli (operatore, autista…)</li>
+                    <li>Tesseramenti</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/anagrafica-soci.png" alt="Anagrafica socio">
+                <figcaption>Dettaglio anagrafica</figcaption>
+            </figure>
+        </section>
+
+        <!-- 10. Operatori -->
+        <section class="slide slide-shot" data-title="Operatori">
+            <div class="slide-text">
+                <h2>8. Elenco operatori</h2>
+                <p>Chi guida i servizi:</p>
+                <ul>
+                    <li>Anagrafica operatore</li>
+                    <li>Servizi assegnati</li>
+                    <li>Chilometraggio</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/elenco-operatori.png" alt="Elenco operatori">
+                <figcaption>Elenco operatori</figcaption>
+            </figure>
+        </section>
+
+        <!-- 11. Mezzi -->
+        <section class="slide slide-shot" data-title="Mezzi">
+            <div class="slide-text">
+                <h2>9. Elenco mezzi</h2>
+                <p>I veicoli dell’associazione:</p>
+                <ul>
+                    <li>Marca, modello, targa</li>
+                    <li>Scadenze ZTL, assicurazione, bollo</li>
+                    <li>Avvisi se una scadenza è passata</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/elenco-mezzi.png" alt="Elenco mezzi">
+                <figcaption>Elenco mezzi</figcaption>
+            </figure>
+        </section>
+
+        <!-- 12. Tratte -->
+        <section class="slide slide-shot" data-title="Tratte fuori Asti">
+            <div class="slide-text">
+                <h2>10. Tratte fuori Asti</h2>
+                <p>Costi per destinazioni lontane:</p>
+                <ul>
+                    <li>Km, tariffa e pedaggio</li>
+                    <li>Totale calcolato automaticamente</li>
+                    <li>Si collega al nuovo servizio</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/tratte-fuori-asti.png" alt="Tratte fuori Asti">
+                <figcaption>Tabella costi tratte</figcaption>
+            </figure>
+        </section>
+
+        <!-- 13. Report giorno -->
+        <section class="slide slide-shot" data-title="Report del giorno">
+            <div class="slide-text">
+                <h2>11. Report del giorno</h2>
+                <p>Elenco stampabile dei servizi di una data.</p>
+                <ul>
+                    <li>Cambia giorno con le frecce</li>
+                    <li>Pulsante STAMPA</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/report-giornaliero.png" alt="Report giornaliero">
+                <figcaption>Servizi del giorno</figcaption>
+            </figure>
+        </section>
+
+        <!-- 14. Report settimana -->
+        <section class="slide slide-shot" data-title="Report settimanale">
+            <div class="slide-text">
+                <h2>12. Report settimanale</h2>
+                <p>Panoramica della settimana:</p>
+                <ul>
+                    <li>Settimana precedente / corrente / successiva</li>
+                    <li>Vista per giorni</li>
+                    <li>Stampa del report</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/report-settimanale.png" alt="Report settimanale">
+                <figcaption>Report settimanale</figcaption>
+            </figure>
+        </section>
+
+        <!-- 15. Incassi selezione -->
+        <section class="slide slide-shot" data-title="Incassi giornalieri">
+            <div class="slide-text">
+                <h2>13. Incassi giornalieri</h2>
+                <p>Scegli la data e visualizzi gli incassi.</p>
+                <ul>
+                    <li>Selezione data</li>
+                    <li>Poi apri il riepilogo</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/incassi-giornalieri.png" alt="Selezione data incassi">
+                <figcaption>Scelta data incassi</figcaption>
+            </figure>
+        </section>
+
+        <!-- 16. Riepilogo incassi -->
+        <section class="slide slide-shot" data-title="Riepilogo incassi">
+            <div class="slide-text">
+                <h2>14. Riepilogo incassi</h2>
+                <p>Servizi incassati in una giornata:</p>
+                <ul>
+                    <li>Elenco dettagliato</li>
+                    <li>Totale della giornata</li>
+                    <li>Stampa</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/riepilogo-incassi.png" alt="Riepilogo incassi">
+                <figcaption>Riepilogo servizi incassati</figcaption>
+            </figure>
+        </section>
+
+        <!-- 17. Chilometri -->
+        <section class="slide slide-shot" data-title="Chilometri">
+            <div class="slide-text">
+                <h2>15. Chilometri</h2>
+                <p>Riepilogo km percorsi per operatore:</p>
+                <ul>
+                    <li>Si apre da Elenco operatori</li>
+                    <li>Filtro per mese e anno</li>
+                    <li>Stampa</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/report-chilometri.png" alt="Report chilometri">
+                <figcaption>Riepilogo chilometri</figcaption>
+            </figure>
+        </section>
+
+        <!-- 18. Riepilogo pagamenti -->
+        <section class="slide slide-shot" data-title="Riepilogo pagamenti">
+            <div class="slide-text">
+                <h2>16. Riepilogo pagamenti</h2>
+                <p>Per gli amministratori:</p>
+                <ul>
+                    <li>Filtri per anno e stato</li>
+                    <li>Totali eseguiti / incassati / da incassare</li>
+                    <li>Conteggi servizi gratis</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/riepilogo-pagamenti.png" alt="Riepilogo pagamenti">
+                <figcaption>Riepilogo pagamenti (admin)</figcaption>
+            </figure>
+        </section>
+
+        <!-- 19. Impostazioni -->
+        <section class="slide slide-shot" data-title="Impostazioni">
+            <div class="slide-text">
+                <h2>17. Impostazioni</h2>
+                <p>Valori di configurazione (admin):</p>
+                <ul>
+                    <li>Costo al km</li>
+                    <li>Tariffe</li>
+                    <li>Altri parametri dell’app</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/impostazioni.png" alt="Impostazioni">
+                <figcaption>Impostazioni</figcaption>
+            </figure>
+        </section>
+
+        <!-- 20. Utenti -->
+        <section class="slide slide-shot" data-title="Utenti">
+            <div class="slide-text">
+                <h2>18. Gestione utenti</h2>
+                <p>Chi può usare l’app (admin):</p>
+                <ul>
+                    <li>Crea nuovi accessi</li>
+                    <li>Permessi Admin / Programma / Calendario</li>
+                    <li>Modifica password</li>
+                </ul>
+            </div>
+            <figure class="shot">
+                <img src="videate/utenti.png" alt="Gestione utenti">
+                <figcaption>Gestione utenti</figcaption>
+            </figure>
+        </section>
+
+        <!-- 21. Come iniziare -->
+        <section class="slide" data-title="Come iniziare">
+            <h2>Come iniziare</h2>
+            <ol class="steps">
+                <li><strong>Installa</strong> l’applicazione sul PC</li>
+                <li><strong>Apri</strong> AUSER Gestione Operativa</li>
+                <li><strong>Accedi</strong> con email e password</li>
+                <li><strong>Lavora</strong> dalla home e dal menu a destra</li>
+            </ol>
+            <p class="lead end-note">Per cambiare persona: usa <strong>CAMBIA UTENTE</strong> nella sidebar.</p>
+        </section>
+
+        <!-- 22. Fine -->
+        <section class="slide slide-cover slide-end" data-title="Fine">
+            <div class="cover-mark">a</div>
+            <p class="cover-org">auser Asti</p>
+            <h1>Grazie</h1>
+            <p class="cover-sub">Domande?</p>
+        </section>
+    </main>
+
+    <nav class="preso-nav" aria-label="Navigazione presentazione">
+        <button type="button" id="btn-prev" class="nav-btn">← Indietro</button>
+        <button type="button" id="btn-next" class="nav-btn nav-btn-primary">Avanti →</button>
+    </nav>
+
+    <script src="presentazione.js"></script>
+</body>
+</html>

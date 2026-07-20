@@ -29,7 +29,6 @@ body {
     flex-wrap: wrap;
 }
 
-.ns-header-left,
 .ns-header-right {
     display: flex;
     gap: 10px;
@@ -51,15 +50,6 @@ body {
     border: none;
     border-radius: 4px;
     cursor: pointer;
-}
-
-.btn-chiudi {
-    background-color: #e67e22;
-    color: #fff;
-}
-
-.btn-chiudi:hover {
-    background-color: #d35400;
 }
 
 .btn-annulla {
@@ -128,6 +118,13 @@ body {
     font-weight: bold;
     color: #2d7a32;
     margin-bottom: 0;
+}
+
+.ns-section-title-hint {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #5a7a5c;
+    margin-left: 4px;
 }
 
 .ns-section-header {
@@ -494,9 +491,91 @@ body {
     align-self: start;
 }
 
+.ns-pagamento-azioni-destra {
+    grid-column: 4 / -1;
+    grid-row: 1;
+    display: flex;
+    justify-content: flex-end;
+    align-items: start;
+    min-width: 0;
+}
+
+.ns-btn-tratta-fuori-asti {
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #0d47a1;
+    background-color: #e3f2fd;
+    border: 1px solid #64b5f6;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s ease;
+}
+
+.ns-btn-tratta-fuori-asti:hover {
+    background-color: #bbdefb;
+}
+
+.ns-btn-tratta-fuori-asti:active {
+    background-color: #90caf9;
+}
+
 .ns-pagamento-layout .ns-grid-pagamento {
     grid-column: 1 / -1;
     grid-row: 2;
+}
+
+.ns-tratta-selezionata {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: #e3f2fd;
+    border: 1px solid #64b5f6;
+    border-radius: 6px;
+}
+
+.ns-tratta-selezionata-titolo {
+    font-size: 12px;
+    font-weight: 800;
+    color: #0d47a1;
+    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+}
+
+.ns-tratta-selezionata-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 6px 10px;
+}
+
+.ns-tratta-campo {
+    min-width: 0;
+}
+
+.ns-tratta-campo-label {
+    display: block;
+    font-size: 9px;
+    font-weight: 700;
+    color: #546e7a;
+    margin-bottom: 1px;
+}
+
+.ns-tratta-campo-val {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1565c0;
+    word-break: break-word;
+}
+
+.ns-tratta-note {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #37474f;
+    line-height: 1.35;
 }
 
 .ns-btn-importo {
@@ -552,6 +631,77 @@ body {
 
 .ns-field-dotazioni .ns-input {
     background-color: #fafafa;
+}
+
+.mod-mezzo-dettagli-row {
+    margin-top: 10px;
+}
+
+.mod-mezzo-dettagli-row .ns-field label {
+    font-size: 10px;
+}
+
+.mod-mezzo-dettagli-row .ns-input,
+.mod-mezzo-dettagli-row .ns-textarea {
+    font-size: 11px;
+    padding: 5px 8px;
+}
+
+.ns-grid-mezzo-dettagli {
+    grid-template-columns: 98px 112px minmax(0, 1fr);
+    gap: 8px 10px;
+    align-items: end;
+}
+
+.mod-field-scadenza-ztl {
+    max-width: 98px;
+}
+
+.mod-field-scadenza-assic {
+    max-width: 112px;
+}
+
+.mod-field-scadenza.mod-scadenza-prossima .mod-input-scadenza {
+    background-color: #fff9c4;
+}
+
+.mod-field-scadenza.mod-scadenza-scaduta .mod-input-scadenza {
+    background-color: #ffcdd2;
+}
+
+.ns-field-note-mezzo-compact {
+    margin-top: 0;
+    width: auto;
+    min-width: 0;
+}
+
+.ns-field-note-mezzo-compact .ns-label-nota-aggiuntive {
+    gap: 4px;
+    margin-bottom: 5px;
+}
+
+.ns-field-note-mezzo-compact .ns-btn-icona-modifica {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+}
+
+.ns-field-note-mezzo-compact .ns-textarea-note-mezzo-riga {
+    min-height: 0;
+    height: 29px;
+    line-height: 1.2;
+    padding: 5px 8px;
+    resize: none;
+    overflow: hidden;
+    white-space: nowrap;
+    background-color: #fafafa;
+}
+
+.ns-field-note-mezzo-compact .ns-textarea-note-mezzo-riga.ns-nota-aggiuntiva-modifica {
+    height: auto;
+    min-height: 29px;
+    white-space: pre-wrap;
+    overflow: auto;
 }
 
 .ns-field-note-mezzo {
@@ -743,8 +893,18 @@ body {
         grid-row: 2;
     }
 
+    .ns-pagamento-azioni-destra {
+        grid-column: 2;
+        grid-row: 2;
+        justify-content: flex-end;
+    }
+
     .ns-pagamento-layout .ns-grid-pagamento {
         grid-row: 3;
+    }
+
+    .ns-pagamento-layout .ns-tratta-selezionata {
+        grid-row: 4;
     }
 
     .ns-field-data-bonifico,
@@ -755,6 +915,14 @@ body {
 
     .ns-field-dotazioni {
         grid-column: 1 / -1;
+    }
+
+    .ns-grid-mezzo-dettagli {
+        grid-template-columns: 98px 112px minmax(0, 1fr);
+    }
+
+    .mod-field-note-mezzo {
+        grid-column: auto;
     }
 
     .ns-field.span-4 {
@@ -823,8 +991,22 @@ body {
         grid-row: 2;
     }
 
-    .ns-pagamento-layout .ns-grid-pagamento {
+    .ns-pagamento-azioni-destra {
+        grid-column: 1;
         grid-row: 3;
+        justify-content: stretch;
+    }
+
+    .ns-pagamento-azioni-destra .ns-btn-tratta-fuori-asti {
+        width: 100%;
+    }
+
+    .ns-pagamento-layout .ns-grid-pagamento {
+        grid-row: 4;
+    }
+
+    .ns-pagamento-layout .ns-tratta-selezionata {
+        grid-row: 5;
     }
 
     .ns-field.span-2,
@@ -863,7 +1045,7 @@ body {
 .ns-dialog-overlay {
     position: fixed;
     inset: 0;
-    z-index: 1000;
+    z-index: 3200;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -893,6 +1075,7 @@ body {
     color: #222;
     text-align: center;
     line-height: 1.35;
+    white-space: pre-line;
 }
 
 .ns-dialog-actions {
@@ -929,4 +1112,67 @@ body {
 
 .ns-dialog-btn-no:hover {
     background-color: #e8e8e8;
+}
+
+.ns-dialog-btn-arrivo {
+    background-color: #1565c0;
+    border-color: #1565c0;
+    color: #fff;
+}
+
+.ns-dialog-btn-arrivo:hover {
+    background-color: #0d47a1;
+}
+
+.ns-dialog-titolo {
+    margin: 0 0 8px;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #222;
+    text-align: center;
+}
+
+.ns-dialog-sottotitolo {
+    margin: 0 0 14px;
+    font-size: 0.95rem;
+    color: #444;
+    text-align: center;
+    line-height: 1.35;
+}
+
+.ns-dialog-mezzo-occupato {
+    width: min(100%, 780px);
+}
+
+.ns-mezzo-occupato-tabella-wrap {
+    max-height: 280px;
+    overflow: auto;
+    margin-bottom: 16px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+}
+
+.ns-mezzo-occupato-tabella {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.ns-mezzo-occupato-tabella th,
+.ns-mezzo-occupato-tabella td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.ns-mezzo-occupato-tabella th {
+    background: #f5f5f5;
+    font-weight: 600;
+    color: #333;
+    position: sticky;
+    top: 0;
+}
+
+.ns-mezzo-occupato-tabella tbody tr:last-child td {
+    border-bottom: none;
 }

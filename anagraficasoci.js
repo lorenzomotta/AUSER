@@ -172,6 +172,33 @@ function setDisponibilitaCheckboxes(values) {
     const centralista = document.getElementById('field-disp-centralista');
     if (autista) autista.checked = set.has('AUTISTA');
     if (centralista) centralista.checked = set.has('CENTRALISTA');
+    syncOperatoreDisponibilitaFlags();
+}
+
+/** Attivo, Autista e Centralista attivi solo se Operatore è spuntato (in modifica). */
+function syncOperatoreDisponibilitaFlags() {
+    const operatore = document.getElementById('field-operatore');
+    const attivo = document.getElementById('field-attivo');
+    const autista = document.getElementById('field-disp-autista');
+    const centralista = document.getElementById('field-disp-centralista');
+    if (!operatore || !attivo || !autista || !centralista) return;
+
+    const isOperatore = operatore.checked;
+    const flagsEnabled = isAnagraficaEditMode && isOperatore;
+
+    if (!isOperatore) {
+        attivo.checked = false;
+        autista.checked = false;
+        centralista.checked = false;
+    }
+
+    attivo.disabled = !flagsEnabled;
+    autista.disabled = !flagsEnabled;
+    centralista.disabled = !flagsEnabled;
+
+    attivo.closest('.flag-item')?.classList.toggle('flag-item-disabled', !flagsEnabled);
+    autista.closest('.flag-item')?.classList.toggle('flag-item-disabled', !flagsEnabled);
+    centralista.closest('.flag-item')?.classList.toggle('flag-item-disabled', !flagsEnabled);
 }
 
 function normalizeSesso(value) {
@@ -422,6 +449,8 @@ function setAnagraficaEditMode(editing) {
         const el = document.getElementById(id);
         if (el) el.disabled = !editing;
     });
+
+    syncOperatoreDisponibilitaFlags();
 
     const btnModifica = document.getElementById('btn-modifica-anagrafica');
     const btnSalva = document.getElementById('btn-salva-anagrafica');
@@ -913,6 +942,8 @@ async function saveTesseramento(e) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    document.getElementById('field-operatore')?.addEventListener('change', syncOperatoreDisponibilitaFlags);
+
     document.getElementById('tess-anno')?.addEventListener('input', (e) => {
         const anno = e.target.value;
         document.getElementById('tess-scadenza').value = scadenzaFromAnno(anno);

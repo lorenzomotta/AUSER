@@ -132,6 +132,30 @@ body {
     margin: 10px 0;
 }
 
+.sidebar-user {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 4px;
+}
+
+.sidebar-user-label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.9);
+    text-align: center;
+    word-break: break-word;
+}
+
+.btn-sidebar-logout {
+    background-color: #546e7a;
+    color: #fff;
+}
+
+.btn-sidebar-logout:hover {
+    background-color: #37474f;
+}
+
 /* Main Wrapper - contiene header, content e footer */
 .main-wrapper {
     flex: 1;
@@ -151,14 +175,26 @@ body {
     position: relative;
 }
 
-.btn-close-app-header {
+.header-app-actions {
     position: absolute;
     top: 15px;
     left: 20px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-close-app-header,
+.btn-impostazioni-header,
+.btn-utenti-header {
+    position: static;
+    top: auto;
+    left: auto;
     right: auto;
-    background-color: #dc3545;
-    color: white;
-    border: 2px solid white;
+    background-color: #2e7d32;
+    color: #fff;
+    border: 2px solid #fff;
     border-radius: 4px;
     padding: 8px 12px;
     cursor: pointer;
@@ -169,14 +205,21 @@ body {
     z-index: 10;
 }
 
-.btn-close-app-header:hover {
-    background-color: #c82333;
+.btn-close-app-header:hover,
+.btn-impostazioni-header:hover,
+.btn-utenti-header:hover {
+    background-color: #1b5e20;
+    color: #fff;
     transform: scale(1.05);
 }
 
-.btn-close-app-header svg {
+.btn-close-app-header svg,
+.btn-impostazioni-header svg,
+.btn-utenti-header svg {
     width: 20px;
     height: 20px;
+    stroke: #fff;
+    color: #fff;
 }
 
 .date-info {
@@ -291,23 +334,31 @@ body {
     color: #333;
 }
 
-/* PROSSIMI SERVIZI — layout compatto, DATA / O.S.C. / O.A.D. sulla stessa riga */
-#prossimi-servizi {
+/* SERVIZI DEL GIORNO, PROSSIMI SERVIZI e SERVIZI INSERITI OGGI — layout compatto condiviso */
+#servizi-giorno,
+#prossimi-servizi,
+#servizi-inseriti-oggi {
     padding: 6px;
 }
 
-#prossimi-servizi .service-entry {
+#servizi-giorno .service-entry,
+#prossimi-servizi .service-entry,
+#servizi-inseriti-oggi .service-entry {
     padding: 4px 6px;
     margin-bottom: 6px;
 }
 
-#prossimi-servizi .service-header {
+#servizi-giorno .service-header,
+#prossimi-servizi .service-header,
+#servizi-inseriti-oggi .service-header {
     margin-bottom: 2px;
     gap: 6px;
     align-items: center;
 }
 
-#prossimi-servizi .service-id {
+#servizi-giorno .service-id,
+#prossimi-servizi .service-id,
+#servizi-inseriti-oggi .service-id {
     padding: 2px 6px;
     font-size: 11px;
     height: 24px;
@@ -315,60 +366,92 @@ body {
     width: 44px;
 }
 
-#prossimi-servizi .service-row {
+#servizi-giorno .service-row,
+#prossimi-servizi .service-row,
+#servizi-inseriti-oggi .service-row {
     margin-bottom: 2px;
     gap: 4px;
 }
 
-#prossimi-servizi .service-row:has(.service-data-field) {
+#servizi-giorno .service-row:has(.service-data-field),
+#prossimi-servizi .service-row:has(.service-data-field),
+#servizi-inseriti-oggi .service-row:has(.service-data-field) {
     flex-wrap: nowrap;
     align-items: center;
 }
 
+#servizi-giorno .service-field-inline,
+#servizi-giorno .service-nominativo,
+#servizi-giorno .service-data-field,
 #prossimi-servizi .service-field-inline,
 #prossimi-servizi .service-nominativo,
-#prossimi-servizi .service-data-field {
+#prossimi-servizi .service-data-field,
+#servizi-inseriti-oggi .service-field-inline,
+#servizi-inseriti-oggi .service-nominativo,
+#servizi-inseriti-oggi .service-data-field {
     gap: 4px;
 }
 
+#servizi-giorno .service-field-inline label,
+#servizi-giorno .service-data-field label,
+#servizi-giorno .service-nominativo label,
 #prossimi-servizi .service-field-inline label,
 #prossimi-servizi .service-data-field label,
-#prossimi-servizi .service-nominativo label {
+#prossimi-servizi .service-nominativo label,
+#servizi-inseriti-oggi .service-field-inline label,
+#servizi-inseriti-oggi .service-data-field label,
+#servizi-inseriti-oggi .service-nominativo label {
     font-size: 11px;
 }
 
+#servizi-giorno .service-field-inline input,
+#servizi-giorno .service-date-input,
 #prossimi-servizi .service-field-inline input,
-#prossimi-servizi .service-date-input {
+#prossimi-servizi .service-date-input,
+#servizi-inseriti-oggi .service-field-inline input,
+#servizi-inseriti-oggi .service-date-input {
     padding: 2px 4px;
     font-size: 11px;
     line-height: 1.2;
 }
 
-#prossimi-servizi .service-date-input {
+#servizi-giorno .service-date-input,
+#prossimi-servizi .service-date-input,
+#servizi-inseriti-oggi .service-date-input {
     width: 72px;
 }
 
-#prossimi-servizi .service-ora-sotto-casa {
+#servizi-giorno .service-ora-sotto-casa,
+#prossimi-servizi .service-ora-sotto-casa,
+#servizi-inseriti-oggi .service-ora-sotto-casa {
     width: auto;
     flex: 0 0 auto;
 }
 
-#prossimi-servizi .service-ora-sotto-casa input {
+#servizi-giorno .service-ora-sotto-casa input,
+#prossimi-servizi .service-ora-sotto-casa input,
+#servizi-inseriti-oggi .service-ora-sotto-casa input {
     width: 40px;
 }
 
-#prossimi-servizi .service-row .service-field-inline.service-ora-destinazione {
+#servizi-giorno .service-row .service-field-inline.service-ora-destinazione,
+#prossimi-servizi .service-row .service-field-inline.service-ora-destinazione,
+#servizi-inseriti-oggi .service-row .service-field-inline.service-ora-destinazione {
     margin-left: 0 !important;
     max-width: none !important;
     flex: 0 0 auto !important;
     gap: 4px !important;
 }
 
-#prossimi-servizi .service-row .service-field-inline.service-ora-destinazione label {
+#servizi-giorno .service-row .service-field-inline.service-ora-destinazione label,
+#prossimi-servizi .service-row .service-field-inline.service-ora-destinazione label,
+#servizi-inseriti-oggi .service-row .service-field-inline.service-ora-destinazione label {
     font-size: 11px !important;
 }
 
-#prossimi-servizi .service-row .service-field-inline.service-ora-destinazione input {
+#servizi-giorno .service-row .service-field-inline.service-ora-destinazione input,
+#prossimi-servizi .service-row .service-field-inline.service-ora-destinazione input,
+#servizi-inseriti-oggi .service-row .service-field-inline.service-ora-destinazione input {
     width: 48px !important;
     min-width: 40px !important;
     max-width: 56px !important;
@@ -376,14 +459,18 @@ body {
     font-size: 11px !important;
 }
 
-#prossimi-servizi .service-field-full {
+#servizi-giorno .service-field-full,
+#prossimi-servizi .service-field-full,
+#servizi-inseriti-oggi .service-field-full {
     margin-bottom: 2px;
     display: flex;
     align-items: center;
     gap: 4px;
 }
 
-#prossimi-servizi .service-field-full label {
+#servizi-giorno .service-field-full label,
+#prossimi-servizi .service-field-full label,
+#servizi-inseriti-oggi .service-field-full label {
     display: inline;
     margin-bottom: 0;
     font-size: 11px;
@@ -391,22 +478,55 @@ body {
     flex-shrink: 0;
 }
 
-#prossimi-servizi .service-field-full input {
+#servizi-giorno .service-field-full input,
+#prossimi-servizi .service-field-full input,
+#servizi-inseriti-oggi .service-field-full input {
     padding: 2px 4px;
     font-size: 11px;
     line-height: 1.2;
 }
 
-#prossimi-servizi .service-buttons {
+#servizi-giorno .service-buttons,
+#prossimi-servizi .service-buttons,
+#servizi-inseriti-oggi .service-buttons {
     margin-top: 3px;
     gap: 4px;
 }
 
-#prossimi-servizi .btn-stampa,
-#prossimi-servizi .btn-modifica,
-#prossimi-servizi .btn-completa {
-    padding: 4px 8px;
-    font-size: 11px;
+#servizi-giorno .service-buttons .btn-stampa,
+#servizi-giorno .service-buttons .btn-modifica,
+#servizi-giorno .service-buttons .btn-completa,
+#prossimi-servizi .service-buttons .btn-stampa,
+#prossimi-servizi .service-buttons .btn-modifica,
+#prossimi-servizi .service-buttons .btn-completa,
+#servizi-inseriti-oggi .service-buttons .btn-stampa,
+#servizi-inseriti-oggi .service-buttons .btn-modifica,
+#servizi-inseriti-oggi .service-buttons .btn-completa {
+    --bs-btn-padding-y: 2px;
+    --bs-btn-padding-x: 6px;
+    --bs-btn-font-size: 10px;
+    --bs-btn-line-height: 1.1;
+    padding: 2px 6px;
+    font-size: 10px;
+    line-height: 1.1;
+    font-weight: 600;
+    min-height: 0;
+    border-radius: 2px;
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/* Servizi del giorno: 3 pulsanti — stessa altezza, larghezza ridotta per stare in riga */
+#servizi-giorno .service-buttons {
+    flex-wrap: nowrap;
+}
+
+#servizi-giorno .service-buttons .btn-stampa,
+#servizi-giorno .service-buttons .btn-modifica,
+#servizi-giorno .service-buttons .btn-completa {
+    --bs-btn-padding-x: 3px;
+    padding: 2px 3px;
+    font-size: 9px;
 }
 
 /* Rettangolo giallo per SERVIZI INSERITI OGGI */

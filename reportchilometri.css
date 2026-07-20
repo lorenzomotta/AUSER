@@ -1,0 +1,263 @@
+/* Riepilogo Chilometri Percorsi — report A4 / popup */
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    color: #111;
+    background: #dcdcdc;
+}
+
+.rc-toolbar {
+    display: grid;
+    grid-template-columns: 110px 1fr 110px;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 14px;
+    background: #cfcfcf;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+
+.rc-title-box {
+    text-align: center;
+    font-weight: 800;
+    font-size: 16px;
+    background: #fff;
+    border: 2px solid #111;
+    padding: 8px 10px;
+}
+
+.rc-btn {
+    border: 1px solid #111;
+    border-radius: 2px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.rc-btn-chiudi {
+    background: #2e7d32;
+    color: #fff;
+}
+
+.rc-btn-stampa {
+    background: #c62828;
+    color: #fff;
+}
+
+.rc-page {
+    max-width: 980px;
+    margin: 12px auto 28px;
+    padding: 10px 14px 20px;
+    background: #d8d8d8;
+}
+
+.rc-print-header h1 {
+    margin: 0 0 10px;
+    text-align: center;
+    font-size: 18px;
+}
+
+.rc-operatore-riga {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.rc-label {
+    background: #fff;
+    border: 1px solid #111;
+    padding: 6px 10px;
+    font-weight: 700;
+}
+
+.rc-operatore-nome {
+    flex: 1;
+    background: #c8e6c9;
+    border: 1px solid #111;
+    padding: 8px 12px;
+    font-size: 18px;
+    font-weight: 800;
+    font-style: italic;
+    text-align: center;
+}
+
+.rc-periodo {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.rc-periodo-box {
+    background: #fff;
+    border: 1px solid #111;
+    padding: 6px 18px;
+    font-weight: 800;
+    font-size: 14px;
+    min-width: 110px;
+    text-align: center;
+}
+
+.rc-nav {
+    border: 1px solid #111;
+    background: #fff;
+    width: 32px;
+    height: 32px;
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.rc-loading,
+.rc-errore {
+    text-align: center;
+    padding: 24px;
+    background: #fff;
+    border: 1px solid #999;
+}
+
+.rc-errore { color: #b71c1c; }
+
+.rc-table-head,
+.rc-riga {
+    display: grid;
+    grid-template-columns: 88px 70px 1.4fr 1fr 1fr 55px;
+    gap: 4px;
+    margin-bottom: 3px;
+}
+
+.rc-table-head {
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+
+.rc-table-head span {
+    background: #fff;
+    border: 1px solid #111;
+    text-align: center;
+    font-weight: 800;
+    padding: 5px 4px;
+}
+
+.rc-gruppo {
+    margin-bottom: 10px;
+}
+
+.rc-gruppo-titolo {
+    display: inline-block;
+    background: #fff;
+    border: 1px solid #111;
+    font-weight: 800;
+    padding: 4px 14px;
+    margin: 6px 0 4px;
+}
+
+.rc-cell {
+    background: #fff;
+    border: 1px solid #111;
+    padding: 4px 5px;
+    text-align: center;
+    min-height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    word-break: break-word;
+}
+
+.rc-cell-left {
+    justify-content: flex-start;
+    text-align: left;
+}
+
+.rc-gruppo-vuoto {
+    font-style: italic;
+    padding: 4px 0 8px 4px;
+    color: #444;
+}
+
+.rc-subtotale {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0 14px;
+    font-weight: 700;
+}
+
+.rc-subtotale-nome {
+    background: #fff;
+    border: 2px solid #111;
+    padding: 4px 12px;
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.rc-box {
+    background: #fff;
+    border: 1px solid #111;
+    padding: 4px 10px;
+    min-width: 36px;
+    text-align: center;
+    font-weight: 800;
+}
+
+.rc-totali {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.rc-totale-riga {
+    display: grid;
+    grid-template-columns: 1.4fr 70px 1.2fr 70px;
+    gap: 8px;
+    align-items: center;
+}
+
+.rc-totale-label {
+    background: #bdbdbd;
+    border: 1px solid #111;
+    padding: 6px 8px;
+    font-weight: 700;
+    font-size: 11px;
+}
+
+@media print {
+    @page {
+        size: A4 portrait;
+        margin: 8mm;
+    }
+
+    html, body {
+        background: #fff;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .no-print { display: none !important; }
+
+    .rc-page {
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        background: #fff;
+    }
+
+    .rc-operatore-nome {
+        background: #c8e6c9 !important;
+    }
+
+    .rc-totale-label {
+        background: #bdbdbd !important;
+    }
+}

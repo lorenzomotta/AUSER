@@ -29,6 +29,8 @@ let currentPage = 1;
 let searchDebounceTimer = null;
 let filterScaduteOnly = false;
 let showArchiviatiOnly = false;
+/** Set di IdSocio che hanno almeno un servizio collegato */
+let idsocioConServizi = new Set();
 
 // Converte un valore campo (stringa, booleano o numero) in testo
 function normalizeFieldValue(value) {
@@ -176,11 +178,150 @@ async function openAnagraficaSocio(idsocio, nominativo) {
     }
 }
 
+// Ripristina il focus sulla finestra Elenco Soci (dopo chiusura servizi filtrati)
+async function focusElencoSociWindow() {
+    if (!isTauri()) return;
+    try {
+        const { WebviewWindow, getCurrent } = await import('@tauri-apps/api/window');
+        const elencoSoci = WebviewWindow.getByLabel('elenco-soci');
+        if (elencoSoci) {
+            await elencoSoci.show();
+            await elencoSoci.setFocus();
+            return;
+        }
+        // Elenco soci aperto nella finestra principale (navigazione da home)
+        const current = getCurrent();
+        if (current && /elencosoci\.html/i.test(window.location.pathname)) {
+            await current.show();
+            await current.setFocus();
+        }
+    } catch (err) {
+        console.warn('Ripristino focus Elenco Soci:', err);
+    }
+}
+
+function buildServiziSocioUrl(idsocio, nominativo) {
+    const params = new URLSearchParams({ idsocio: String(idsocio).trim() });
+    if (nominativo) params.set('nominativo', String(nominativo).trim());
+    return `ELENCOSERVIZI.html?${params.toString()}`;
+}
+
+function labelFinestraServiziSocio(idsocio) {
+    const safeId = String(idsocio).replace(/[^a-zA-Z0-9_-]/g, '_');
+    return `elenco-servizi-socio-${safeId}`;
+}
+
+// Apre l'elenco servizi filtrato sull'IDSOCIO del socio selezionato
+async function openServiziSocio(idsocio, nominativo) {
+    if (!idsocio) {
+        console.error('ID socio non disponibile');
+        return;
+    }
+
+    const url = buildServiziSocioUrl(idsocio, nominativo);
+    const title = nominativo
+        ? `Servizi — ${nominativo}`
+        : `Servizi socio ${idsocio}`;
+
+    if (!isTauri()) {
+        window.open(url, '_blank');
+        return;
+    }
+
+    try {
+        const { WebviewWindow } = await import('@tauri-apps/api/window');
+        const label = labelFinestraServiziSocio(idsocio);
+
+        const existing = WebviewWindow.getByLabel(label);
+        if (existing) {
+            try {
+                await existing.show();
+                await existing.maximize();
+                await existing.setFocus();
+                console.log('Finestra servizi socio già aperta, portata in primo piano:', label);
+                return;
+            } catch (err) {
+                console.warn('Finestra servizi socio non riutilizzabile, ne creo una nuova:', err);
+                try {
+                    await existing.close();
+                } catch (_) { /* etichetta potrebbe essere già libera */ }
+            }
+        }
+
+        console.log('Creazione finestra servizi socio:', label, url);
+
+        let finestraServiziAperta = false;
+
+        const webview = new WebviewWindow(label, {
+            url,
+            title,
+            width: 1400,
+            height: 900,
+            resizable: true,
+            maximized: false,
+            decorations: true,
+            center: true
+        });
+
+        webview.once('tauri://created', async () => {
+            finestraServiziAperta = true;
+            console.log('Finestra servizi socio creata:', label);
+            try {
+                await webview.maximize();
+                await webview.setFocus();
+            } catch (err) {
+                console.warn('maximize/focus servizi socio:', err);
+            }
+        });
+
+        webview.once('tauri://error', (event) => {
+            console.error('Errore creazione finestra servizi socio:', event);
+        });
+
+        webview.once('tauri://destroyed', () => {
+            if (finestraServiziAperta) {
+                focusElencoSociWindow();
+            }
+        });
+    } catch (error) {
+        console.error('Errore apertura servizi socio:', error);
+    }
+}
+
 // Ordina per nominativo (A→Z, regole italiane)
 function sortByNominativo(list) {
     return [...list].sort((a, b) =>
         (a.nominativo || '').localeCompare(b.nominativo || '', 'it', { sensitivity: 'base' })
     );
+}
+
+function socioHaServiziCollegati(idsocio) {
+    const id = String(idsocio || '').trim();
+    if (!id) return false;
+    return idsocioConServizi.has(id);
+}
+
+async function loadIdsocioConServizi() {
+    idsocioConServizi = new Set();
+    if (!isTauri() || !invoke) return;
+
+    try {
+        try {
+            await invoke('init_supabase_from_config');
+        } catch (initErr) {
+            console.warn('Init Supabase (idsocio servizi):', initErr);
+        }
+        const list = await invoke('get_idsocio_con_servizi');
+        if (Array.isArray(list)) {
+            list.forEach((id) => {
+                const trimmed = String(id || '').trim();
+                if (trimmed) idsocioConServizi.add(trimmed);
+            });
+        }
+        console.log(`✓ IdSocio con servizi collegati: ${idsocioConServizi.size}`);
+    } catch (error) {
+        console.error('Errore caricamento IdSocio con servizi:', error);
+    }
 }
 
 // Carica tutti i tesserati e popola la lista
@@ -451,6 +592,12 @@ function createSocioBlock(tesserato) {
         ? '<span class="tessera-scaduta-label">TESSERA SCADUTA!!</span>'
         : '';
 
+    const idsocio = String(tesserato.idsocio || '').trim();
+    const haServizi = socioHaServiziCollegati(idsocio);
+    const serviziBtnAttrs = haServizi
+        ? ''
+        : ' disabled title="Nessun servizio collegato a questo socio"';
+
     const socioBlock = document.createElement('div');
     socioBlock.className = 'socio-block';
     socioBlock.dataset.socioId = tesserato.id || '';
@@ -519,8 +666,8 @@ function createSocioBlock(tesserato) {
                         </div>
                     </div>
                     <div class="socio-form-actions">
-                        <button class="btn btn-anagrafica" data-socio-id="${tesserato.id || ''}" data-idsocio="${escapeHtml(tesserato.idsocio || '')}">ANAGRAFICA</button>
-                        <button class="btn btn-servizi" data-socio-id="${tesserato.id || ''}" data-idsocio="${escapeHtml(tesserato.idsocio || '')}">SERVIZI</button>
+                        <button type="button" class="btn btn-anagrafica" data-socio-id="${tesserato.id || ''}" data-idsocio="${escapeHtml(tesserato.idsocio || '')}">ANAGRAFICA</button>
+                        <button type="button" class="btn btn-servizi" data-socio-id="${tesserato.id || ''}" data-idsocio="${escapeHtml(tesserato.idsocio || '')}"${serviziBtnAttrs}>SERVIZI</button>
                     </div>
                 </div>
             </div>
@@ -686,8 +833,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Inizializza Tauri
     await initTauri();
     await setupSocioAnagraficaListener();
-    
-    // Carica tutti i tesserati e popola la lista
+
+    // Prima gli IdSocio con servizi, poi la lista soci (per abilitare/disabilitare SERVIZI)
+    await loadIdsocioConServizi();
     await loadAllTesserati();
     
     // Event listener per mostrare/nascondere la ricerca
@@ -747,11 +895,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 openAnagraficaSocio(idsocio, nominativo);
             } else if (e.target.classList.contains('btn-servizi')) {
                 e.stopPropagation();
-                const socioId = e.target.getAttribute('data-socio-id');
+                if (e.target.disabled) return;
                 const idsocio = e.target.getAttribute('data-idsocio');
-                console.log('Pulsante SERVIZI cliccato per socio ID:', socioId, 'IDSOCIO:', idsocio);
-                // TODO: Implementare apertura servizi del socio
-                alert(`Apertura servizi per socio ID: ${idsocio} (funzionalità in sviluppo)`);
+                const blocco = e.target.closest('.socio-block');
+                const nominativoEl = blocco?.querySelector('.socio-form-group-nominativo input');
+                const nominativo = nominativoEl?.value?.trim() || '';
+                console.log('Pulsante SERVIZI cliccato, IDSOCIO:', idsocio);
+                openServiziSocio(idsocio, nominativo);
             }
         });
     }

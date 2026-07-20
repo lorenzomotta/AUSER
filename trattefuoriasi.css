@@ -1,0 +1,375 @@
+/* Tratte Fuori Asti — stili modulo */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #c8c6c3;
+    min-height: 100vh;
+}
+
+.tratte-page {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    max-width: 800px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* Header verde */
+.tratte-header {
+    display: grid;
+    grid-template-columns: 130px 1fr 150px;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(180deg, #2e8b3a 0%, #1f6b2a 100%);
+    padding: 8px 10px 10px;
+    color: #fff;
+}
+
+.tratte-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tratte-logo-circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #ff6600;
+    color: #fff;
+    font-weight: bold;
+    font-size: 18px;
+}
+
+.tratte-logo-text {
+    font-size: 14px;
+    font-weight: bold;
+    color: #ff6600;
+    line-height: 1.1;
+}
+
+.tratte-header-center {
+    text-align: center;
+}
+
+.tratte-title {
+    font-size: clamp(15px, 2vw, 22px);
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    margin: 0;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.tratte-header-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+}
+
+.btn-tratte-chiudi {
+    background-color: #ff6600;
+    color: #000;
+    border: 2px solid #cc5200;
+    padding: 6px 18px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 2px;
+    min-width: 100px;
+}
+
+.btn-tratte-chiudi:hover {
+    background-color: #ff8533;
+}
+
+.btn-tratte-modifica {
+    background-color: #fff;
+    color: #c00;
+    border: 2px solid #c00;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 2px;
+    min-width: 100px;
+}
+
+.btn-tratte-modifica:hover {
+    background-color: #fff5f5;
+}
+
+.btn-tratte-modifica.is-saving {
+    background-color: #28a745;
+    color: #fff;
+    border-color: #1e7e34;
+}
+
+/* Avviso giallo */
+.tratte-warning {
+    background-color: #ffc107;
+    color: #c00;
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+    padding: 6px 12px;
+    border-bottom: 2px solid #e0a800;
+}
+
+/* Intestazioni colonne */
+.tratte-colonne-header {
+    display: grid;
+    grid-template-columns: 36px 1.1fr 40px 0.9fr 40px 54px 54px 58px 54px 68px;
+    gap: 3px;
+    padding: 5px 8px 3px;
+    background-color: #2e8b3a;
+    color: #fff;
+    font-size: 10px;
+    font-weight: bold;
+    align-items: end;
+}
+
+.tratte-colonne-header span {
+    text-align: center;
+    line-height: 1.1;
+}
+
+.tratte-colonne-header .col-comune,
+.tratte-colonne-header .col-localita {
+    text-align: left;
+}
+
+/* Lista scrollabile */
+.tratte-lista {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 10px 16px;
+    background-color: #c8c6c3;
+}
+
+.tratte-loading,
+.tratte-empty,
+.tratte-errore {
+    text-align: center;
+    padding: 24px;
+    color: #555;
+    font-size: 15px;
+}
+
+.tratte-errore {
+    color: #c00;
+}
+
+/* Singola tratta — griglia a 2 righe (dati + note) */
+.tratta-entry {
+    display: grid;
+    grid-template-columns: 36px 1.1fr 40px 0.9fr 40px 54px 54px 58px 54px 68px;
+    grid-template-rows: auto auto;
+    gap: 3px;
+    align-items: center;
+    background-color: #f3d4c8;
+    border: 1px solid #d4a894;
+    margin-bottom: 6px;
+    padding: 4px 4px 6px;
+    border-radius: 2px;
+}
+
+.tratta-entry.selected {
+    outline: 3px solid #ff6600;
+    background-color: #ffe8dc;
+}
+
+.tratta-entry .tratta-cell {
+    width: 100%;
+    border: 1px solid #bbb;
+    background: #fff;
+    padding: 2px 3px;
+    font-size: 11px;
+    border-radius: 1px;
+    min-width: 0;
+}
+
+.tratta-entry .tratta-cell[readonly] {
+    background: #fff;
+    color: #222;
+}
+
+.tratta-entry .tratta-id {
+    grid-column: 1;
+    grid-row: 1;
+    text-align: center;
+    font-weight: bold;
+    background: #f8f8f8;
+}
+
+.tratta-entry .tratta-cell[data-field="comune"] { grid-column: 2; grid-row: 1; }
+.tratta-entry .tratta-cell[data-field="provincia"] { grid-column: 3; grid-row: 1; }
+.tratta-entry .tratta-cell[data-field="localita"] { grid-column: 4; grid-row: 1; }
+.tratta-entry .tratta-cell[data-field="km"] { grid-column: 5; grid-row: 1; }
+.tratta-entry .tratta-cell[data-field="costo_km"] { grid-column: 6; grid-row: 1; }
+.tratta-entry .tratta-cell[data-field="costo"] { grid-column: 7; grid-row: 1; }
+.tratta-entry .tratta-cell[data-field="pedaggio"] { grid-column: 8; grid-row: 1; }
+.tratta-entry .tratta-cell[data-field="totale"] { grid-column: 9; grid-row: 1; }
+
+.tratta-entry .btn-seleziona {
+    grid-column: 10;
+    grid-row: 1 / 3;
+    align-self: stretch;
+    background-color: #ffc107;
+    color: #000;
+    border: 1px solid #d39e00;
+    padding: 10px 4px;
+    font-size: 10px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 2px;
+    width: 100%;
+    min-height: 44px;
+}
+
+.tratta-entry .btn-seleziona:hover {
+    background-color: #ffcd39;
+}
+
+.tratta-entry .tratta-note-label {
+    grid-column: 1 / 3;
+    grid-row: 2;
+    color: #ff6600;
+    font-weight: bold;
+    font-style: italic;
+    font-size: 11px;
+    white-space: nowrap;
+    padding-left: 2px;
+}
+
+.tratta-entry .tratta-note-input {
+    grid-column: 3 / 10;
+    grid-row: 2;
+    width: 100%;
+    border: 1px solid #bbb;
+    background: #fff;
+    padding: 3px 6px;
+    font-size: 11px;
+    min-width: 0;
+}
+
+.tratta-entry.in-edit .tratta-cell:not(.tratta-id),
+.tratta-entry.in-edit .tratta-note-input {
+    background-color: #fffff0;
+    border-color: #28a745;
+}
+
+.tratte-status {
+    position: fixed;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 13px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 100;
+}
+
+.tratte-status.visible {
+    opacity: 1;
+}
+
+/* Modale avviso costo al km */
+.tratte-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 16px;
+}
+
+.tratte-modal-overlay[hidden] {
+    display: none;
+}
+
+.tratte-modal {
+    background: #fff;
+    border: 3px solid #c00;
+    border-radius: 6px;
+    padding: 20px 24px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.tratte-modal-message {
+    color: #c00;
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 1.4;
+    margin-bottom: 18px;
+}
+
+.btn-tratte-modal-ok {
+    background-color: #ff6600;
+    color: #000;
+    border: 2px solid #cc5200;
+    padding: 8px 32px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 3px;
+}
+
+.btn-tratte-modal-ok:hover {
+    background-color: #ff8533;
+}
+
+.tratta-entry .tratta-cell[data-field="costo_km"],
+.tratta-entry .tratta-cell[data-field="costo"],
+.tratta-entry .tratta-cell[data-field="totale"] {
+    cursor: not-allowed;
+    background-color: #f3f3f3;
+}
+
+.tratta-entry.in-edit .tratta-cell[data-field="costo_km"],
+.tratta-entry.in-edit .tratta-cell[data-field="costo"],
+.tratta-entry.in-edit .tratta-cell[data-field="totale"] {
+    background-color: #f3f3f3;
+    border-color: #bbb;
+}
+
+@media (max-width: 520px) {
+    .tratte-header {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+
+    .tratte-header-left,
+    .tratte-header-right {
+        justify-content: center;
+        align-items: center;
+    }
+
+    .tratte-header-right {
+        flex-direction: row;
+        justify-content: center;
+    }
+
+    .tratte-colonne-header {
+        display: none;
+    }
+}

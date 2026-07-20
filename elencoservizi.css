@@ -229,6 +229,18 @@ body {
     background-color: transparent;
 }
 
+.es-tratta-riepilogo-section {
+    padding: 4px 1px 6px;
+}
+
+.es-tratta-riepilogo {
+    grid-column: auto;
+    grid-row: auto;
+    margin-top: 4px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
 .form-row {
     display: flex;
     flex-wrap: nowrap;
@@ -366,7 +378,7 @@ body {
 
 .input-button-group {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     gap: 8px;
     width: 100%;
 }
@@ -439,12 +451,17 @@ body {
 .btn-filtra {
     background-color: #28a745;
     color: white;
-    padding: 4px 8px;
+    padding: 0 10px;
     white-space: nowrap;
     width: auto;
     min-width: 50px;
     flex-shrink: 0;
     font-size: 11px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
 }
 
 .btn-filtra:hover {
@@ -503,7 +520,7 @@ body {
 .footer-buttons-left,
 .footer-buttons-right {
     display: flex;
-    gap: 10px;
+    gap: 6px;
     align-items: center;
     flex: 0 0 auto;
 }
@@ -537,6 +554,12 @@ body {
     border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-sizing: border-box;
+    width: auto;
 }
 
 .btn-pagination:hover:not(:disabled) {
@@ -550,8 +573,8 @@ body {
 }
 
 .btn-filtro-stato {
-    padding: 10px 20px;
-    font-size: 14px;
+    padding: 8px 10px;
+    font-size: 12px;
     font-weight: bold;
     background-color: #6c757d;
     color: white;
@@ -560,13 +583,17 @@ body {
     cursor: pointer;
     transition: background-color 0.3s;
     white-space: nowrap;
-    width: 140px;
-    min-width: 140px;
-    flex: 0 0 140px;
-    text-align: center;
+    width: 115px;
+    min-width: 115px;
+    flex: 0 0 115px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-sizing: border-box;
 }
 
-.btn-filtro-stato:hover {
+.btn-filtro-stato:hover:not(:disabled) {
     background-color: #5a6268;
 }
 
@@ -574,8 +601,14 @@ body {
     background-color: #007bff;
 }
 
-.btn-filtro-stato.active:hover {
+.btn-filtro-stato.active:hover:not(:disabled) {
     background-color: #0056b3;
+}
+
+.btn-filtro-stato:disabled {
+    background-color: #aaa;
+    cursor: not-allowed;
+    opacity: 0.65;
 }
 
 .btn-filtro-richiedente {
@@ -592,7 +625,11 @@ body {
     width: 140px;
     min-width: 140px;
     flex: 0 0 140px;
-    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-sizing: border-box;
 }
 
 .btn-filtro-richiedente:hover {
@@ -823,148 +860,6 @@ body {
 
 .btn-ricerca-modal:hover {
     background-color: #0056b3;
-}
-
-/* Modale Modifica Servizio */
-.modal-modifica-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.55);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 2100;
-    padding: 16px;
-}
-
-.modal-modifica-content {
-    background-color: #fff;
-    border-radius: 8px;
-    width: 95%;
-    max-width: 1150px;
-    max-height: 92vh;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
-}
-
-.modal-modifica-header {
-    padding: 16px 20px;
-    border-bottom: 2px solid #ddd;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: #f8f9fa;
-    border-radius: 8px 8px 0 0;
-}
-
-.modal-modifica-header h2 {
-    margin: 0;
-    color: #333;
-    font-size: 20px;
-}
-
-.modal-modifica-body {
-    padding: 18px 20px;
-    overflow-y: auto;
-    flex: 1;
-}
-
-.modifica-form-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 14px 16px;
-}
-
-.modifica-form-group {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.modifica-form-group.span-2 {
-    grid-column: span 2;
-}
-
-.modifica-form-group.span-3 {
-    grid-column: span 3;
-}
-
-.modifica-form-group.span-4 {
-    grid-column: span 4;
-}
-
-.modifica-form-group label {
-    font-size: 11px;
-    font-weight: bold;
-    color: #555;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-}
-
-.modifica-form-group input,
-.modifica-form-group select,
-.modifica-form-group textarea {
-    width: 100%;
-    padding: 7px 9px;
-    font-size: 13px;
-    border: 1px solid #999;
-    border-radius: 4px;
-    font-family: inherit;
-}
-
-.modifica-form-group input[readonly] {
-    background-color: #f0f0f0;
-    color: #555;
-}
-
-.modifica-form-group textarea {
-    min-height: 72px;
-    resize: vertical;
-}
-
-.modal-modifica-footer {
-    padding: 16px 20px;
-    border-top: 2px solid #ddd;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    background-color: #f8f9fa;
-    border-radius: 0 0 8px 8px;
-}
-
-.btn-salva-modal {
-    padding: 10px 22px;
-    font-size: 14px;
-    font-weight: bold;
-    background-color: #28a745;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-.btn-salva-modal:hover {
-    background-color: #218838;
-}
-
-.btn-salva-modal:disabled {
-    opacity: 0.65;
-    cursor: not-allowed;
-}
-
-@media (max-width: 992px) {
-    .modifica-form-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .modifica-form-group.span-3,
-    .modifica-form-group.span-4 {
-        grid-column: span 2;
-    }
 }
 
 @media (max-width: 768px) {

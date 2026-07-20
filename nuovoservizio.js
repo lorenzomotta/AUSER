@@ -1,12 +1,30 @@
 // Nuovo Servizio — form inserimento (salvataggio DB in fase successiva)
+
+import {
+    mergeTrattaInNote,
+    applicaRiepilogoTrattaNelDom,
+    leggiTrattaDalDom,
+    apriFinestraSelezioneTratta,
+    onTrattaFuoriAstiSelezionata,
+    chiediPartenzaOArrivo,
+    compilaCampiLocalitaDaTratta,
+    rimuoviTrattaDalForm,
+    messaggioAvvisoDopoRimozioneTratta
+} from './tratta-riepilogo.js';
+
 let invoke;
 
 let allTesserati = [];
 let allOperatori = [];
 let allAutomezzi = [];
 let allMotivazioni = [];
+let allComuniPrelievo = [];
+let allLuoghiPrelievo = [];
+let allComuniDestinazione = [];
+let allLuoghiDestinazione = [];
 let allRichiedenti = [];
 let allTipiPagamento = [];
+let allStatiServizio = [];
 
 const CAMPI_OBBLIGATORI = [
     { id: 'ns-trasportato', label: 'TRASPORTATO' },
@@ -182,6 +200,10 @@ function deduplicaMotivazioni(lista) {
     });
 
     return uniche.sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
+}
+
+function deduplicaComuni(lista) {
+    return deduplicaMotivazioni(lista);
 }
 
 function isNonArchiviato(tesserato) {
@@ -697,6 +719,123 @@ function setupAutocompleteMotivazione() {
     });
 }
 
+function setupAutocompleteComunePrelievo() {
+    setupAutocompleteDaLista(
+        'ns-comune-prelievo',
+        'ns-comune-prelievo-suggestions',
+        () => allComuniPrelievo
+    );
+}
+
+function setupAutocompleteLuogoPrelievo() {
+    setupAutocompleteDaLista(
+        'ns-luogo-prelievo',
+        'ns-luogo-prelievo-suggestions',
+        () => allLuoghiPrelievo
+    );
+}
+
+function setupAutocompleteComuneDestinazione() {
+    setupAutocompleteDaLista(
+        'ns-comune-destinazione',
+        'ns-comune-destinazione-suggestions',
+        () => allComuniDestinazione
+    );
+}
+
+function setupAutocompleteLuogoDestinazione() {
+    setupAutocompleteDaLista(
+        'ns-luogo-destinazione',
+        'ns-luogo-destinazione-suggestions',
+        () => allLuoghiDestinazione
+    );
+}
+
+/** Autocomplete generico: lista unica, filtro digitando */
+function setupAutocompleteDaLista(inputId, suggestionsId, getLista) {
+    const input = document.getElementById(inputId);
+    const suggestionsDiv = document.getElementById(suggestionsId);
+    if (!input || !suggestionsDiv) return;
+
+    let selectedIndex = -1;
+    let filteredSuggestions = [];
+
+    function renderSuggestions() {
+        suggestionsDiv.innerHTML = '';
+        filteredSuggestions.forEach((valore, index) => {
+            const div = document.createElement('div');
+            div.className = 'autocomplete-suggestion ns-autocomplete-suggestion';
+            div.dataset.index = String(index);
+            div.textContent = valore;
+            div.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                input.value = valore;
+                input.classList.remove('ns-campo-errore');
+                suggestionsDiv.style.display = 'none';
+                filteredSuggestions = [];
+                selectedIndex = -1;
+            });
+            suggestionsDiv.appendChild(div);
+        });
+        suggestionsDiv.style.display = filteredSuggestions.length > 0 ? 'block' : 'none';
+        selectedIndex = -1;
+    }
+
+    function updateSelectedSuggestion() {
+        const suggestions = suggestionsDiv.querySelectorAll('.ns-autocomplete-suggestion');
+        suggestions.forEach((sug, idx) => {
+            sug.classList.toggle('selected', idx === selectedIndex);
+        });
+        if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+            suggestions[selectedIndex].scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    input.addEventListener('input', (e) => {
+        const searchTerm = normalizzaTestoRicerca(e.target.value);
+        if (searchTerm.length === 0) {
+            suggestionsDiv.style.display = 'none';
+            filteredSuggestions = [];
+            return;
+        }
+
+        const lista = Array.isArray(getLista()) ? getLista() : [];
+        filteredSuggestions = deduplicaComuni(
+            lista.filter(c => normalizzaTestoRicerca(c).includes(searchTerm))
+        ).slice(0, 20);
+
+        renderSuggestions();
+    });
+
+    input.addEventListener('blur', () => {
+        setTimeout(() => {
+            suggestionsDiv.style.display = 'none';
+        }, 200);
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (filteredSuggestions.length === 0) return;
+            selectedIndex = Math.min(selectedIndex + 1, filteredSuggestions.length - 1);
+            updateSelectedSuggestion();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedIndex = Math.max(selectedIndex - 1, -1);
+            updateSelectedSuggestion();
+        } else if (e.key === 'Enter' && selectedIndex >= 0) {
+            e.preventDefault();
+            input.value = filteredSuggestions[selectedIndex];
+            input.classList.remove('ns-campo-errore');
+            suggestionsDiv.style.display = 'none';
+            filteredSuggestions = [];
+            selectedIndex = -1;
+        } else if (e.key === 'Escape') {
+            suggestionsDiv.style.display = 'none';
+        }
+    });
+}
+
 function popolaSelectRichiedenti() {
     const select = document.getElementById('ns-richiedente');
     if (!select) return;
@@ -721,6 +860,54 @@ function popolaSelectTipiPagamento() {
         opt.textContent = tipo;
         select.appendChild(opt);
     });
+}
+
+function getStatiServizioOptions() {
+    return allStatiServizio.length ? [...allStatiServizio] : [];
+}
+
+function resolveStatoServizioSelezionato(valoreCorrente = '') {
+    const opzioni = getStatiServizioOptions();
+    const corrente = String(valoreCorrente || '').trim();
+    if (!corrente || !opzioni.length) return opzioni[0] || '';
+    const match = opzioni.find(s => s.toUpperCase() === corrente.toUpperCase());
+    return match || opzioni[0] || '';
+}
+
+/** Stato predefinito per un nuovo servizio: DA ESEGUIRE (da tabella Supabase) */
+function statoDefaultNuovoServizio() {
+    const opzioni = getStatiServizioOptions();
+    if (!opzioni.length) return '';
+    return opzioni.find(s => s.toUpperCase() === 'DA ESEGUIRE')
+        || opzioni[0]
+        || '';
+}
+
+function popolaSelectStatiServizio(valoreSelezionato = '') {
+    const select = document.getElementById('ns-stato-servizio');
+    if (!select) return;
+
+    const opzioni = getStatiServizioOptions();
+    select.innerHTML = '';
+    if (!opzioni.length) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '— Nessuno stato da Supabase —';
+        select.appendChild(opt);
+        return;
+    }
+
+    opzioni.forEach(stato => {
+        const opt = document.createElement('option');
+        opt.value = stato;
+        opt.textContent = stato;
+        select.appendChild(opt);
+    });
+
+    const selezionato = valoreSelezionato
+        ? resolveStatoServizioSelezionato(valoreSelezionato)
+        : statoDefaultNuovoServizio();
+    if (selezionato) select.value = selezionato;
 }
 
 function popolaSelectOperatori() {
@@ -757,6 +944,59 @@ function trovaAutomezzoSelezionato() {
     return allAutomezzi.find(m => normalizzaNumero(m.nr_automezzo) === nr) || null;
 }
 
+function parseDataScadenzaMezzo(dateStr) {
+    if (!dateStr || !String(dateStr).trim()) return null;
+    const s = String(dateStr).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+        const [year, month, day] = s.slice(0, 10).split('-').map(v => parseInt(v, 10));
+        const date = new Date(year, month - 1, day);
+        if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) {
+            return date;
+        }
+        return null;
+    }
+    const parts = s.split('/');
+    if (parts.length !== 3) return null;
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const year = parseInt(parts[2], 10);
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+        return null;
+    }
+    return date;
+}
+
+function classeStatoScadenza(dateStr) {
+    const scadenza = parseDataScadenzaMezzo(dateStr);
+    if (!scadenza) return '';
+    const oggi = new Date();
+    oggi.setHours(0, 0, 0, 0);
+    scadenza.setHours(0, 0, 0, 0);
+    if (scadenza < oggi) return 'mod-scadenza-scaduta';
+    const diffGiorni = (scadenza - oggi) / (1000 * 60 * 60 * 24);
+    if (diffGiorni < 60) return 'mod-scadenza-prossima';
+    return '';
+}
+
+function valoreScadenzaDisplay(valueIso) {
+    if (!valueIso) return '';
+    const s = String(valueIso).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return dataIsoToItaliana(s.slice(0, 10));
+    return s;
+}
+
+function applicaStileScadenzaCampo(id, valueIso) {
+    const input = document.getElementById(id);
+    if (!input) return;
+    const field = input.closest('.mod-field-scadenza');
+    if (!field) return;
+    field.classList.remove('mod-scadenza-prossima', 'mod-scadenza-scaduta');
+    input.value = valoreScadenzaDisplay(valueIso);
+    const classe = classeStatoScadenza(valueIso || input.value);
+    if (classe) field.classList.add(classe);
+}
+
 function aggiornaDettaglioDaMezzo() {
     const automezzo = trovaAutomezzoSelezionato();
     automezzoSelezionatoCorrente = automezzo;
@@ -767,7 +1007,82 @@ function aggiornaDettaglioDaMezzo() {
 
     setValore('ns-dotazioni', automezzo?.dotazione || '');
     setValore('ns-note-mezzo', automezzo?.note_mezzo || '');
+    applicaStileScadenzaCampo('ns-scadenza-ztl', automezzo?.scadenza_ztl || '');
+    applicaStileScadenzaCampo('ns-scadenza-assicurazione', automezzo?.scadenza_assicurazione || '');
     aggiornaStatoPulsanteNoteMezzo();
+}
+
+function escapeHtmlMezzo(text) {
+    return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function chiudiModaleMezzoOccupato() {
+    const overlay = document.getElementById('ns-dialog-mezzo-occupato');
+    if (!overlay) return;
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+}
+
+function mostraModaleMezzoOccupato(lista, mezzo, dataIso) {
+    const overlay = document.getElementById('ns-dialog-mezzo-occupato');
+    const sottotitolo = document.getElementById('ns-dialog-mezzo-occupato-sottotitolo');
+    const tbody = document.getElementById('ns-dialog-mezzo-occupato-body');
+    const btnChiudi = document.getElementById('ns-dialog-mezzo-occupato-chiudi');
+    if (!overlay || !tbody) return;
+
+    const dataIt = dataIsoToItaliana(dataIso) || dataIso;
+    if (sottotitolo) {
+        sottotitolo.textContent =
+            `Il mezzo ${mezzo || ''} è già usato in questi servizi del ${dataIt}:`;
+    }
+
+    tbody.innerHTML = lista.map((s) => {
+        const ora = escapeHtmlMezzo(s.ora || '—');
+        const operatore = escapeHtmlMezzo(s.operatore || '—');
+        const trasportato = escapeHtmlMezzo(s.trasportato || '—');
+        const comuneDest = escapeHtmlMezzo(s.comune_destinazione || '—');
+        const luogoDest = escapeHtmlMezzo(s.luogo_destinazione || '—');
+        return `<tr>
+            <td>${ora}</td>
+            <td>${operatore}</td>
+            <td>${trasportato}</td>
+            <td>${comuneDest}</td>
+            <td>${luogoDest}</td>
+        </tr>`;
+    }).join('');
+
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    btnChiudi?.focus();
+}
+
+async function controllaMezzoGiaUsatoNellaData() {
+    const mezzo = getValore('ns-mezzo');
+    const dataPrelievo = getValore('ns-data-prelievo');
+    if (!mezzo || !dataPrelievo) return;
+    if (!isTauri() || typeof invoke !== 'function') return;
+
+    try {
+        const lista = await invoke('get_servizi_mezzo_nella_data', {
+            mezzo,
+            dataPrelievo,
+            escludiIdServizio: null
+        });
+        if (Array.isArray(lista) && lista.length > 0) {
+            mostraModaleMezzoOccupato(lista, mezzo, dataPrelievo);
+        }
+    } catch (err) {
+        console.warn('Controllo mezzo già usato:', err);
+    }
+}
+
+function setupModaleMezzoOccupato() {
+    document.getElementById('ns-dialog-mezzo-occupato-chiudi')
+        ?.addEventListener('click', chiudiModaleMezzoOccupato);
 }
 
 function aggiornaStatoPulsanteNoteMezzo() {
@@ -866,7 +1181,10 @@ async function toggleModificaNoteMezzo() {
 }
 
 function setupMezzoListener() {
-    document.getElementById('ns-mezzo')?.addEventListener('change', aggiornaDettaglioDaMezzo);
+    document.getElementById('ns-mezzo')?.addEventListener('change', async () => {
+        aggiornaDettaglioDaMezzo();
+        await controllaMezzoGiaUsatoNellaData();
+    });
 }
 
 function assicuraOpzioneSelect(selectId, valore) {
@@ -988,14 +1306,22 @@ function chiediSiNo(messaggio) {
     });
 }
 
+function avvisaSeTrattaRimossa(trattaRimossa) {
+    if (!trattaRimossa) return;
+    mostraAvviso(messaggioAvvisoDopoRimozioneTratta(trattaRimossa)).catch(() => {});
+}
+
 // Pulsanti importo rapido
 function onPagamentoGratis() {
+    avvisaSeTrattaRimossa(rimuoviTrattaDalForm('ns-tratta-fuori-asti'));
     impostaPagamentoEuro(0);
     setValore('ns-stato-incasso', 'GRATIS');
     impostaSelectValore('ns-tipo-pagamento', 'GRATIS');
 }
 
 let pagamentoRapidoInCorso = false;
+/** Evita di cancellare la tratta mentre la stiamo applicando al campo donazione */
+let ignoraCambioPagamentoPerTratta = false;
 
 function attivaCampoDonazionePagamento() {
     const campo = document.getElementById('ns-pagamento');
@@ -1011,6 +1337,9 @@ async function applicaPagamentoConDomande(importo) {
     pagamentoRapidoInCorso = true;
 
     try {
+        // Qualsiasi importo rapido cambia la donazione → togli tratta
+        avvisaSeTrattaRimossa(rimuoviTrattaDalForm('ns-tratta-fuori-asti'));
+
         if (importo != null) {
             impostaPagamentoEuro(importo);
         }
@@ -1047,23 +1376,84 @@ function setupPagamentoQuickButtons() {
     document.getElementById('btn-pagamento-10')?.addEventListener('click', onPagamento10);
     document.getElementById('btn-pagamento-15')?.addEventListener('click', onPagamento15);
     document.getElementById('btn-pagamento-libero')?.addEventListener('click', onPagamentoLibero);
+    document.getElementById('btn-tratta-fuori-asti')?.addEventListener('click', () => {
+        apriFinestraSelezioneTratta();
+    });
 
     const campoPagamento = document.getElementById('ns-pagamento');
     campoPagamento?.addEventListener('focus', preparaCampoPagamentoPerModifica);
-    campoPagamento?.addEventListener('blur', formattaCampoPagamento);
+    campoPagamento?.addEventListener('blur', () => {
+        formattaCampoPagamento();
+    });
+    campoPagamento?.addEventListener('input', () => {
+        if (ignoraCambioPagamentoPerTratta) return;
+        avvisaSeTrattaRimossa(rimuoviTrattaDalForm('ns-tratta-fuori-asti'));
+    });
+    campoPagamento?.addEventListener('change', () => {
+        if (ignoraCambioPagamentoPerTratta) return;
+        avvisaSeTrattaRimossa(rimuoviTrattaDalForm('ns-tratta-fuori-asti'));
+    });
+}
+
+async function applicaTotaleTrattaFuoriAsti(payload) {
+    if (!payload) return;
+    const totaleNum = parseEuroItaliano(payload.totale);
+
+    ignoraCambioPagamentoPerTratta = true;
+    try {
+        impostaPagamentoEuro(totaleNum);
+        attivaCampoDonazionePagamento();
+
+        const dove = await chiediPartenzaOArrivo();
+        const conRuolo = { ...payload, ruolo: dove };
+        applicaRiepilogoTrattaNelDom(conRuolo, { hiddenId: 'ns-tratta-fuori-asti' });
+        if (dove === 'partenza' || dove === 'arrivo') {
+            compilaCampiLocalitaDaTratta(conRuolo, dove, 'ns');
+        }
+    } catch (err) {
+        console.warn('Scelta partenza/arrivo tratta:', err);
+        applicaRiepilogoTrattaNelDom(payload, { hiddenId: 'ns-tratta-fuori-asti' });
+    } finally {
+        window.setTimeout(() => {
+            ignoraCambioPagamentoPerTratta = false;
+        }, 300);
+    }
+}
+
+async function setupListenerTrattaFuoriAsti() {
+    await onTrattaFuoriAstiSelezionata((payload) => {
+        applicaTotaleTrattaFuoriAsti(payload);
+    });
 }
 
 function impostaValoriPredefiniti() {
-    setValore('ns-data-prelievo', oggiIso());
+    const oggi = oggiIso();
+    setValore('ns-data-prelievo', oggi);
+    setValore('ns-ora-arrivo', oggi);
     const richiedenteDefault = allRichiedenti.find(r => String(r).toUpperCase() === 'SOCIO')
         || allRichiedenti[0]
         || '';
     if (richiedenteDefault) {
         setValore('ns-richiedente', richiedenteDefault);
     }
-    setValore('ns-stato-servizio', 'DA ESEGUIRE');
+    setValore('ns-stato-servizio', statoDefaultNuovoServizio());
     setValore('ns-stato-incasso', 'DA INCASSARE');
-    setValore('ns-archivia', 'NO');
+}
+
+/** Quando cambia DATA PRELIEVO, copia lo stesso valore in DATA DESTINAZIONE */
+function setupCopiaDataPrelievoSuDestinazione() {
+    const dataPrelievo = document.getElementById('ns-data-prelievo');
+    const dataDestinazione = document.getElementById('ns-ora-arrivo');
+    if (!dataPrelievo || !dataDestinazione) return;
+
+    dataPrelievo.addEventListener('change', async () => {
+        dataDestinazione.value = dataPrelievo.value;
+        dataDestinazione.classList.remove('ns-campo-errore');
+        // Se un mezzo è già scelto, ricontrolla se è usato in questa nuova data
+        if (getValore('ns-mezzo')) {
+            await controllaMezzoGiaUsatoNellaData();
+        }
+    });
 }
 
 function unisciIndirizzoECivico(indirizzo, civico) {
@@ -1149,8 +1539,8 @@ function raccogliDatiForm() {
         data_bonifico: dataIsoToItaliana(getValore('ns-data-bonifico')),
         data_ricevuta: dataIsoToItaliana(getValore('ns-data-ricevuta')),
         numero_ricevuta: getValore('ns-numero-ricevuta'),
-        note_fine_servizio: document.getElementById('ns-note-fine-servizio')?.value || '',
-        archivia: getValore('ns-archivia') === 'SI' ? 'SI' : 'NO'
+        note_fine_servizio: mergeTrattaInNote('', leggiTrattaDalDom('ns-tratta-fuori-asti')),
+        archivia: 'NO'
     };
 }
 
@@ -1162,13 +1552,64 @@ async function salvaNuovoServizio() {
     formattaCampoPagamento();
 
     const dati = raccogliDatiForm();
-    console.log('Dati nuovo servizio (validati):', dati);
+    const payload = {
+        id: 0,
+        data_prelievo: dati.data_prelievo || null,
+        idsocio: dati.idsocio || null,
+        socio_trasportato: dati.socio_trasportato || null,
+        ora_inizio: dati.ora_inizio || null,
+        comune_prelievo: dati.comune_prelievo || null,
+        luogo_prelievo: dati.luogo_prelievo || null,
+        tipo_servizio: dati.tipo_servizio || null,
+        carrozzina: dati.carrozzina || null,
+        richiedente: dati.richiedente || null,
+        motivazione: dati.motivazione || null,
+        ora_arrivo: dati.ora_arrivo || null,
+        comune_destinazione: dati.comune_destinazione || null,
+        luogo_destinazione: dati.luogo_destinazione || null,
+        pagamento: dati.pagamento || null,
+        stato_incasso: dati.stato_incasso || null,
+        operatore: dati.operatore || null,
+        operatore_2: dati.operatore_2 || null,
+        mezzo: dati.mezzo || null,
+        tempo: dati.tempo || null,
+        km: dati.km || null,
+        km_uscita: null,
+        km_rientro: null,
+        tipo_pagamento: dati.tipo_pagamento || null,
+        data_bonifico: dati.data_bonifico || null,
+        data_ricevuta: dati.data_ricevuta || null,
+        numero_ricevuta: dati.numero_ricevuta || null,
+        stato_servizio: dati.stato_servizio || null,
+        note_prelievo: dati.note_prelievo || null,
+        note_arrivo: dati.note_arrivo || null,
+        note_fine_servizio: dati.note_fine_servizio || null,
+        archivia: dati.archivia || 'NO'
+    };
 
-    // Salvataggio su Supabase verrà implementato in un passo successivo
-    alert(
-        'Campi obbligatori compilati correttamente.\n\n' +
-        'Il salvataggio sul database verrà attivato nella prossima fase di sviluppo.'
-    );
+    const btnSalva = document.getElementById('btn-salva');
+    if (btnSalva) btnSalva.disabled = true;
+
+    try {
+        if (!isTauri() || !invoke) {
+            await mostraAvviso(
+                'Salvataggio disponibile solo nell\'app desktop.\n\n' +
+                'Apri AUSER con Tauri (npm run tauri dev) per salvare sul database.'
+            );
+            return;
+        }
+
+        await invoke('init_supabase_from_config').catch(() => {});
+        const nuovoId = await invoke('create_servizio', { payload });
+        await mostraAvviso(`Servizio n. ${nuovoId} salvato correttamente.`);
+        await chiudiPagina();
+    } catch (error) {
+        console.error('Errore salvataggio nuovo servizio:', error);
+        const msg = error?.message || error || 'Errore sconosciuto';
+        await mostraAvviso('Errore nel salvataggio del servizio:\n\n' + msg);
+    } finally {
+        if (btnSalva) btnSalva.disabled = false;
+    }
 }
 
 function resetForm() {
@@ -1179,6 +1620,7 @@ function resetForm() {
     impostaValoriPredefiniti();
     setValore('ns-idsocio', '');
     aggiornaDettaglioDaMezzo();
+    applicaRiepilogoTrattaNelDom(null, { hiddenId: 'ns-tratta-fuori-asti' });
 }
 
 async function chiudiPagina() {
@@ -1211,12 +1653,17 @@ async function caricaDatiIniziali() {
     if (isTauri() && invoke) {
         try {
             await invoke('init_supabase_from_config').catch(() => {});
-            const [tesserati, automezzi, motivazioni, richiedenti, tipiPagamento] = await Promise.all([
+            const [tesserati, automezzi, motivazioni, localitaAuto, richiedenti, tipiPagamento, statiServizio] = await Promise.all([
                 invoke('get_all_tesserati'),
                 invoke('get_all_automezzi'),
                 invoke('get_motivazioni_servizi').catch(() => []),
+                invoke('get_localita_autocomplete_servizi').catch(() => ({})),
                 invoke('get_all_richiedenti').catch(() => []),
-                invoke('get_all_tipi_pagamento').catch(() => [])
+                invoke('get_all_tipi_pagamento').catch(() => []),
+                invoke('get_all_stati_servizio').catch(err => {
+                    console.warn('Errore caricamento stati servizio da Supabase:', err);
+                    return [];
+                })
             ]);
             allTesserati = Array.isArray(tesserati) ? tesserati : [];
             console.log(`Nuovo servizio: caricati ${allTesserati.length} tesserati da Supabase`);
@@ -1225,6 +1672,14 @@ async function caricaDatiIniziali() {
             allAutomezzi = Array.isArray(automezzi) ? automezzi : [];
             allMotivazioni = deduplicaMotivazioni(motivazioni);
             console.log(`Nuovo servizio: ${allMotivazioni.length} motivazioni caricate da Supabase`);
+            const loc = localitaAuto && typeof localitaAuto === 'object' ? localitaAuto : {};
+            allComuniPrelievo = deduplicaComuni(loc.comuni_prelievo || loc.comuniPrelievo || []);
+            allLuoghiPrelievo = deduplicaComuni(loc.luoghi_prelievo || loc.luoghiPrelievo || []);
+            allComuniDestinazione = deduplicaComuni(loc.comuni_destinazione || loc.comuniDestinazione || []);
+            allLuoghiDestinazione = deduplicaComuni(loc.luoghi_destinazione || loc.luoghiDestinazione || []);
+            console.log(
+                `Nuovo servizio: autocomplete località — comuni_prelievo=${allComuniPrelievo.length}, luoghi_prelievo=${allLuoghiPrelievo.length}, comuni_dest=${allComuniDestinazione.length}, luoghi_dest=${allLuoghiDestinazione.length}`
+            );
             allRichiedenti = Array.isArray(richiedenti)
                 ? richiedenti.filter(r => String(r || '').trim())
                 : [];
@@ -1233,6 +1688,13 @@ async function caricaDatiIniziali() {
                 ? tipiPagamento.filter(t => String(t || '').trim())
                 : [];
             console.log(`Nuovo servizio: ${allTipiPagamento.length} tipi pagamento caricati da Supabase`);
+            allStatiServizio = Array.isArray(statiServizio)
+                ? statiServizio.filter(s => String(s || '').trim())
+                : [];
+            console.log(`Nuovo servizio: ${allStatiServizio.length} stati servizio caricati da Supabase`);
+            if (!allStatiServizio.length) {
+                console.warn('Stati servizio: nessun valore da Supabase (StatoDelServizio_supa).');
+            }
         } catch (error) {
             console.error('Errore caricamento dati:', error);
         }
@@ -1264,6 +1726,7 @@ async function caricaDatiIniziali() {
         ];
         allRichiedenti = ['SOCIO', 'COMUNE', 'ALTRI'];
         allTipiPagamento = ['CONTANTI', 'BONIFICO', 'ASSEGNO'];
+        allStatiServizio = [];
     }
 
     allOperatori = allTesserati.filter(t => {
@@ -1273,10 +1736,15 @@ async function caricaDatiIniziali() {
 
     popolaSelectRichiedenti();
     popolaSelectTipiPagamento();
+    popolaSelectStatiServizio();
     popolaSelectOperatori();
     popolaSelectMezzi();
     setupAutocompleteTrasportato();
     setupAutocompleteMotivazione();
+    setupAutocompleteComunePrelievo();
+    setupAutocompleteLuogoPrelievo();
+    setupAutocompleteComuneDestinazione();
+    setupAutocompleteLuogoDestinazione();
     setupMezzoListener();
     setupPagamentoQuickButtons();
     impostaValoriPredefiniti();
@@ -1287,12 +1755,14 @@ async function caricaDatiIniziali() {
 function setupEventListeners() {
     document.getElementById('btn-salva')?.addEventListener('click', salvaNuovoServizio);
     document.getElementById('btn-annulla')?.addEventListener('click', annulla);
-    document.getElementById('btn-chiudi')?.addEventListener('click', annulla);
 
     document.getElementById('btn-prelievo-da-casa')?.addEventListener('click', compilaPrelievoDaCasaTrasportato);
     document.getElementById('btn-destinazione-casa-trasportato')?.addEventListener('click', compilaDestinazioneCasaTrasportato);
     document.getElementById('btn-modifica-nota-aggiuntiva')?.addEventListener('click', toggleModificaNotaAggiuntiva);
     document.getElementById('btn-modifica-note-mezzo')?.addEventListener('click', toggleModificaNoteMezzo);
+
+    setupCopiaDataPrelievoSuDestinazione();
+    setupModaleMezzoOccupato();
 
     document.getElementById('form-nuovo-servizio')?.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -1308,6 +1778,7 @@ function setupEventListeners() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     await initTauri();
+    await setupListenerTrattaFuoriAsti();
     setupEventListeners();
     await caricaDatiIniziali();
 });

@@ -106,6 +106,171 @@ async function openAnagraficaSocio(idsocio, nominativo) {
     }
 }
 
+// Ripristina il focus su Elenco Operatori (dopo chiusura servizi filtrati)
+async function focusElencoOperatoriWindow() {
+    if (!isTauri()) return;
+    try {
+        const { WebviewWindow, getCurrent } = await import('@tauri-apps/api/window');
+        const elencoOperatori = WebviewWindow.getByLabel('elenco-operatori');
+        if (elencoOperatori) {
+            await elencoOperatori.show();
+            await elencoOperatori.setFocus();
+            return;
+        }
+        const current = getCurrent();
+        if (current && /elencooperatori\.html/i.test(window.location.pathname)) {
+            await current.show();
+            await current.setFocus();
+        }
+    } catch (err) {
+        console.warn('Ripristino focus Elenco Operatori:', err);
+    }
+}
+
+function buildServiziOperatoreUrl(nominativo) {
+    const params = new URLSearchParams({ operatore: String(nominativo || '').trim() });
+    return `ELENCOSERVIZI.html?${params.toString()}`;
+}
+
+function labelFinestraServiziOperatore(idsocio, nominativo) {
+    const safeId = String(idsocio || nominativo).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 48);
+    return `elenco-servizi-operatore-${safeId}`;
+}
+
+async function openServiziOperatore(nominativo, idsocio) {
+    const nome = String(nominativo || '').trim();
+    if (!nome) {
+        console.error('Nominativo operatore non disponibile');
+        return;
+    }
+
+    const url = buildServiziOperatoreUrl(nome);
+    const title = `Servizi — ${nome}`;
+
+    if (!isTauri()) {
+        window.open(url, '_blank');
+        return;
+    }
+
+    try {
+        const { WebviewWindow } = await import('@tauri-apps/api/window');
+        const label = labelFinestraServiziOperatore(idsocio, nome);
+
+        const existing = WebviewWindow.getByLabel(label);
+        if (existing) {
+            try {
+                await existing.show();
+                await existing.maximize();
+                await existing.setFocus();
+                console.log('Finestra servizi operatore già aperta:', label);
+                return;
+            } catch (err) {
+                console.warn('Finestra servizi operatore non riutilizzabile:', err);
+                try {
+                    await existing.close();
+                } catch (_) { /* etichetta potrebbe essere già libera */ }
+            }
+        }
+
+        console.log('Creazione finestra servizi operatore:', label, url);
+
+        let finestraAperta = false;
+
+        const webview = new WebviewWindow(label, {
+            url,
+            title,
+            width: 1400,
+            height: 900,
+            resizable: true,
+            maximized: false,
+            decorations: true,
+            center: true
+        });
+
+        webview.once('tauri://created', async () => {
+            finestraAperta = true;
+            console.log('Finestra servizi operatore creata:', label);
+            try {
+                await webview.maximize();
+                await webview.setFocus();
+            } catch (err) {
+                console.warn('maximize/focus servizi operatore:', err);
+            }
+        });
+
+        webview.once('tauri://error', (event) => {
+            console.error('Errore creazione finestra servizi operatore:', event);
+        });
+
+        webview.once('tauri://destroyed', () => {
+            if (finestraAperta) {
+                focusElencoOperatoriWindow();
+            }
+        });
+    } catch (error) {
+        console.error('Errore apertura servizi operatore:', error);
+    }
+}
+
+function buildChilometraggioUrl(nominativo, idsocio) {
+    const params = new URLSearchParams();
+    if (nominativo) params.set('operatore', String(nominativo).trim());
+    if (idsocio) params.set('idsocio', String(idsocio).trim());
+    return `REPORTCHILOMETRI.html?${params.toString()}`;
+}
+
+async function openChilometraggioOperatore(nominativo, idsocio) {
+    const nome = String(nominativo || '').trim();
+    if (!nome && !idsocio) {
+        alert('Operatore non disponibile');
+        return;
+    }
+
+    const url = buildChilometraggioUrl(nome, idsocio);
+    const title = nome
+        ? `Chilometraggio — ${nome}`
+        : `Chilometraggio operatore ${idsocio}`;
+
+    if (!isTauri()) {
+        window.open(url, '_blank');
+        return;
+    }
+
+    try {
+        const { WebviewWindow } = await import('@tauri-apps/api/window');
+        const safe = String(idsocio || nome).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 48);
+        const label = `chilometraggio-operatore-${safe}`;
+
+        const existing = WebviewWindow.getByLabel(label);
+        if (existing) {
+            try {
+                await existing.show();
+                await existing.setFocus();
+                return;
+            } catch (err) {
+                console.warn('Finestra chilometraggio non riutilizzabile:', err);
+                try { await existing.close(); } catch (_) { /* ignore */ }
+            }
+        }
+
+        const webview = new WebviewWindow(label, {
+            url,
+            title,
+            width: 1000,
+            height: 900,
+            resizable: true,
+            maximized: false,
+            decorations: true,
+            center: true
+        });
+
+        webview.setFocus().catch((err) => console.warn('setFocus chilometraggio:', err));
+    } catch (error) {
+        console.error('Errore apertura chilometraggio:', error);
+        window.open(url, '_blank');
+    }
+}
+
 // Cache globale per gli operatori (prima del filtro di ricerca)
 let allOperatori = [];
 
@@ -309,22 +474,24 @@ function populateListaOperatori(operatori) {
         `;
         
         formSection1.appendChild(formRow1);
-        
+
+        const nominativo = String(operatore.nominativo || '').trim();
+
         // Seconda riga: NOTAAGGIUNTIVA e pulsanti ANAGRAFICA e SERVIZI
         const formSection2 = document.createElement('div');
         formSection2.className = 'socio-form-section';
         const formRow2 = document.createElement('div');
         formRow2.className = 'socio-form-row';
-        
+
         formRow2.innerHTML = `
             <div class="socio-form-group socio-form-group-nota">
                 <label>NOTA AGGIUNTIVA</label>
                 <textarea readonly>${escapeHtml(operatore.notaaggiuntiva || '')}</textarea>
             </div>
             <div class="socio-form-actions">
-                <button class="btn btn-anagrafica" data-socio-id="${operatore.id || ''}" data-idsocio="${escapeHtml(operatore.idsocio || '')}">ANAGRAFICA</button>
-                <button class="btn btn-servizi" data-socio-id="${operatore.id || ''}" data-idsocio="${escapeHtml(operatore.idsocio || '')}">SERVIZI</button>
-                <button class="btn btn-chilometraggio" data-socio-id="${operatore.id || ''}" data-idsocio="${escapeHtml(operatore.idsocio || '')}">CHILOMETRAGGIO</button>
+                <button type="button" class="btn btn-anagrafica" data-socio-id="${operatore.id || ''}" data-idsocio="${escapeHtml(operatore.idsocio || '')}">ANAGRAFICA</button>
+                <button type="button" class="btn btn-servizi" data-socio-id="${operatore.id || ''}" data-idsocio="${escapeHtml(operatore.idsocio || '')}" data-nominativo="${escapeHtml(nominativo)}">SERVIZI</button>
+                <button type="button" class="btn btn-chilometraggio" data-socio-id="${operatore.id || ''}" data-idsocio="${escapeHtml(operatore.idsocio || '')}" data-nominativo="${escapeHtml(nominativo)}">CHILOMETRAGGIO</button>
             </div>
         `;
         
@@ -529,8 +696,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Inizializza Tauri
     await initTauri();
     await setupSocioAnagraficaListener();
-    
-    // Carica tutti gli operatori e popola la lista
+
     await loadAllOperatori();
     
     // Event listener per mostrare/nascondere la ricerca
@@ -578,18 +744,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 openAnagraficaSocio(idsocio, nominativo);
             } else if (e.target.classList.contains('btn-servizi')) {
                 e.stopPropagation();
-                const socioId = e.target.getAttribute('data-socio-id');
                 const idsocio = e.target.getAttribute('data-idsocio');
-                console.log('Pulsante SERVIZI cliccato per operatore ID:', socioId, 'IDSOCIO:', idsocio);
-                // TODO: Implementare apertura servizi dell'operatore
-                alert(`Apertura servizi per operatore ID: ${idsocio} (funzionalità in sviluppo)`);
+                const nominativo = e.target.getAttribute('data-nominativo')
+                    || e.target.closest('.socio-block')?.querySelector('.socio-form-group-nominativo input')?.value?.trim()
+                    || '';
+                console.log('Pulsante SERVIZI cliccato, operatore:', nominativo);
+                openServiziOperatore(nominativo, idsocio);
             } else if (e.target.classList.contains('btn-chilometraggio')) {
                 e.stopPropagation();
-                const socioId = e.target.getAttribute('data-socio-id');
                 const idsocio = e.target.getAttribute('data-idsocio');
-                console.log('Pulsante CHILOMETRAGGIO cliccato per operatore ID:', socioId, 'IDSOCIO:', idsocio);
-                // TODO: Implementare apertura chilometraggio dell'operatore
-                alert(`Apertura chilometraggio per operatore ID: ${idsocio} (funzionalità in sviluppo)`);
+                const nominativo = e.target.getAttribute('data-nominativo')
+                    || e.target.closest('.socio-block')?.querySelector('.socio-form-group-nominativo input')?.value?.trim()
+                    || '';
+                console.log('Pulsante CHILOMETRAGGIO cliccato, operatore:', nominativo, 'IDSOCIO:', idsocio);
+                openChilometraggioOperatore(nominativo, idsocio);
             }
         });
     }

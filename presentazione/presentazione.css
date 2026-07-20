@@ -1,0 +1,304 @@
+/* Presentazione AUSER — proiettabile a schermo intero */
+
+:root {
+    --green: #2d7a32;
+    --green-dark: #1e5a22;
+    --red: #c62828;
+    --orange: #e65100;
+    --blue: #1565c0;
+    --yellow: #f9a825;
+    --ink: #1a1a1a;
+    --muted: #5a5a5a;
+    --paper: #f0f2f4;
+    --card: #ffffff;
+    --font: "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    height: 100%;
+    font-family: var(--font);
+    background: #1b1f1c;
+    color: var(--ink);
+    overflow: hidden;
+}
+
+.preso-chrome {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 20px;
+    background: rgba(27, 31, 28, 0.92);
+    color: #e8ece9;
+    font-size: 0.85rem;
+}
+
+.preso-brand {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.preso-progress {
+    flex: 1;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.preso-progress::after {
+    content: "";
+    display: block;
+    height: 100%;
+    width: var(--progress, 10%);
+    background: var(--green);
+    transition: width 0.25s ease;
+}
+
+.preso-counter {
+    opacity: 0.8;
+    min-width: 4ch;
+    text-align: right;
+}
+
+.preso-stage {
+    height: 100%;
+    padding: 52px 24px 72px;
+}
+
+.slide {
+    display: none;
+    height: 100%;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 36px 40px;
+    background: var(--paper);
+    border-radius: 4px;
+    overflow: auto;
+    animation: fadeIn 0.28s ease;
+}
+
+.slide.is-active {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 18px;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+}
+
+.slide h1 {
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+    letter-spacing: 0.04em;
+    color: var(--green-dark);
+}
+
+.slide h2 {
+    font-size: clamp(1.6rem, 3.2vw, 2.2rem);
+    color: var(--green-dark);
+    margin-bottom: 4px;
+}
+
+.lead {
+    font-size: 1.15rem;
+    color: var(--muted);
+    max-width: 42rem;
+    line-height: 1.45;
+}
+
+.feature-list,
+.slide ol,
+.slide ul {
+    margin-left: 1.25rem;
+    font-size: 1.15rem;
+    line-height: 1.65;
+    color: var(--ink);
+}
+
+.feature-list li + li,
+.slide ol li + li,
+.slide ul li + li {
+    margin-top: 0.35rem;
+}
+
+.tip, .note {
+    font-size: 0.98rem;
+    color: var(--muted);
+}
+
+.tip {
+    margin-top: 0.75rem;
+    padding: 10px 12px;
+    background: #e8f5e9;
+    border-left: 4px solid var(--green);
+}
+
+/* Copertina */
+.slide-cover {
+    align-items: center;
+    text-align: center;
+    background:
+        radial-gradient(ellipse at 30% 20%, #dcebdd 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 80%, #d6e4f5 0%, transparent 50%),
+        var(--paper);
+}
+
+.cover-mark {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--red);
+    color: #fff;
+    font-size: 2.4rem;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+    margin-bottom: 8px;
+}
+
+.cover-org {
+    color: var(--red);
+    font-weight: 700;
+    font-size: 1.35rem;
+}
+
+.cover-sub {
+    color: var(--muted);
+    font-size: 1.2rem;
+    margin-top: 8px;
+}
+
+.cover-hint {
+    margin-top: 28px;
+    font-size: 0.95rem;
+    color: #888;
+}
+
+.slide-end .cover-sub {
+    margin-top: 12px;
+}
+
+/* Slide con videata */
+.slide-shot {
+    display: none;
+    flex-direction: row !important;
+    align-items: stretch;
+    gap: 28px;
+}
+
+.slide-shot.is-active {
+    display: flex !important;
+}
+
+.slide-text {
+    flex: 0 0 38%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+}
+
+.shot {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.shot img {
+    width: 100%;
+    height: auto;
+    max-height: calc(100vh - 160px);
+    object-fit: contain;
+    object-position: top center;
+    background: #fff;
+    border: 1px solid #cfd5d0;
+    border-radius: 4px;
+}
+
+.shot figcaption {
+    font-size: 0.9rem;
+    color: var(--muted);
+    text-align: center;
+}
+
+.steps {
+    font-size: 1.25rem;
+    line-height: 1.8;
+}
+
+.end-note {
+    margin-top: 16px;
+}
+
+/* Navigazione */
+.preso-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 12px 20px;
+    background: rgba(27, 31, 28, 0.92);
+}
+
+.nav-btn {
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: transparent;
+    color: #fff;
+    padding: 10px 18px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 3px;
+}
+
+.nav-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.nav-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.nav-btn-primary {
+    background: var(--green);
+    border-color: var(--green);
+}
+
+.nav-btn-primary:hover {
+    background: var(--green-dark);
+}
+
+@media (max-width: 900px) {
+    .slide-shot.is-active {
+        flex-direction: column !important;
+    }
+
+    .slide-text {
+        flex: none;
+    }
+
+    .shot img {
+        max-height: 42vh;
+    }
+
+}

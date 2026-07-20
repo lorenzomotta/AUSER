@@ -9,9 +9,6 @@
 <body>
     <div class="ns-container">
         <header class="ns-header">
-            <div class="ns-header-left">
-                <button type="button" class="btn btn-chiudi" id="btn-chiudi">CHIUDI</button>
-            </div>
             <h1 class="ns-title">NUOVO SERVIZIO</h1>
             <div class="ns-header-right">
                 <button type="button" class="btn btn-annulla" id="btn-annulla">ANNULLA</button>
@@ -107,7 +104,7 @@
             <!-- Prelievo -->
             <section class="ns-section">
                 <div class="ns-section-header">
-                    <h2 class="ns-section-title">2. Dati prelievo</h2>
+                    <h2 class="ns-section-title">2. Dati prelievo <span class="ns-section-title-hint">(se la tratta è fuori Asti, i campi COMUNE e LUOGO verranno compilati automaticamente in seguito)</span></h2>
                     <button type="button" class="btn btn-prelievo-da-casa" id="btn-prelievo-da-casa">
                         PRELIEVO DA CASA TRASPORTATO
                     </button>
@@ -123,11 +120,19 @@
                     </div>
                     <div class="ns-field ns-field-comune-prelievo">
                         <label for="ns-comune-prelievo">COMUNE DI PRELIEVO <span class="required">*</span></label>
-                        <input type="text" id="ns-comune-prelievo" class="ns-input">
+                        <div class="ns-autocomplete-wrapper">
+                            <input type="text" id="ns-comune-prelievo" class="ns-input" autocomplete="off"
+                                placeholder="Digita per cercare un comune già usato...">
+                            <div id="ns-comune-prelievo-suggestions" class="ns-autocomplete-suggestions"></div>
+                        </div>
                     </div>
                     <div class="ns-field ns-field-luogo-prelievo">
                         <label for="ns-luogo-prelievo">LUOGO DI PRELIEVO <span class="required">*</span></label>
-                        <input type="text" id="ns-luogo-prelievo" class="ns-input">
+                        <div class="ns-autocomplete-wrapper">
+                            <input type="text" id="ns-luogo-prelievo" class="ns-input" autocomplete="off"
+                                placeholder="Digita per cercare un luogo già usato...">
+                            <div id="ns-luogo-prelievo-suggestions" class="ns-autocomplete-suggestions"></div>
+                        </div>
                     </div>
                     <div class="ns-field ns-field-note-prelievo">
                         <label for="ns-note-prelievo">NOTE PRELIEVO</label>
@@ -139,7 +144,7 @@
             <!-- Destinazione -->
             <section class="ns-section">
                 <div class="ns-section-header">
-                    <h2 class="ns-section-title">3. Dati destinazione</h2>
+                    <h2 class="ns-section-title">3. Dati destinazione <span class="ns-section-title-hint">(se la tratta è fuori Asti, i campi Comune e luogo verranno compilati automaticamente)</span></h2>
                     <button type="button" class="btn btn-prelievo-da-casa" id="btn-destinazione-casa-trasportato">
                         DESTINAZIONE CASA TRASPORTATO
                     </button>
@@ -151,11 +156,19 @@
                     </div>
                     <div class="ns-field ns-field-comune-destinazione">
                         <label for="ns-comune-destinazione">COMUNE DI DESTINAZIONE <span class="required">*</span></label>
-                        <input type="text" id="ns-comune-destinazione" class="ns-input">
+                        <div class="ns-autocomplete-wrapper">
+                            <input type="text" id="ns-comune-destinazione" class="ns-input" autocomplete="off"
+                                placeholder="Digita per cercare un comune già usato...">
+                            <div id="ns-comune-destinazione-suggestions" class="ns-autocomplete-suggestions"></div>
+                        </div>
                     </div>
                     <div class="ns-field ns-field-luogo-destinazione">
                         <label for="ns-luogo-destinazione">LUOGO DI DESTINAZIONE <span class="required">*</span></label>
-                        <input type="text" id="ns-luogo-destinazione" class="ns-input">
+                        <div class="ns-autocomplete-wrapper">
+                            <input type="text" id="ns-luogo-destinazione" class="ns-input" autocomplete="off"
+                                placeholder="Digita per cercare un luogo già usato...">
+                            <div id="ns-luogo-destinazione-suggestions" class="ns-autocomplete-suggestions"></div>
+                        </div>
                     </div>
                     <div class="ns-field ns-field-note-arrivo">
                         <label for="ns-note-arrivo">NOTE ARRIVO</label>
@@ -193,9 +206,7 @@
                     <div class="ns-field">
                         <label for="ns-stato-servizio">STATO DEL SERVIZIO <span class="required">*</span></label>
                         <select id="ns-stato-servizio" class="ns-input">
-                            <option value="DA ESEGUIRE">DA ESEGUIRE</option>
-                            <option value="ESEGUITO">ESEGUITO</option>
-                            <option value="ANNULLATO">ANNULLATO</option>
+                            <option value="">— Caricamento stati —</option>
                         </select>
                     </div>
                     <div class="ns-field span-4">
@@ -231,21 +242,33 @@
                             placeholder="Seleziona un mezzo">
                     </div>
                 </div>
-                <div class="ns-field ns-field-note-mezzo">
-                    <div class="ns-label-nota-aggiuntive">
-                        <label for="ns-note-mezzo">NOTE MEZZO</label>
-                        <button type="button" id="btn-modifica-note-mezzo" class="ns-btn-icona-modifica"
-                            title="Modifica note mezzo" disabled aria-label="Modifica note mezzo">
-                            <svg class="ns-icona-matita" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                                <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.83H5v-.92l9.06-9.06.92.92L5.92 20.08zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
-                            </svg>
-                            <svg class="ns-icona-spunta" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                                <path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                            </svg>
-                        </button>
+                <div class="ns-grid ns-grid-mezzo-dettagli mod-mezzo-dettagli-row">
+                    <div class="ns-field mod-field-scadenza mod-field-scadenza-ztl">
+                        <label for="ns-scadenza-ztl">SCADENZA ZTL</label>
+                        <input type="text" id="ns-scadenza-ztl" class="ns-input mod-input-scadenza" readonly tabindex="-1"
+                            placeholder="—">
                     </div>
-                    <textarea id="ns-note-mezzo" class="ns-input ns-textarea" rows="2" readonly tabindex="-1"
-                        placeholder="Seleziona un mezzo per visualizzare le note."></textarea>
+                    <div class="ns-field mod-field-scadenza mod-field-scadenza-assic">
+                        <label for="ns-scadenza-assicurazione">SCADENZA ASSICURAZIONE</label>
+                        <input type="text" id="ns-scadenza-assicurazione" class="ns-input mod-input-scadenza" readonly tabindex="-1"
+                            placeholder="—">
+                    </div>
+                    <div class="ns-field mod-field-note-mezzo ns-field-note-mezzo-compact">
+                        <div class="ns-label-nota-aggiuntive">
+                            <label for="ns-note-mezzo">NOTE MEZZO</label>
+                            <button type="button" id="btn-modifica-note-mezzo" class="ns-btn-icona-modifica"
+                                title="Modifica note mezzo" disabled aria-label="Modifica note mezzo">
+                                <svg class="ns-icona-matita" viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">
+                                    <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.83H5v-.92l9.06-9.06.92.92L5.92 20.08zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
+                                </svg>
+                                <svg class="ns-icona-spunta" viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">
+                                    <path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <textarea id="ns-note-mezzo" class="ns-input ns-textarea ns-textarea-note-mezzo-riga" rows="1" readonly tabindex="-1"
+                            placeholder="Seleziona un mezzo per visualizzare le note."></textarea>
+                    </div>
                 </div>
             </section>
 
@@ -258,6 +281,9 @@
                         <button type="button" class="ns-btn-importo" id="btn-pagamento-10">10 €.</button>
                         <button type="button" class="ns-btn-importo" id="btn-pagamento-15">15 €.</button>
                         <button type="button" class="ns-btn-importo" id="btn-pagamento-libero">LIBERO</button>
+                    </div>
+                    <div class="ns-pagamento-azioni-destra">
+                        <button type="button" class="ns-btn-tratta-fuori-asti" id="btn-tratta-fuori-asti">TRATTA FUORI ASTI</button>
                     </div>
                     <div class="ns-grid ns-grid-pagamento">
                     <div class="ns-field ns-field-stato-incasso">
@@ -292,24 +318,8 @@
                         <input type="date" id="ns-data-bonifico" class="ns-input ns-input-data">
                     </div>
                     </div>
-                </div>
-            </section>
-
-            <!-- Note finali -->
-            <section class="ns-section">
-                <h2 class="ns-section-title">7. Note e archiviazione</h2>
-                <div class="ns-grid">
-                    <div class="ns-field span-4">
-                        <label for="ns-note-fine-servizio">NOTE FINE SERVIZIO</label>
-                        <textarea id="ns-note-fine-servizio" class="ns-input ns-textarea" rows="3"></textarea>
-                    </div>
-                    <div class="ns-field">
-                        <label for="ns-archivia">ARCHIVIA</label>
-                        <select id="ns-archivia" class="ns-input">
-                            <option value="NO">NO</option>
-                            <option value="SI">SI</option>
-                        </select>
-                    </div>
+                    <input type="hidden" id="ns-tratta-fuori-asti" value="">
+                    <div class="ns-tratta-selezionata" id="ns-tratta-fuori-asti-box" hidden></div>
                 </div>
             </section>
         </form>
@@ -330,6 +340,43 @@
             <div class="ns-dialog-actions">
                 <button type="button" id="ns-dialog-sino-si" class="ns-dialog-btn ns-dialog-btn-si">SÌ</button>
                 <button type="button" id="ns-dialog-sino-no" class="ns-dialog-btn ns-dialog-btn-no">NO</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ns-dialog-partenza-arrivo" class="ns-dialog-overlay" hidden aria-hidden="true">
+        <div class="ns-dialog" role="dialog" aria-modal="true" aria-labelledby="ns-dialog-partenza-arrivo-messaggio">
+            <p id="ns-dialog-partenza-arrivo-messaggio" class="ns-dialog-messaggio">
+                La località fuori ASTI è la partenza o l'arrivo?
+            </p>
+            <div class="ns-dialog-actions">
+                <button type="button" id="ns-dialog-btn-partenza" class="ns-dialog-btn ns-dialog-btn-si">PARTENZA</button>
+                <button type="button" id="ns-dialog-btn-arrivo" class="ns-dialog-btn ns-dialog-btn-arrivo">ARRIVO</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info: mezzo già usato nella data di prelievo -->
+    <div id="ns-dialog-mezzo-occupato" class="ns-dialog-overlay" hidden aria-hidden="true">
+        <div class="ns-dialog ns-dialog-mezzo-occupato" role="dialog" aria-modal="true" aria-labelledby="ns-dialog-mezzo-occupato-titolo">
+            <h2 id="ns-dialog-mezzo-occupato-titolo" class="ns-dialog-titolo">Mezzo già in uso</h2>
+            <p id="ns-dialog-mezzo-occupato-sottotitolo" class="ns-dialog-sottotitolo"></p>
+            <div class="ns-mezzo-occupato-tabella-wrap">
+                <table class="ns-mezzo-occupato-tabella">
+                    <thead>
+                        <tr>
+                            <th>Ora</th>
+                            <th>Operatore</th>
+                            <th>Trasportato</th>
+                            <th>Comune destinazione</th>
+                            <th>Località destinazione</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ns-dialog-mezzo-occupato-body"></tbody>
+                </table>
+            </div>
+            <div class="ns-dialog-actions">
+                <button type="button" id="ns-dialog-mezzo-occupato-chiudi" class="ns-dialog-btn ns-dialog-btn-si">CHIUDI</button>
             </div>
         </div>
     </div>

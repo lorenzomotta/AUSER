@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Riepilogo Pagamenti - AUSER Asti</title>
+    <link rel="stylesheet" href="riepilogopagamenti.css">
+    <link rel="stylesheet" href="nuovoservizio.css">
+    <link rel="stylesheet" href="modifica-servizio.css">
+</head>
+<body>
+    <div class="rp-app">
+        <header class="rp-header">
+            <div class="rp-header-left">
+                <button type="button" class="rp-btn rp-btn-chiudi" id="btn-chiudi">CHIUDI</button>
+                <button type="button" class="rp-btn rp-btn-ricerca" id="btn-toggle-ricerca">RICERCA AVANZATA</button>
+                <button type="button" class="rp-btn rp-btn-reset" id="btn-reset-filtri" hidden>AZZERA FILTRI</button>
+            </div>
+            <h1 class="rp-title">RIEPILOGO PAGAMENTI</h1>
+            <div class="rp-header-right">
+                <label class="rp-anno-label" for="rp-anno">ANNO</label>
+                <select id="rp-anno" class="rp-anno-select"></select>
+                <span class="rp-conteggio" id="rp-conteggio-visibili">0 servizi</span>
+            </div>
+        </header>
+
+        <section class="rp-ricerca" id="rp-ricerca" hidden>
+            <div class="rp-ricerca-grid">
+                <div class="rp-field rp-field-compatto">
+                    <label for="f-stato">STATO INCASSO</label>
+                    <select id="f-stato">
+                        <option value="">— Tutti —</option>
+                        <option value="INCASSATO">INCASSATO</option>
+                        <option value="DA INCASSARE">DA INCASSARE</option>
+                        <option value="GRATIS">GRATIS</option>
+                        <option value="ANNULLATO">ANNULLATO</option>
+                    </select>
+                </div>
+                <div class="rp-field rp-field-compatto">
+                    <label for="f-richiedente">RICHIEDENTE</label>
+                    <select id="f-richiedente">
+                        <option value="">— Tutti —</option>
+                    </select>
+                </div>
+                <div class="rp-field rp-field-compatto">
+                    <label for="f-tipo-pagam">TIPO PAGAMENTO</label>
+                    <select id="f-tipo-pagam">
+                        <option value="">— Tutti —</option>
+                    </select>
+                </div>
+                <div class="rp-field rp-field-periodo">
+                    <label>DATA PRELIEVO (periodo)</label>
+                    <div class="rp-periodo">
+                        <input type="date" id="f-data-da" title="Dalla data">
+                        <span class="rp-periodo-sep">→</span>
+                        <input type="date" id="f-data-a" title="Alla data">
+                    </div>
+                </div>
+                <div class="rp-ricerca-azioni">
+                    <button type="button" class="rp-btn rp-btn-applica" id="btn-applica-filtri">APPLICA</button>
+                </div>
+            </div>
+        </section>
+
+        <div class="rp-loading" id="rp-loading">Caricamento servizi...</div>
+        <div class="rp-errore" id="rp-errore" hidden></div>
+        <div class="rp-vuoto" id="rp-vuoto" hidden>Nessun servizio trovato.</div>
+
+        <div class="rp-table-wrap" id="rp-table-wrap" hidden>
+            <table class="rp-table">
+                <thead>
+                    <tr>
+                        <th class="col-stato"></th>
+                        <th>RICHIEDENTE</th>
+                        <th>DATA</th>
+                        <th>Nominativo</th>
+                        <th></th>
+                        <th>PRELIEVO</th>
+                        <th></th>
+                        <th>DESTINAZIONE</th>
+                        <th>DONAZIONE</th>
+                        <th>TIPO PAGAM</th>
+                        <th>DATA INCASSO</th>
+                        <th class="col-azione"></th>
+                    </tr>
+                </thead>
+                <tbody id="rp-tbody"></tbody>
+            </table>
+        </div>
+
+        <footer class="rp-footer" id="rp-footer" hidden>
+            <div class="rp-totali-riga">
+                <div class="rp-totale">
+                    <span class="rp-totale-label">TOTALE SERVIZI ESEGUITI</span>
+                    <span class="rp-totale-val rp-val-giallo" id="tot-eseguiti-euro">0,00 €</span>
+                </div>
+                <div class="rp-totale">
+                    <span class="rp-totale-label">TOTALE SERVIZI INCASSATI</span>
+                    <span class="rp-totale-val rp-val-verde" id="tot-incassati-euro">0,00 €</span>
+                </div>
+                <div class="rp-totale">
+                    <span class="rp-totale-label">TOTALE SERVIZI DA INCASSARE</span>
+                    <span class="rp-totale-val rp-val-rosso" id="tot-da-incassare-euro">0,00 €</span>
+                </div>
+            </div>
+            <div class="rp-totali-riga">
+                <div class="rp-totale">
+                    <span class="rp-totale-label">CONTEGGIO SERVIZI ESEGUITI</span>
+                    <span class="rp-totale-val rp-val-giallo" id="tot-eseguiti-n">0</span>
+                </div>
+                <div class="rp-totale">
+                    <span class="rp-totale-label">CONTEGGIO SERVIZI INCASSATI</span>
+                    <span class="rp-totale-val rp-val-verde" id="tot-incassati-n">0</span>
+                </div>
+                <div class="rp-totale">
+                    <span class="rp-totale-label">CONTEGGIO SERVIZI GRATIS</span>
+                    <span class="rp-totale-val rp-val-azzurro" id="tot-gratis-n">0</span>
+                </div>
+                <div class="rp-totale">
+                    <span class="rp-totale-label">CONTEGGIO SERVIZI DA INCASSARE</span>
+                    <span class="rp-totale-val rp-val-rosso" id="tot-da-incassare-n">0</span>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script type="module" src="riepilogopagamenti.js"></script>
+</body>
+</html>

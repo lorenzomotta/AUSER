@@ -421,6 +421,17 @@ body {
     background-color: #0b7dda;
 }
 
+.btn-servizi:disabled {
+    background-color: #b0bec5;
+    color: #eceff1;
+    cursor: not-allowed;
+    opacity: 0.9;
+}
+
+.btn-servizi:disabled:hover {
+    background-color: #b0bec5;
+}
+
 .btn-chilometraggio {
     background-color: #FF9800;
     color: white;

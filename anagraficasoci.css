@@ -402,6 +402,16 @@ textarea.form-control {
     margin: 0;
 }
 
+.flag-item-disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.flag-item-disabled input {
+    cursor: not-allowed;
+}
+
 .flag-archivia span {
     color: #c62828;
 }

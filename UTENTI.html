@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione Utenti - AUSER Asti</title>
+    <link rel="stylesheet" href="utenti.css">
+</head>
+<body>
+    <div class="ut-app">
+        <header class="ut-header">
+            <h1 class="ut-title">GESTIONE UTENTI</h1>
+            <div class="ut-header-actions">
+                <button type="button" class="ut-btn ut-btn-nuovo" id="btn-nuovo">NUOVO UTENTE</button>
+                <button type="button" class="ut-btn ut-btn-chiudi" id="btn-chiudi">CHIUDI</button>
+            </div>
+        </header>
+
+        <p class="ut-intro">Solo amministratori. Modifica poteri o crea nuovi accessi a Supabase.</p>
+
+        <div class="ut-loading" id="ut-loading">Caricamento utenti...</div>
+        <div class="ut-errore" id="ut-errore" hidden></div>
+        <div class="ut-ok" id="ut-ok" hidden></div>
+        <div class="ut-vuoto" id="ut-vuoto" hidden>Nessun utente in user_permissions.</div>
+
+        <div class="ut-lista" id="ut-lista" hidden></div>
+    </div>
+
+    <!-- Modale modifica -->
+    <div class="ut-modal" id="modal-edit" hidden>
+        <div class="ut-modal-card" role="dialog" aria-labelledby="modal-edit-title">
+            <h2 id="modal-edit-title">Modifica utente</h2>
+            <input type="hidden" id="edit-user-id">
+            <div class="ut-field">
+                <label for="edit-username">Username</label>
+                <input type="text" id="edit-username">
+            </div>
+            <div class="ut-checks">
+                <label><input type="checkbox" id="edit-is-admin"> Amministratore (is_admin)</label>
+                <label><input type="checkbox" id="edit-programma"> Programma (app desktop)</label>
+                <label><input type="checkbox" id="edit-calendario"> Calendario (web)</label>
+            </div>
+            <div class="ut-field">
+                <label for="edit-password">Nuova password (opzionale)</label>
+                <input type="password" id="edit-password" placeholder="Lascia vuoto per non cambiare" autocomplete="new-password">
+            </div>
+            <div class="ut-modal-azioni">
+                <button type="button" class="ut-btn ut-btn-elimina" id="btn-elimina-edit">ELIMINA</button>
+                <div class="ut-modal-azioni-destra">
+                    <button type="button" class="ut-btn ut-btn-salva" id="btn-salva-edit">SALVA</button>
+                    <button type="button" class="ut-btn ut-btn-annulla" id="btn-annulla-edit">ANNULLA</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conferma eliminazione utente -->
+    <div class="ut-modal" id="modal-conferma-elimina" hidden>
+        <div class="ut-modal-card ut-modal-card-conferma" role="dialog" aria-labelledby="modal-conferma-elimina-title">
+            <h2 id="modal-conferma-elimina-title">Eliminare utente?</h2>
+            <p class="ut-conferma-testo" id="modal-conferma-elimina-testo">
+                Sei sicuro di voler eliminare questo utente? L'operazione non si può annullare.
+            </p>
+            <div class="ut-modal-azioni ut-modal-azioni-conferma">
+                <button type="button" class="ut-btn ut-btn-elimina" id="btn-conferma-elimina-si">SÌ, ELIMINA</button>
+                <button type="button" class="ut-btn ut-btn-annulla" id="btn-conferma-elimina-no">NO, ANNULLA</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modale nuovo -->
+    <div class="ut-modal" id="modal-nuovo" hidden>
+        <div class="ut-modal-card" role="dialog" aria-labelledby="modal-nuovo-title">
+            <h2 id="modal-nuovo-title">Nuovo utente</h2>
+            <div class="ut-field">
+                <label for="nuovo-email">Email</label>
+                <input type="email" id="nuovo-email" required autocomplete="off">
+            </div>
+            <div class="ut-field">
+                <label for="nuovo-password">Password</label>
+                <input type="password" id="nuovo-password" required autocomplete="new-password" minlength="6">
+            </div>
+            <div class="ut-field">
+                <label for="nuovo-username">Username (opzionale)</label>
+                <input type="text" id="nuovo-username" autocomplete="off">
+            </div>
+            <div class="ut-checks">
+                <label><input type="checkbox" id="nuovo-is-admin"> Amministratore</label>
+                <label><input type="checkbox" id="nuovo-programma" checked> Programma</label>
+                <label><input type="checkbox" id="nuovo-calendario"> Calendario</label>
+            </div>
+            <div class="ut-modal-azioni">
+                <button type="button" class="ut-btn ut-btn-salva" id="btn-salva-nuovo">CREA</button>
+                <button type="button" class="ut-btn ut-btn-annulla" id="btn-annulla-nuovo">ANNULLA</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="utenti.js"></script>
+</body>
+</html>

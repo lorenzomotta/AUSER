@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Costo Tratte Fuori Asti - AUSER Asti</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="trattefuoriasi.css">
+</head>
+<body>
+    <div class="tratte-page">
+        <header class="tratte-header">
+            <div class="tratte-header-left">
+                <div class="tratte-logo">
+                    <span class="tratte-logo-circle">a</span>
+                    <span class="tratte-logo-text">auser Asti</span>
+                </div>
+            </div>
+            <div class="tratte-header-center">
+                <h1 class="tratte-title">TABELLA COSTO TRATTE FUORI ASTI</h1>
+            </div>
+            <div class="tratte-header-right">
+                <button type="button" class="btn-tratte-chiudi" id="btn-chiudi">CHIUDI</button>
+                <button type="button" class="btn-tratte-modifica" id="btn-modifica">MODIFICA</button>
+            </div>
+        </header>
+
+        <div class="tratte-warning" role="alert">
+            ATTENZIONE !!!!! VERIFICARE CHE IL PEDAGGIO AUTOSTRADALE SIA AGGIORNATO
+        </div>
+
+        <div class="tratte-colonne-header" aria-hidden="true">
+            <span class="col-id">ID</span>
+            <span class="col-comune">COMUNE</span>
+            <span class="col-prov">PROV</span>
+            <span class="col-localita">LOCALITA</span>
+            <span class="col-km">KM</span>
+            <span class="col-costo-km">€./KM</span>
+            <span class="col-costo">COSTO</span>
+            <span class="col-pedaggio">PEDAGGIO</span>
+            <span class="col-totale">TOTALE</span>
+            <span class="col-azione"></span>
+        </div>
+
+        <div class="tratte-lista" id="tratte-lista">
+            <div class="tratte-loading">Caricamento tratte...</div>
+        </div>
+    </div>
+
+    <p id="tratte-status" class="tratte-status" aria-live="polite"></p>
+
+    <div id="modal-tratte-avviso" class="tratte-modal-overlay" hidden>
+        <div class="tratte-modal" role="alertdialog" aria-labelledby="modal-tratte-avviso-msg" aria-modal="true">
+            <p id="modal-tratte-avviso-msg" class="tratte-modal-message"></p>
+            <button type="button" class="btn-tratte-modal-ok" id="btn-modal-tratte-avviso-ok">OK</button>
+        </div>
+    </div>
+
+    <script type="module" src="trattefuoriasi.js"></script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scheda del Servizio - AUSER Asti</title>
+    <link rel="stylesheet" href="schedaservizio.css">
+</head>
+<body>
+    <div class="ss-toolbar no-print">
+        <button type="button" class="ss-btn ss-btn-chiudi" id="btn-chiudi">CHIUDI</button>
+        <button type="button" class="ss-btn ss-btn-stampa" id="btn-stampa">STAMPA</button>
+        <span class="ss-toolbar-status" id="ss-status" aria-live="polite"></span>
+    </div>
+
+    <div class="ss-loading" id="ss-loading">Caricamento scheda...</div>
+    <div class="ss-errore" id="ss-errore" hidden></div>
+
+    <article class="ss-page" id="ss-page" hidden>
+        <header class="ss-title-bar">
+            <h1>SCHEDA DEL SERVIZIO</h1>
+        </header>
+
+        <section class="ss-meta">
+            <div class="ss-meta-pair ss-meta-id">
+                <span class="ss-label">IDSERVIZIO</span>
+                <div class="ss-box" id="ss-idservizio"></div>
+            </div>
+            <div class="ss-meta-pair">
+                <span class="ss-label">DATA SOTTOCASA</span>
+                <div class="ss-box" id="ss-data-sottocasa"></div>
+            </div>
+            <div class="ss-meta-pair">
+                <span class="ss-label">ORA SOTTOCASA</span>
+                <div class="ss-box" id="ss-ora-sottocasa"></div>
+            </div>
+            <div class="ss-meta-pair">
+                <span class="ss-label">DATA A DESTINAZIONE</span>
+                <div class="ss-box" id="ss-data-destinazione"></div>
+            </div>
+            <div class="ss-meta-pair">
+                <span class="ss-label">ORA ARRIVO</span>
+                <div class="ss-box" id="ss-ora-arrivo"></div>
+            </div>
+        </section>
+
+        <section class="ss-contatti">
+            <div class="ss-contatti-trasportato">
+                <div class="ss-band">TRASPORTATO</div>
+                <div class="ss-box ss-box-tall" id="ss-trasportato"></div>
+            </div>
+            <div class="ss-contatti-telefono">
+                <div class="ss-band">TELEFONO DI CONTATTO</div>
+                <div class="ss-box ss-box-tall" id="ss-telefono"></div>
+            </div>
+        </section>
+
+        <section class="ss-mezzo-block">
+            <div class="ss-mezzo-headers">
+                <div class="ss-band ss-band-azzurro">OPERATORE</div>
+                <div class="ss-band ss-band-azzurro">AUTOMEZZO</div>
+                <div class="ss-band ss-band-azzurro">TARGA</div>
+            </div>
+            <div class="ss-mezzo-values">
+                <div class="ss-box ss-operatore-box">
+                    <div id="ss-operatore-nome"></div>
+                    <div id="ss-operatore-tel" class="ss-sub"></div>
+                </div>
+                <div class="ss-box" id="ss-automezzo"></div>
+                <div class="ss-box" id="ss-targa"></div>
+            </div>
+        </section>
+
+        <section class="ss-tipo-riga">
+            <label class="ss-check">
+                <input type="checkbox" id="ss-check-standard" disabled>
+                <span>STANDARD</span>
+            </label>
+            <label class="ss-check">
+                <input type="checkbox" id="ss-check-carrozzina" disabled>
+                <span>CON CARROZZINA</span>
+            </label>
+            <div class="ss-box ss-box-carrozzina" id="ss-carrozzina"></div>
+        </section>
+
+        <section class="ss-motivazione">
+            <div class="ss-band">MOTIVAZIONE DEL TRASPORTO</div>
+            <div class="ss-box" id="ss-motivazione"></div>
+        </section>
+
+        <section class="ss-luoghi">
+            <div class="ss-luogo">
+                <div class="ss-band">PRELIEVO</div>
+                <div class="ss-luogo-body">
+                    <div class="ss-luogo-riga">
+                        <span class="ss-mini-label">COMUNE</span>
+                        <div class="ss-box" id="ss-prelievo-comune"></div>
+                    </div>
+                    <div class="ss-luogo-riga">
+                        <span class="ss-mini-label">INDIRIZZO</span>
+                        <div class="ss-box" id="ss-prelievo-indirizzo"></div>
+                    </div>
+                    <div class="ss-luogo-riga ss-luogo-note">
+                        <span class="ss-mini-label">NOTE</span>
+                        <div class="ss-box ss-box-note" id="ss-prelievo-note"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="ss-luogo">
+                <div class="ss-band">DESTINAZIONE</div>
+                <div class="ss-luogo-body">
+                    <div class="ss-luogo-riga">
+                        <span class="ss-mini-label">COMUNE</span>
+                        <div class="ss-box" id="ss-destinazione-comune"></div>
+                    </div>
+                    <div class="ss-luogo-riga">
+                        <span class="ss-mini-label">INDIRIZZO</span>
+                        <div class="ss-box" id="ss-destinazione-indirizzo"></div>
+                    </div>
+                    <div class="ss-luogo-riga ss-luogo-note">
+                        <span class="ss-mini-label">NOTE</span>
+                        <div class="ss-box ss-box-note" id="ss-destinazione-note"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="ss-pagamento">
+            <div class="ss-band">PAGAMENTO DEL SERVIZIO</div>
+            <div class="ss-pagamento-riga1">
+                <label class="ss-check ss-pagamento-gratis">
+                    <input type="checkbox" id="ss-check-gratis" disabled>
+                    <span>GRATIS</span>
+                </label>
+                <div class="ss-pagamento-campo ss-campo-donazione">
+                    <span class="ss-mini-label">DONAZIONE SUGGERITA</span>
+                    <div class="ss-box" id="ss-donazione"></div>
+                </div>
+                <div class="ss-pagamento-campo ss-campo-dona-con">
+                    <span class="ss-mini-label">DONA CON</span>
+                    <div class="ss-box" id="ss-dona-con"></div>
+                </div>
+                <div class="ss-pagamento-campo ss-campo-num-ricevuta">
+                    <span class="ss-mini-label">N. RICEVUTA</span>
+                    <div class="ss-box" id="ss-numero-ricevuta"></div>
+                </div>
+                <div class="ss-pagamento-campo ss-campo-data-ricevuta">
+                    <span class="ss-mini-label">DATA RICEVUTA</span>
+                    <div class="ss-box" id="ss-data-ricevuta"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="ss-chilometraggio">
+            <div class="ss-band">CHILOMETRAGGIO e NOTE CHIUSURA SERVIZIO</div>
+            <div class="ss-km-riga">
+                <div class="ss-km-campo">
+                    <span class="ss-mini-label">KM USCITA</span>
+                    <div class="ss-box" id="ss-km-uscita"></div>
+                </div>
+                <div class="ss-km-campo">
+                    <span class="ss-mini-label">KM RIENTRO</span>
+                    <div class="ss-box" id="ss-km-rientro"></div>
+                </div>
+                <div class="ss-km-campo">
+                    <span class="ss-mini-label">KM</span>
+                    <div class="ss-box" id="ss-km"></div>
+                </div>
+                <div class="ss-km-campo">
+                    <span class="ss-mini-label">TEMPO</span>
+                    <div class="ss-box" id="ss-tempo"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="ss-note-fine">
+            <p class="ss-note-fine-title">EVENTUALI NOTE DI FINE SERVIZIO</p>
+            <div class="ss-box ss-box-note-fine" id="ss-note-fine"></div>
+        </section>
+    </article>
+
+    <script type="module" src="schedaservizio.js"></script>
+</body>
+</html>

@@ -20,6 +20,7 @@ pub struct SupabaseTablesConfig {
     pub tipologia_socio: String,
     pub tratte: String,
     pub user_permissions: String,
+    /// Storico annuale tesseramenti (più righe per IdSocio)
     pub tesseramenti: String,
 }
 
@@ -214,6 +215,407 @@ impl SupabaseClient {
         self.fetch_table("automezzi", filter, None, None).await
     }
 
+    pub async fn fetch_tratte(&self, filter: Option<&str>) -> Result<Vec<Value>, String> {
+        self.fetch_table("tratte", filter, None, Some("IdTratta.asc"))
+            .await
+    }
+
+    pub async fn fetch_user_permissions(
+        &self,
+        filter: Option<&str>,
+    ) -> Result<Vec<Value>, String> {
+        self.fetch_table("user_permissions", filter, None, None)
+            .await
+    }
+
+    fn apply_service_headers(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        let key = &self.config.anon_key;
+        request
+            .header("apikey", key)
+            .header("Authorization", format!("Bearer {}", key))
+    }
+
+    /// Aggiorna i permessi di un utente (PATCH su user_id)
+    pub async fn patch_user_permissions(
+        &self,
+        user_id: &str,
+        body: &serde_json::Map<String, Value>,
+    ) -> Result<(), String> {
+        if body.is_empty() {
+            return Ok(());
+        }
+        let table_name = &self.config.tables.user_permissions;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/rest/v1/{}?user_id=eq.{}", base, table_name, user_id);
+
+        println!(
+            "📡 Supabase PATCH [user_permissions → {}] user_id={} body={:?}",
+            table_name, user_id, body
+        );
+
+        let request = self
+            .http
+            .patch(&url)
+            .header("Content-Type", "application/json")
+            .header("Prefer", "return=representation")
+            .json(body);
+
+        let response = self
+            .apply_service_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione PATCH user_permissions: {}", e))?;
+
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(format!(
+                "Errore PATCH user_permissions ({}): {}",
+                status, text
+            ));
+        }
+
+        // return=representation: se 0 righe, il filtro non ha trovato l'utente
+        let trimmed = text.trim();
+        if trimmed.is_empty() || trimmed == "[]" || trimmed == "null" {
+            return Err(format!(
+                "Nessuna riga aggiornata in user_permissions per user_id={}",
+                user_id
+            ));
+        }
+
+        println!("✓ PATCH user_permissions ok: {}", trimmed);
+        Ok(())
+    }
+
+    /// Elimina una riga in user_permissions
+    pub async fn delete_user_permissions(&self, user_id: &str) -> Result<(), String> {
+        let table_name = &self.config.tables.user_permissions;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!(
+            "{}/rest/v1/{}?user_id=eq.{}",
+            base,
+            table_name,
+            user_id.trim()
+        );
+
+        println!(
+            "📡 Supabase DELETE [user_permissions → {}] user_id={}",
+            table_name, user_id
+        );
+
+        let request = self.http.delete(&url);
+        let response = self
+            .apply_service_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione DELETE user_permissions: {}", e))?;
+
+        if response.status().is_success() {
+            return Ok(());
+        }
+        let status = response.status();
+        let err_body = response.text().await.unwrap_or_default();
+        Err(format!(
+            "Errore DELETE user_permissions ({}): {}",
+            status, err_body
+        ))
+    }
+
+    /// Inserisce una riga in user_permissions
+    pub async fn insert_user_permissions(&self, body: &Value) -> Result<(), String> {
+        let table_name = &self.config.tables.user_permissions;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/rest/v1/{}", base, table_name);
+
+        println!("📡 Supabase POST [user_permissions → {}]", table_name);
+
+        let request = self
+            .http
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .header("Prefer", "return=minimal")
+            .json(body);
+
+        let response = self
+            .apply_service_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione POST user_permissions: {}", e))?;
+
+        if response.status().is_success() {
+            return Ok(());
+        }
+        let status = response.status();
+        let err_body = response.text().await.unwrap_or_default();
+        Err(format!(
+            "Errore POST user_permissions ({}): {}",
+            status, err_body
+        ))
+    }
+
+    /// Inserisce o aggiorna i permessi (gestisce utente già presente)
+    pub async fn upsert_user_permissions(
+        &self,
+        user_id: &str,
+        body: &Value,
+    ) -> Result<(), String> {
+        match self.insert_user_permissions(body).await {
+            Ok(()) => Ok(()),
+            Err(e) if e.contains("409") || e.contains("23505") || e.contains("duplicate") => {
+                println!(
+                    "ℹ️ user_permissions già presente per {}: aggiorno (upsert)",
+                    user_id
+                );
+                let mut map = serde_json::Map::new();
+                if let Some(obj) = body.as_object() {
+                    for (k, v) in obj {
+                        if k != "user_id" {
+                            map.insert(k.clone(), v.clone());
+                        }
+                    }
+                }
+                self.patch_user_permissions(user_id, &map).await
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Cerca user_id Auth per email (Admin API)
+    pub async fn admin_find_user_id_by_email(&self, email: &str) -> Result<Option<String>, String> {
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!(
+            "{}/auth/v1/admin/users?page=1&per_page=200",
+            base
+        );
+
+        println!("📡 Supabase Auth Admin GET users (cerca email)");
+
+        let request = self.http.get(&url);
+        let response = self
+            .apply_service_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Auth Admin list: {}", e))?;
+
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(format!("Errore lista utenti Auth ({}): {}", status, text));
+        }
+
+        let parsed: Value = serde_json::from_str(&text)
+            .map_err(|e| format!("Risposta lista Auth non valida: {} — {}", e, text))?;
+
+        let users = parsed
+            .get("users")
+            .and_then(|u| u.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        let email_lc = email.trim().to_lowercase();
+        for u in users {
+            let em = u
+                .get("email")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if em == email_lc {
+                if let Some(id) = u.get("id").and_then(|v| v.as_str()) {
+                    return Ok(Some(id.to_string()));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Crea utente Auth (Admin API) e restituisce l'id.
+    /// Se l'email esiste già, restituisce l'id esistente e aggiorna la password.
+    pub async fn admin_ensure_auth_user(
+        &self,
+        email: &str,
+        password: &str,
+    ) -> Result<(String, bool), String> {
+        match self.admin_create_auth_user(email, password).await {
+            Ok(id) => Ok((id, true)),
+            Err(e) => {
+                let low = e.to_lowercase();
+                if low.contains("already")
+                    || low.contains("registered")
+                    || low.contains("exists")
+                    || low.contains("422")
+                    || low.contains("user_already")
+                {
+                    let existing = self
+                        .admin_find_user_id_by_email(email)
+                        .await?
+                        .ok_or_else(|| {
+                            format!(
+                                "Email già registrata in Auth, ma utente non trovato in elenco: {}",
+                                e
+                            )
+                        })?;
+                    self.admin_update_auth_password(&existing, password)
+                        .await?;
+                    Ok((existing, false))
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    /// Crea utente Auth (Admin API) e restituisce l'id
+    pub async fn admin_create_auth_user(
+        &self,
+        email: &str,
+        password: &str,
+    ) -> Result<String, String> {
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/auth/v1/admin/users", base);
+        let body = serde_json::json!({
+            "email": email,
+            "password": password,
+            "email_confirm": true
+        });
+
+        println!("📡 Supabase Auth Admin POST users email={}", email);
+
+        let request = self
+            .http
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .json(&body);
+
+        let response = self
+            .apply_service_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Auth Admin create: {}", e))?;
+
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(format!("Errore creazione utente Auth ({}): {}", status, text));
+        }
+
+        let parsed: Value = serde_json::from_str(&text)
+            .map_err(|e| format!("Risposta Auth non valida: {} — {}", e, text))?;
+        let id = parsed
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        if id.is_empty() {
+            return Err(format!("Auth non ha restituito id utente: {}", text));
+        }
+        Ok(id)
+    }
+
+    /// Imposta password e/o username (user_metadata) utente Auth (Admin API)
+    pub async fn admin_update_auth_user(
+        &self,
+        user_id: &str,
+        password: Option<&str>,
+        username: Option<&str>,
+    ) -> Result<(), String> {
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/auth/v1/admin/users/{}", base, user_id);
+
+        let mut body = serde_json::Map::new();
+        if let Some(p) = password {
+            let t = p.trim();
+            if !t.is_empty() {
+                body.insert("password".to_string(), serde_json::json!(t));
+            }
+        }
+        if let Some(u) = username {
+            let t = u.trim();
+            if !t.is_empty() {
+                body.insert(
+                    "user_metadata".to_string(),
+                    serde_json::json!({ "username": t, "full_name": t }),
+                );
+            }
+        }
+        if body.is_empty() {
+            return Ok(());
+        }
+
+        println!(
+            "📡 Supabase Auth Admin PUT user_id={} keys={:?}",
+            user_id,
+            body.keys().collect::<Vec<_>>()
+        );
+
+        let request = self
+            .http
+            .put(&url)
+            .header("Content-Type", "application/json")
+            .json(&body);
+
+        let response = self
+            .apply_service_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Auth Admin update: {}", e))?;
+
+        if response.status().is_success() {
+            return Ok(());
+        }
+        let status = response.status();
+        let err_body = response.text().await.unwrap_or_default();
+        Err(format!(
+            "Errore aggiornamento utente Auth ({}): {}",
+            status, err_body
+        ))
+    }
+
+    /// Elimina utente Auth (Admin API)
+    pub async fn admin_delete_auth_user(&self, user_id: &str) -> Result<(), String> {
+        let uid = user_id.trim();
+        if uid.is_empty() {
+            return Err("user_id mancante per eliminazione Auth".to_string());
+        }
+
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/auth/v1/admin/users/{}", base, uid);
+
+        println!("📡 Supabase Auth Admin DELETE user_id={}", uid);
+
+        let request = self.http.delete(&url);
+        let response = self
+            .apply_service_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Auth Admin delete: {}", e))?;
+
+        if response.status().is_success() {
+            return Ok(());
+        }
+        let status = response.status();
+        let err_body = response.text().await.unwrap_or_default();
+        Err(format!(
+            "Errore eliminazione utente Auth ({}): {}",
+            status, err_body
+        ))
+    }
+
+    /// Imposta password utente Auth (Admin API)
+    pub async fn admin_update_auth_password(
+        &self,
+        user_id: &str,
+        password: &str,
+    ) -> Result<(), String> {
+        self.admin_update_auth_user(user_id, Some(password), None)
+            .await
+    }
+
+    pub async fn fetch_impostazioni(&self, filter: Option<&str>) -> Result<Vec<Value>, String> {
+        self.fetch_table("impostazioni", filter, None, Some("Impostazione.asc"))
+            .await
+    }
+
     pub async fn fetch_dotazioni_mezzi(&self, filter: Option<&str>) -> Result<Vec<Value>, String> {
         self.fetch_table("dotazioni_mezzi", filter, None, Some("Dotazione.asc"))
             .await
@@ -267,6 +669,11 @@ impl SupabaseClient {
 
     pub async fn fetch_tipi_pagamento(&self, filter: Option<&str>) -> Result<Vec<Value>, String> {
         self.fetch_table("tipo_pagamenti", filter, None, None).await
+    }
+
+    pub async fn fetch_stati_del_servizio(&self, filter: Option<&str>) -> Result<Vec<Value>, String> {
+        self.fetch_table("stato_del_servizio", filter, None, Some("id.asc"))
+            .await
     }
 
     /// Inserisce una nuova tipologia in TipoSocio_supa
@@ -337,6 +744,118 @@ impl SupabaseClient {
         .await
     }
 
+    /// Comuni/luoghi prelievo e destinazione dai servizi (autocomplete Nuovo Servizio).
+    pub async fn fetch_servizi_localita_autocomplete(&self) -> Result<Vec<Value>, String> {
+        let select_variants = [
+            "Prelievo_Comune,Prelievo_Indirizzo,Destinazione_Comune,Destinazione_Indirizzo",
+            "PRELIEVO_COMUNE,PRELIEVO_INDIRIZZO,DESTINAZIONE_COMUNE,DESTINAZIONE_INDIRIZZO",
+        ];
+        for select in select_variants {
+            match self.fetch_table("servizi", None, Some(select), None).await {
+                Ok(rows) if !rows.is_empty() => return Ok(rows),
+                Ok(_) => continue,
+                Err(e) => {
+                    println!("⚠️ fetch_servizi_localita_autocomplete select {}: {}", select, e);
+                    continue;
+                }
+            }
+        }
+        // Fallback: almeno i comuni di prelievo
+        self.fetch_servizi_comuni_prelievo().await
+    }
+
+    /// Comuni di prelievo presenti nei servizi (solo colonna comune, leggero).
+    pub async fn fetch_servizi_comuni_prelievo(&self) -> Result<Vec<Value>, String> {
+        for col in ["Prelievo_Comune", "PRELIEVO_COMUNE", "Prelievo_comune"] {
+            match self
+                .fetch_table(
+                    "servizi",
+                    Some(&format!("{}=not.is.null", col)),
+                    Some(col),
+                    Some(&format!("{}.asc", col)),
+                )
+                .await
+            {
+                Ok(rows) if !rows.is_empty() => return Ok(rows),
+                Ok(_) => continue,
+                Err(e) => {
+                    println!("⚠️ fetch_servizi_comuni_prelievo colonna {}: {}", col, e);
+                    continue;
+                }
+            }
+        }
+        Err("Colonna Prelievo_Comune non trovata nella tabella servizi".to_string())
+    }
+
+    /// Elenco IdSocio presenti in almeno un servizio (solo colonna IdSocio, leggero).
+    pub async fn fetch_servizi_idsocio(&self) -> Result<Vec<Value>, String> {
+        for col in ["IdSocio", "IDSOCIO"] {
+            match self
+                .fetch_table(
+                    "servizi",
+                    Some(&format!("{}=not.is.null", col)),
+                    Some(col),
+                    None,
+                )
+                .await
+            {
+                Ok(rows) if !rows.is_empty() => return Ok(rows),
+                Ok(_) => continue,
+                Err(e) => {
+                    println!("⚠️ fetch_servizi_idsocio colonna {}: {}", col, e);
+                    continue;
+                }
+            }
+        }
+        Err("Colonna IdSocio non trovata nella tabella servizi".to_string())
+    }
+
+    /// Massimo idservizio in tabella (0 se vuota o colonna non trovata)
+    pub async fn fetch_max_servizio_id(&self) -> Result<u32, String> {
+        let table_name = &self.config.tables.servizi;
+        let base = self.config.url.trim_end_matches('/');
+
+        for id_col in ["idservizio", "IdServizio", "IDSERVIZIO"] {
+            let url = format!(
+                "{}/rest/v1/{}?select={}&order={}.desc&limit=1",
+                base, table_name, id_col, id_col
+            );
+
+            println!("📡 Supabase GET max idservizio [{}]: {}", id_col, url);
+
+            let request = self
+                .http
+                .get(&url)
+                .header("Content-Type", "application/json");
+
+            let response = self
+                .apply_auth_headers(request)
+                .send()
+                .await
+                .map_err(|e| format!("Errore connessione Supabase max idservizio: {}", e))?;
+
+            if !response.status().is_success() {
+                continue;
+            }
+
+            let rows: Vec<Value> = response
+                .json()
+                .await
+                .map_err(|e| format!("Errore parsing max idservizio: {}", e))?;
+
+            if let Some(row) = rows.first() {
+                let id_str = get_field(row, id_col);
+                if let Ok(id) = id_str.parse::<u32>() {
+                    return Ok(id);
+                }
+            }
+
+            return Ok(0);
+        }
+
+        Err("Impossibile determinare il massimo idservizio in Servizi_supa".to_string())
+    }
+
     /// Aggiorna un servizio per IdServizio (PATCH PostgREST)
     pub async fn patch_servizio(
         &self,
@@ -401,11 +920,102 @@ impl SupabaseClient {
         Err(format!("Errore Supabase PATCH HTTP {}: {}", status, err_body))
     }
 
+    /// Inserisce un nuovo servizio (POST PostgREST)
+    pub async fn insert_servizio(
+        &self,
+        body: &serde_json::Map<String, Value>,
+    ) -> Result<Value, String> {
+        if body.is_empty() {
+            return Err("Nessun campo da inserire per il nuovo servizio".to_string());
+        }
+
+        let table_name = &self.config.tables.servizi;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/rest/v1/{}", base, table_name);
+
+        println!("📡 Supabase POST [servizi → {}]", table_name);
+
+        let request = self
+            .http
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .header("Prefer", "return=representation")
+            .json(body);
+
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Supabase POST servizi: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let err_body = response.text().await.unwrap_or_default();
+            return Err(format!(
+                "Errore Supabase POST servizi HTTP {}: {}",
+                status, err_body
+            ));
+        }
+
+        let rows: Vec<Value> = response
+            .json()
+            .await
+            .map_err(|e| format!("Errore parsing risposta insert servizio: {}", e))?;
+
+        rows.into_iter()
+            .next()
+            .ok_or_else(|| "Nessuna riga restituita dopo insert servizio".to_string())
+    }
+
+    /// Elimina un servizio per idservizio (DELETE PostgREST)
+    pub async fn delete_servizio(&self, id_servizio: u32) -> Result<(), String> {
+        let table_name = &self.config.tables.servizi;
+        let base = self.config.url.trim_end_matches('/');
+
+        let mut last_error = None;
+        for id_col in ["idservizio", "IdServizio", "IDSERVIZIO"] {
+            let url = format!(
+                "{}/rest/v1/{}?{}=eq.{}",
+                base, table_name, id_col, id_servizio
+            );
+
+            println!(
+                "📡 Supabase DELETE [servizi → {}] {}={}",
+                table_name, id_col, id_servizio
+            );
+
+            let request = self.http.delete(&url);
+            let response = self
+                .apply_auth_headers(request)
+                .send()
+                .await
+                .map_err(|e| format!("Errore connessione Supabase DELETE servizi: {}", e))?;
+
+            if response.status().is_success() {
+                return Ok(());
+            }
+
+            let status = response.status();
+            let err_body = response.text().await.unwrap_or_default();
+            last_error = Some(format!("HTTP {}: {}", status, err_body));
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            format!("Impossibile eliminare servizio idservizio={}", id_servizio)
+        }))
+    }
+
+    /// Storico tesseramenti: tabella dedicata (più anni per IdSocio).
     pub async fn fetch_tesseramenti(
         &self,
         filter: Option<&str>,
     ) -> Result<Vec<Value>, String> {
-        self.fetch_table("tesseramenti", filter, None, Some("Anno.desc"))
+        self.fetch_table(
+            "tesseramenti",
+            filter,
+            None,
+            Some("Anno.desc.nullslast,DataTesseramento.desc.nullslast"),
+        )
             .await
     }
 
@@ -548,6 +1158,58 @@ impl SupabaseClient {
         }))
     }
 
+    /// Aggiorna una tratta per IdTratta (PATCH PostgREST)
+    pub async fn patch_tratta(
+        &self,
+        id_tratta: u32,
+        body: &serde_json::Map<String, Value>,
+    ) -> Result<(), String> {
+        if body.is_empty() {
+            return Ok(());
+        }
+
+        let table_name = &self.config.tables.tratte;
+        let base = self.config.url.trim_end_matches('/');
+        let mut last_error: Option<String> = None;
+
+        for id_col in ["IdTratta", "ID_TRATTA", "id"] {
+            let url = format!(
+                "{}/rest/v1/{}?{}=eq.{}",
+                base, table_name, id_col, id_tratta
+            );
+
+            println!(
+                "📡 Supabase PATCH [tratte → {}] {}={}",
+                table_name, id_col, id_tratta
+            );
+
+            let request = self
+                .http
+                .patch(&url)
+                .header("Content-Type", "application/json")
+                .header("Prefer", "return=minimal")
+                .json(body);
+
+            let response = self
+                .apply_auth_headers(request)
+                .send()
+                .await
+                .map_err(|e| format!("Errore connessione Supabase PATCH tratte: {}", e))?;
+
+            if response.status().is_success() {
+                return Ok(());
+            }
+
+            let status = response.status();
+            let err_body = response.text().await.unwrap_or_default();
+            last_error = Some(format!("HTTP {}: {}", status, err_body));
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            format!("Impossibile aggiornare tratta IdTratta={}", id_tratta)
+        }))
+    }
+
     /// Inserisce un nuovo automezzo (POST PostgREST)
     pub async fn insert_automezzo(
         &self,
@@ -591,14 +1253,15 @@ impl SupabaseClient {
             .ok_or_else(|| "Nessuna riga restituita dopo insert automezzo".to_string())
     }
 
-    /// Inserisce o aggiorna un tesseramento (POST o PATCH su tabella tesseramenti)
+    /// Salva una riga in Tesseramenti_supa:
+    /// - se c'è `row_id` → PATCH (modifica)
+    /// - altrimenti → POST (nuovo)
+    /// Non usa ON CONFLICT: sulla tabella non c'è UNIQUE(IdSocio, Anno).
     pub async fn upsert_tesseramento(
         &self,
         body: &serde_json::Map<String, Value>,
+        row_id: Option<&str>,
     ) -> Result<Value, String> {
-        let table_name = &self.config.tables.tesseramenti;
-        let base = self.config.url.trim_end_matches('/');
-
         let idsocio = body
             .get("IdSocio")
             .map(json_to_string)
@@ -609,11 +1272,14 @@ impl SupabaseClient {
             return Err("IdSocio e Anno obbligatori per il tesseramento".to_string());
         }
 
-        // Prova PATCH se esiste già (IdSocio + Anno)
-        for id_col in ["IdSocio", "IDSOCIO"] {
-            let url = format!(
-                "{}/rest/v1/{}?{}=eq.{}&Anno=eq.{}",
-                base, table_name, id_col, idsocio, anno
+        let table_name = &self.config.tables.tesseramenti;
+        let base = self.config.url.trim_end_matches('/');
+
+        let response = if let Some(id) = row_id.map(str::trim).filter(|s| !s.is_empty()) {
+            let url = format!("{}/rest/v1/{}?id=eq.{}", base, table_name, id);
+            println!(
+                "📡 Supabase PATCH [tesseramenti → {}] id={} IdSocio={} Anno={}",
+                table_name, id, idsocio, anno
             );
 
             let request = self
@@ -623,48 +1289,35 @@ impl SupabaseClient {
                 .header("Prefer", "return=representation")
                 .json(body);
 
-            let response = self
-                .apply_auth_headers(request)
+            self.apply_auth_headers(request)
                 .send()
                 .await
-                .map_err(|e| format!("Errore connessione Supabase PATCH tesseramenti: {}", e))?;
+                .map_err(|e| format!("Errore connessione Supabase PATCH tesseramenti: {}", e))?
+        } else {
+            let url = format!("{}/rest/v1/{}", base, table_name);
+            println!(
+                "📡 Supabase POST [tesseramenti → {}] IdSocio={} Anno={}",
+                table_name, idsocio, anno
+            );
 
-            if response.status().is_success() {
-                let rows: Vec<Value> = response
-                    .json()
-                    .await
-                    .map_err(|e| format!("Errore parsing risposta tesseramento: {}", e))?;
-                if let Some(row) = rows.into_iter().next() {
-                    return Ok(row);
-                }
-            }
-        }
+            let request = self
+                .http
+                .post(&url)
+                .header("Content-Type", "application/json")
+                .header("Prefer", "return=representation")
+                .json(body);
 
-        // INSERT nuovo tesseramento
-        let url = format!("{}/rest/v1/{}", base, table_name);
-        println!(
-            "📡 Supabase POST [tesseramenti → {}] IdSocio={} Anno={}",
-            table_name, idsocio, anno
-        );
-
-        let request = self
-            .http
-            .post(&url)
-            .header("Content-Type", "application/json")
-            .header("Prefer", "return=representation")
-            .json(body);
-
-        let response = self
-            .apply_auth_headers(request)
-            .send()
-            .await
-            .map_err(|e| format!("Errore connessione Supabase POST tesseramenti: {}", e))?;
+            self.apply_auth_headers(request)
+                .send()
+                .await
+                .map_err(|e| format!("Errore connessione Supabase POST tesseramenti: {}", e))?
+        };
 
         if !response.status().is_success() {
             let status = response.status();
             let err_body = response.text().await.unwrap_or_default();
             return Err(format!(
-                "Errore Supabase POST tesseramenti HTTP {}: {}",
+                "Errore Supabase salvataggio tesseramenti HTTP {}: {}",
                 status, err_body
             ));
         }
@@ -672,11 +1325,49 @@ impl SupabaseClient {
         let rows: Vec<Value> = response
             .json()
             .await
-            .map_err(|e| format!("Errore parsing risposta tesseramento: {}", e))?;
+            .map_err(|e| format!("Errore parsing risposta salvataggio tesseramenti: {}", e))?;
 
-        rows.into_iter()
-            .next()
-            .ok_or_else(|| "Nessuna riga restituita dopo insert tesseramento".to_string())
+        rows.into_iter().next().ok_or_else(|| {
+            format!(
+                "Nessuna riga restituita dopo salvataggio tesseramento IdSocio={} Anno={}",
+                idsocio, anno
+            )
+        })
+    }
+
+    /// Aggiorna i campi tessera “corrente” su tesserati (usati da Elenco Soci).
+    pub async fn sync_tesseramento_su_tesserati(
+        &self,
+        idsocio: &str,
+        anno: &str,
+        numero: Option<&Value>,
+        data: Option<&Value>,
+        tipologia: Option<&Value>,
+    ) -> Result<(), String> {
+        if idsocio.is_empty() || anno.is_empty() {
+            return Ok(());
+        }
+
+        let mut patch = serde_json::Map::new();
+        patch.insert("Tesseramento_Anno".to_string(), serde_json::json!(anno));
+        if let Some(numero) = numero {
+            patch.insert("Tesseramento_Numero".to_string(), numero.clone());
+        }
+        if let Some(data) = data {
+            patch.insert("Tesseramento_Data".to_string(), data.clone());
+        }
+        if let Some(tipologia) = tipologia {
+            let tip = json_to_string(tipologia);
+            if !tip.is_empty() {
+                patch.insert("TipologiaSocio".to_string(), tipologia.clone());
+            }
+        }
+
+        println!(
+            "📡 Sync tesseramento corrente su tesserati IdSocio={} Anno={}",
+            idsocio, anno
+        );
+        self.patch_tesserato(idsocio, &patch).await
     }
 }
 

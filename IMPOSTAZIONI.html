@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Impostazioni - AUSER Asti</title>
+    <link rel="stylesheet" href="impostazioni.css">
+</head>
+<body>
+    <div class="imp-app">
+        <header class="imp-header">
+            <h1 class="imp-title">IMPOSTAZIONI</h1>
+            <button type="button" class="imp-btn imp-btn-chiudi" id="btn-chiudi">CHIUDI</button>
+        </header>
+
+        <p class="imp-intro">Valori della tabella Impostazioni_supa</p>
+
+        <div class="imp-loading" id="imp-loading">Caricamento impostazioni...</div>
+        <div class="imp-errore" id="imp-errore" hidden></div>
+        <div class="imp-vuoto" id="imp-vuoto" hidden>Nessuna impostazione trovata.</div>
+
+        <div class="imp-lista" id="imp-lista" hidden></div>
+    </div>
+
+    <script type="module" src="impostazioni.js"></script>
+</body>
+</html>

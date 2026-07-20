@@ -1,3 +1,26 @@
+import {
+    initModificaServizio,
+    setupModaleModifica,
+    apriModalModifica,
+    caricaDatiModificaServizio
+} from './modifica-servizio.js';
+import {
+    initCompletaServizio,
+    setupModaleCompleta,
+    apriModalCompleta,
+    caricaDatiCompletaServizio
+} from './completa-servizio.js';
+import { testoNoteFineVisibile, parseTrattaDaNote, htmlContenutoRiepilogoTratta, normalizzaPayloadTratta } from './tratta-riepilogo.js';
+
+function escapeHtmlElenco(str) {
+    if (str === undefined || str === null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 // Import Tauri API
 let invoke, appWindow;
 
@@ -15,11 +38,247 @@ async function initTauri() {
     }
 }
 
-// Verifica se siamo in ambiente Tauri
 function isTauri() {
-    return typeof window !== 'undefined' && 
-           (window.__TAURI_INTERNALS__ !== undefined || 
+    return typeof window !== 'undefined' &&
+        (window.__TAURI_INTERNALS__ !== undefined ||
             window.__TAURI_IPC__ !== undefined);
+}
+
+async function apriSchedaServizioStampa(id) {
+    const idNum = parseInt(id, 10);
+    if (!Number.isFinite(idNum) || idNum <= 0) {
+        alert('ID servizio non valido');
+        return;
+    }
+
+    const url = `SCHEDASERVIZIO.html?id=${encodeURIComponent(idNum)}`;
+
+    if (isTauri()) {
+        try {
+            const { WebviewWindow } = await import('@tauri-apps/api/window');
+            const label = `scheda-servizio-${idNum}`;
+
+            const existing = WebviewWindow.getByLabel(label);
+            if (existing) {
+                try {
+                    await existing.show();
+                    await existing.setFocus();
+                    return;
+                } catch (err) {
+                    console.warn('Finestra scheda non riutilizzabile:', err);
+                    try { await existing.close(); } catch (_) { /* ignore */ }
+                }
+            }
+
+            const webview = new WebviewWindow(label, {
+                url,
+                title: `Scheda servizio ${idNum}`,
+                width: 900,
+                height: 1100,
+                resizable: true,
+                maximized: false,
+                decorations: true,
+                center: true
+            });
+
+            webview.setFocus().catch((err) => console.warn('setFocus scheda:', err));
+            return;
+        } catch (error) {
+            console.error('Errore apertura scheda servizio:', error);
+        }
+    }
+
+    window.open(url, `scheda-servizio-${idNum}`, 'width=900,height=1100');
+}
+
+function getIdsocioFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return (params.get('idsocio') || '').trim();
+}
+
+function getNominativoFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return (params.get('nominativo') || '').trim();
+}
+
+function getOperatoreFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return (params.get('operatore') || '').trim();
+}
+
+async function caricaTuttiAnniSeFiltroUrl() {
+    if (filtroAnnoModo === 'tutti') return;
+    applicaFiltroArchiviaIniziale = false;
+    filtroAnnoModo = 'tutti';
+    updateAnnoHeaderUI();
+    await getServiziForModo('tutti');
+    serviziOriginali = getServiziListaBaseForModo('tutti');
+}
+
+/** Filtro iniziale da URL (?idsocio= o ?operatore=). */
+async function applicaFiltroInizialeDaUrl() {
+    const idsocio = getIdsocioFromUrl();
+    const operatore = getOperatoreFromUrl();
+    if (!idsocio && !operatore) return;
+
+    await caricaTuttiAnniSeFiltroUrl();
+
+    const titleEl = document.getElementById('servizi-title-text');
+    const nominativoSocio = getNominativoFromUrl();
+
+    if (idsocio) {
+        filtriRicerca.idsocio = idsocio;
+        const inputIdsocio = document.getElementById('ricerca-idsocio');
+        if (inputIdsocio) inputIdsocio.value = idsocio;
+        if (titleEl) {
+            titleEl.textContent = nominativoSocio
+                ? `SERVIZI SOCIO ${idsocio} — ${nominativoSocio}`
+                : `SERVIZI SOCIO ${idsocio}`;
+        }
+    }
+
+    if (operatore) {
+        filtriRicerca.operatore = operatore;
+        const inputOperatore = document.getElementById('ricerca-operatore');
+        if (inputOperatore) inputOperatore.value = operatore;
+        if (titleEl && !idsocio) {
+            titleEl.textContent = `SERVIZI OPERATORE — ${operatore}`;
+        }
+    }
+
+    applyAllFilters();
+    updateFilterWarning();
+    updateServiziCount();
+}
+
+async function focusElencoSociWindow() {
+    if (!isTauri()) return;
+    try {
+        const { WebviewWindow } = await import('@tauri-apps/api/window');
+        const elencoSoci = WebviewWindow.getByLabel('elenco-soci');
+        if (elencoSoci) {
+            await elencoSoci.show();
+            await elencoSoci.setFocus();
+        }
+    } catch (err) {
+        console.warn('Ripristino focus Elenco Soci:', err);
+    }
+}
+
+async function focusElencoOperatoriWindow() {
+    if (!isTauri()) return;
+    try {
+        const { WebviewWindow, getCurrent } = await import('@tauri-apps/api/window');
+        const elencoOperatori = WebviewWindow.getByLabel('elenco-operatori');
+        if (elencoOperatori) {
+            await elencoOperatori.show();
+            await elencoOperatori.setFocus();
+            return;
+        }
+        const current = getCurrent();
+        if (current && /elencooperatori\.html/i.test(window.location.pathname)) {
+            await current.show();
+            await current.setFocus();
+        }
+    } catch (err) {
+        console.warn('Ripristino focus Elenco Operatori:', err);
+    }
+}
+
+function isFinestraServiziDaElencoSocio(label = '') {
+    return !!getIdsocioFromUrl() || String(label).startsWith('elenco-servizi-socio-');
+}
+
+function isFinestraServiziDaElencoOperatori(label = '') {
+    return !!getOperatoreFromUrl() || String(label).startsWith('elenco-servizi-operatore-');
+}
+
+async function chiudiFinestraElencoServizi() {
+    const daElencoSocio = isFinestraServiziDaElencoSocio();
+    const daElencoOperatori = isFinestraServiziDaElencoOperatori();
+
+    if (isTauri()) {
+        try {
+            const { getCurrent, WebviewWindow } = await import('@tauri-apps/api/window');
+            const currentWindow = getCurrent();
+            const label = String(currentWindow?.label || '');
+
+            const isElencoServizi =
+                label === 'elenco-servizi'
+                || label.startsWith('elenco-servizi-socio-')
+                || label.startsWith('elenco-servizi-operatore-');
+
+            const tornaAllaHome = async () => {
+                try {
+                    const mainWin = WebviewWindow.getByLabel('main');
+                    if (mainWin) {
+                        await mainWin.unminimize().catch(() => {});
+                        await mainWin.show();
+                        await mainWin.setFocus();
+                    }
+                } catch (_) { /* ignore */ }
+            };
+
+            // Chiudi solo la finestra popup di Elenco Servizi — mai la home
+            if (isElencoServizi) {
+                if (daElencoSocio) {
+                    await focusElencoSociWindow();
+                } else if (daElencoOperatori) {
+                    await focusElencoOperatoriWindow();
+                } else {
+                    await tornaAllaHome();
+                }
+                await currentWindow.close();
+                return;
+            }
+
+            // Se Elenco Servizi è finito sulla finestra principale: torna a index, non chiudere l'app
+            await tornaAllaHome();
+            window.location.href = 'index.html';
+            return;
+        } catch (error) {
+            console.error('Errore nella chiusura finestra:', error);
+            if (!daElencoSocio && !daElencoOperatori) {
+                window.location.href = 'index.html';
+            }
+        }
+        return;
+    }
+
+    if (window.opener) {
+        window.close();
+    } else if (!daElencoSocio && !daElencoOperatori) {
+        window.location.href = 'index.html';
+    }
+}
+
+async function setupChiusuraRitornoFinestraOrigine() {
+    if (!isTauri()) return;
+    const idsocio = getIdsocioFromUrl();
+    const operatore = getOperatoreFromUrl();
+    if (!idsocio && !operatore) return;
+
+    try {
+        const { getCurrent, WebviewWindow } = await import('@tauri-apps/api/window');
+        const win = getCurrent();
+        await win.listen('tauri://close-requested', async () => {
+            if (idsocio) {
+                const elencoSoci = WebviewWindow.getByLabel('elenco-soci');
+                if (elencoSoci) {
+                    await elencoSoci.show();
+                    await elencoSoci.setFocus();
+                }
+            } else if (operatore) {
+                const elencoOperatori = WebviewWindow.getByLabel('elenco-operatori');
+                if (elencoOperatori) {
+                    await elencoOperatori.show();
+                    await elencoOperatori.setFocus();
+                }
+            }
+        });
+    } catch (err) {
+        console.warn('Listener chiusura servizi filtrati:', err);
+    }
 }
 
 // Carica i dati del servizio da SharePoint
@@ -32,7 +291,7 @@ async function loadServizioData(servizioId) {
     
     try {
         console.log('Caricamento servizio ID:', servizioId);
-        const servizio = await invoke('get_servizio_completo', { servizio_id: parseInt(servizioId) });
+        const servizio = await invoke('get_servizio_completo', { servizioId: parseInt(servizioId, 10) });
         console.log('Servizio caricato:', servizio);
         populateForm(servizio);
     } catch (error) {
@@ -82,7 +341,7 @@ function populateForm(servizio) {
     setValue('tipo-pagamento', servizio.tipo_pagamento);
     setValue('data-bonifico', servizio.data_bonifico);
     setValue('stato-servizio', servizio.stato_servizio);
-    setValue('note-fine-servizio', servizio.note_fine_servizio);
+    setValue('note-fine-servizio', testoNoteFineVisibile(servizio.note_fine_servizio));
 }
 
 // Carica dati di esempio per demo
@@ -290,7 +549,6 @@ let allOperatori = [];
 
 // Cache per automezzi
 let allAutomezzi = [];
-let servizioInModifica = null;
 
 function getAnnoCorrente() {
     return new Date().getFullYear();
@@ -481,6 +739,7 @@ async function loadAllServizi() {
         updateAnnoHeaderUI();
         populateListaServizi([...serviziOriginali]);
         populateForm(servizioDemo);
+        updateFiltroStatoButtons();
         return;
     }
     
@@ -499,6 +758,7 @@ async function loadAllServizi() {
             serviziCache = [];
             updateServiziCount();
             updatePaginationBar(0, 1, 1);
+            updateFiltroStatoButtons();
             return;
         }
         
@@ -682,7 +942,7 @@ function createServizioBlock(servizio) {
         </div>
         <div class="form-group form-group-note">
             <label>NOTE FINE SERVIZIO</label>
-            <textarea readonly>${servizio.note_fine_servizio || ''}</textarea>
+            <textarea readonly>${escapeHtmlElenco(testoNoteFineVisibile(servizio.note_fine_servizio))}</textarea>
         </div>
     `;
 
@@ -692,6 +952,20 @@ function createServizioBlock(servizio) {
     formSections.appendChild(formSection2);
     formSections.appendChild(formSection3);
     formSections.appendChild(formSection4);
+
+    const trattaSalvata = normalizzaPayloadTratta(servizio.tratta_fuori_asti)
+        || parseTrattaDaNote(servizio.note_fine_servizio).tratta;
+    if (trattaSalvata && (trattaSalvata.comune || trattaSalvata.localita || trattaSalvata.id !== '' && trattaSalvata.id != null)) {
+        const trattaSection = document.createElement('div');
+        trattaSection.className = 'form-section es-tratta-riepilogo-section';
+        trattaSection.innerHTML = `
+            <div class="ns-tratta-selezionata es-tratta-riepilogo">
+                ${htmlContenutoRiepilogoTratta(trattaSalvata)}
+            </div>
+        `;
+        formSections.appendChild(trattaSection);
+    }
+
     servizioBlock.appendChild(formSections);
 
     return servizioBlock;
@@ -816,26 +1090,45 @@ function updateFilterWarning() {
     }
 }
 
+function haServiziStatoCompletato() {
+    return serviziOriginali.some(s =>
+        String(s.stato_servizio || '').trim().toUpperCase() === 'COMPLETATO'
+    );
+}
+
+function normalizzaStatoServizio(stato) {
+    return String(stato || '').trim().toUpperCase();
+}
+
 // Funzione per aggiornare lo stato visivo dei pulsanti filtro stato
 function updateFiltroStatoButtons() {
     const btnDaEseguire = document.getElementById('btn-da-eseguire');
     const btnEseguiti = document.getElementById('btn-eseguiti');
     const btnAnnullati = document.getElementById('btn-annullati');
+    const btnCompletato = document.getElementById('btn-completato');
     const btnTutti = document.getElementById('btn-tutti');
-    
+    const haCompletati = haServiziStatoCompletato();
+
+    if (btnCompletato) {
+        btnCompletato.disabled = !haCompletati;
+    }
+
     // Rimuovi classe active da tutti i pulsanti
-    [btnDaEseguire, btnEseguiti, btnAnnullati, btnTutti].forEach(btn => {
+    [btnDaEseguire, btnEseguiti, btnAnnullati, btnCompletato, btnTutti].forEach(btn => {
         if (btn) btn.classList.remove('active');
     });
-    
+
     // Aggiungi classe active al pulsante corrispondente al filtro attivo
     if (filtroStatoAttivo && valoreFiltroStato) {
-        if (valoreFiltroStato === 'DA ESEGUIRE' && btnDaEseguire) {
+        const stato = normalizzaStatoServizio(valoreFiltroStato);
+        if (stato === 'DA ESEGUIRE' && btnDaEseguire) {
             btnDaEseguire.classList.add('active');
-        } else if (valoreFiltroStato === 'ESEGUITO' && btnEseguiti) {
+        } else if (stato === 'ESEGUITO' && btnEseguiti) {
             btnEseguiti.classList.add('active');
-        } else if (valoreFiltroStato === 'ANNULLATO' && btnAnnullati) {
+        } else if (stato === 'ANNULLATO' && btnAnnullati) {
             btnAnnullati.classList.add('active');
+        } else if (stato === 'COMPLETATO' && btnCompletato && haCompletati) {
+            btnCompletato.classList.add('active');
         }
     }
 }
@@ -1045,6 +1338,11 @@ function rimuoviTuttiFiltri() {
 
 // Funzione helper per applicare tutti i filtri attivi
 function applyAllFilters() {
+    if (filtroStatoAttivo && normalizzaStatoServizio(valoreFiltroStato) === 'COMPLETATO' && !haServiziStatoCompletato()) {
+        filtroStatoAttivo = false;
+        valoreFiltroStato = null;
+    }
+
     let serviziFiltrati = [...serviziOriginali];
     
     // Applica filtro TRASPORTATO se attivo
@@ -1066,8 +1364,8 @@ function applyAllFilters() {
     // Applica filtro STATO DEL SERVIZIO se attivo
     if (filtroStatoAttivo && valoreFiltroStato) {
         serviziFiltrati = serviziFiltrati.filter(servizio => {
-            const stato = servizio.stato_servizio || '';
-            return stato.trim().toUpperCase() === valoreFiltroStato.trim().toUpperCase();
+            const stato = normalizzaStatoServizio(servizio.stato_servizio);
+            return stato === normalizzaStatoServizio(valoreFiltroStato);
         });
     }
     
@@ -1197,6 +1495,7 @@ function applyAllFilters() {
 
     // Ripopola la lista con i servizi filtrati (pagina 1)
     populateListaServizi(serviziFiltrati);
+    updateFiltroStatoButtons();
 }
 
 // Event listeners
@@ -1205,12 +1504,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Inizializza Tauri
     await initTauri();
+
+    // Chiusura con X → torna a Elenco Soci / Operatori (finestra aperta da pulsante SERVIZI)
+    await setupChiusuraRitornoFinestraOrigine();
     
     // Carica gli automezzi prima di caricare i servizi
     await caricaAutomezzi();
     
     // Carica tutti i servizi e popola la lista
     await loadAllServizi();
+
+    // Filtro da URL (apertura da Elenco Soci → SERVIZI)
+    await applicaFiltroInizialeDaUrl();
     
     // Inizializza lo stato dei pulsanti filtro stato
     updateFiltroStatoButtons();
@@ -1220,6 +1525,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btnDaEseguire = document.getElementById('btn-da-eseguire');
     const btnEseguiti = document.getElementById('btn-eseguiti');
     const btnAnnullati = document.getElementById('btn-annullati');
+    const btnCompletato = document.getElementById('btn-completato');
     const btnTutti = document.getElementById('btn-tutti');
     
     if (btnDaEseguire) {
@@ -1230,6 +1536,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (btnAnnullati) {
         btnAnnullati.addEventListener('click', () => filtraPerStato('ANNULLATO'));
+    }
+    if (btnCompletato) {
+        btnCompletato.addEventListener('click', () => {
+            if (!btnCompletato.disabled) {
+                filtraPerStato('COMPLETATO');
+            }
+        });
     }
     if (btnTutti) {
         btnTutti.addEventListener('click', () => rimuoviTuttiFiltri());
@@ -1282,8 +1595,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Carica tesserati e operatori per i dropdown
     await caricaDatiPerDropdown();
-    
-    // Setup modale modifica
+
+    initCompletaServizio({
+        getInvoke: () => invoke,
+        isTauriEnv: isTauri,
+        trovaServizioLocal: trovaServizioById,
+        onSaveSuccess: async (servizioAggiornato) => {
+            aggiornaServizioInCache(servizioAggiornato);
+            renderServiziView(false);
+        }
+    });
+    await caricaDatiCompletaServizio();
+    setupModaleCompleta();
+
+    initModificaServizio({
+        getInvoke: () => invoke,
+        isTauriEnv: isTauri,
+        getTipiPagamentoExtra: getTipiPagamentoUnici,
+        trovaServizioLocal: trovaServizioById,
+        onSaveSuccess: async (servizioAggiornato) => {
+            aggiornaServizioInCache(servizioAggiornato);
+            renderServiziView(false);
+        },
+        onDeleteSuccess: async (servizioId) => {
+            rimuoviServizioDaCache(servizioId);
+            renderServiziView(false);
+        }
+    });
+    await caricaDatiModificaServizio();
     setupModaleModifica();
     
     // Setup modale ricerca
@@ -1293,12 +1632,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     const containerBody = document.getElementById('servizi-container-body');
     if (containerBody) {
         containerBody.addEventListener('click', (e) => {
+            if (e.target.classList.contains('btn-stampa')) {
+                e.stopPropagation();
+                const block = e.target.closest('.servizio-block');
+                const servizioId = block?.dataset?.servizioId;
+                if (servizioId) {
+                    apriSchedaServizioStampa(servizioId);
+                }
+                return;
+            }
+
             if (e.target.classList.contains('btn-modifica')) {
                 e.stopPropagation();
                 const block = e.target.closest('.servizio-block');
                 const servizioId = block?.dataset?.servizioId;
                 if (servizioId) {
                     apriModalModifica(servizioId);
+                }
+                return;
+            }
+
+            if (e.target.classList.contains('btn-completa')) {
+                e.stopPropagation();
+                const block = e.target.closest('.servizio-block');
+                const servizioId = block?.dataset?.servizioId;
+                if (servizioId) {
+                    apriModalCompleta(servizioId);
                 }
                 return;
             }
@@ -1328,41 +1687,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btnStampa = document.getElementById('btn-stampa');
     if (btnStampa) {
         btnStampa.addEventListener('click', async () => {
-            console.log('STAMPA cliccato');
-            if (isTauri() && invoke) {
-                try {
-                    const servizioId = document.getElementById('ids').value;
-                    await invoke('stampa_servizio', { id: parseInt(servizioId) });
-                    alert('Stampa avviata per servizio ' + servizioId);
-                } catch (error) {
-                    console.error('Errore nella stampa:', error);
-                    alert('Errore nella stampa: ' + error.message);
-                }
-            } else {
-                alert('Stampa avviata (modalità demo)');
+            const servizioId = document.getElementById('ids')?.value?.trim();
+            if (!servizioId) {
+                alert('Seleziona o indica un ID servizio da stampare');
+                return;
             }
-        });
-    }
-    
-    // Pulsante COMPLETA
-    const btnCompleta = document.getElementById('btn-completa');
-    if (btnCompleta) {
-        btnCompleta.addEventListener('click', async () => {
-            console.log('COMPLETA cliccato');
-            if (isTauri() && invoke) {
-                try {
-                    const servizioId = document.getElementById('ids').value;
-                    await invoke('completa_servizio', { id: parseInt(servizioId) });
-                    alert('Servizio ' + servizioId + ' completato');
-                    // Ricarica i dati o torna alla home
-                    window.location.href = 'index.html';
-                } catch (error) {
-                    console.error('Errore nel completamento:', error);
-                    alert('Errore nel completamento: ' + error.message);
-                }
-            } else {
-                alert('Servizio completato (modalità demo)');
-            }
+            await apriSchedaServizioStampa(servizioId);
         });
     }
     
@@ -1371,55 +1701,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btnChiudi) {
         btnChiudi.addEventListener('click', async () => {
             console.log('CHIUDI cliccato');
-            if (isTauri()) {
-                try {
-                    const { getCurrent } = await import('@tauri-apps/api/window');
-                    const currentWindow = getCurrent();
-                    
-                    // Verifica che questa sia la finestra elenco-servizi e non la principale
-                    if (currentWindow && currentWindow.label) {
-                        const label = currentWindow.label;
-                        console.log('Label finestra corrente:', label);
-                        
-                        // Chiudi solo se è la finestra elenco-servizi
-                        if (label === 'elenco-servizi') {
-                            await currentWindow.close();
-                        } else {
-                            // Se per qualche motivo non è elenco-servizi, naviga alla home
-                            console.warn('Finestra non è elenco-servizi, navigazione a home invece di chiusura');
-                            window.location.href = 'index.html';
-                        }
-                    } else {
-                        // Fallback: naviga alla home
-                        window.location.href = 'index.html';
-                    }
-                } catch (error) {
-                    console.error('Errore nella chiusura finestra:', error);
-                    // Fallback: naviga alla home invece di chiudere
-                    window.location.href = 'index.html';
-                }
-            } else {
-                // Fallback per browser: chiudi la finestra o torna alla home
-                if (window.opener) {
-                    window.close();
-                } else {
-                    window.location.href = 'index.html';
-                }
-            }
+            await chiudiFinestraElencoServizi();
         });
     }
 });
 
-// ========== MODALE MODIFICA SERVIZIO ==========
-
-function escapeHtmlModifica(str) {
-    if (str === undefined || str === null) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
+// ========== MODALE MODIFICA SERVIZIO (modifica-servizio.js) ==========
 
 function trovaServizioById(id) {
     const sid = String(id);
@@ -1433,10 +1720,23 @@ function aggiornaServizioInCache(servizio) {
         if (!Array.isArray(arr)) return;
         const idx = arr.findIndex(s => String(s.id) === id);
         if (idx >= 0) arr[idx] = servizio;
+        else arr.push(servizio);
     };
     replaceIn(serviziOriginali);
     replaceIn(serviziCache);
     Object.keys(serviziAnnoCache).forEach(key => replaceIn(serviziAnnoCache[key]));
+}
+
+function rimuoviServizioDaCache(servizioId) {
+    const id = String(servizioId);
+    const removeFrom = (arr) => {
+        if (!Array.isArray(arr)) return;
+        const idx = arr.findIndex(s => String(s.id) === id);
+        if (idx >= 0) arr.splice(idx, 1);
+    };
+    removeFrom(serviziOriginali);
+    removeFrom(serviziCache);
+    Object.keys(serviziAnnoCache).forEach(key => removeFrom(serviziAnnoCache[key]));
 }
 
 function getTipiPagamentoUnici() {
@@ -1445,232 +1745,6 @@ function getTipiPagamentoUnici() {
         if (s.tipo_pagamento) tipi.add(s.tipo_pagamento.trim());
     });
     return Array.from(tipi).sort();
-}
-
-function creaSelectModifica(id, label, value, options, spanClass = '') {
-    const opts = options.map(opt => {
-        const val = typeof opt === 'object' ? opt.value : opt;
-        const text = typeof opt === 'object' ? opt.label : opt;
-        const selected = String(val) === String(value || '') ? ' selected' : '';
-        return `<option value="${escapeHtmlModifica(val)}"${selected}>${escapeHtmlModifica(text)}</option>`;
-    }).join('');
-    return `<div class="modifica-form-group ${spanClass}">
-        <label for="${id}">${escapeHtmlModifica(label)}</label>
-        <select id="${id}">${opts}</select>
-    </div>`;
-}
-
-function creaInputModifica(id, label, value, spanClass = '', readonly = false) {
-    return `<div class="modifica-form-group ${spanClass}">
-        <label for="${id}">${escapeHtmlModifica(label)}</label>
-        <input type="text" id="${id}" value="${escapeHtmlModifica(value)}"${readonly ? ' readonly' : ''}>
-    </div>`;
-}
-
-function creaTextareaModifica(id, label, value, spanClass = '') {
-    return `<div class="modifica-form-group ${spanClass}">
-        <label for="${id}">${escapeHtmlModifica(label)}</label>
-        <textarea id="${id}">${escapeHtmlModifica(value)}</textarea>
-    </div>`;
-}
-
-function costruisciFormModifica(servizio) {
-    const tipiPagamento = getTipiPagamentoUnici();
-    if (servizio.tipo_pagamento && !tipiPagamento.includes(servizio.tipo_pagamento.trim())) {
-        tipiPagamento.push(servizio.tipo_pagamento.trim());
-    }
-
-    const operatoriOpts = [{ value: '', label: '' }].concat(
-        (allOperatori || []).map(op => ({
-            value: op.nominativo || '',
-            label: op.nominativo || ''
-        }))
-    );
-    if (servizio.operatore && !operatoriOpts.some(o => o.value === servizio.operatore)) {
-        operatoriOpts.push({ value: servizio.operatore, label: servizio.operatore });
-    }
-
-    const mezziOpts = [{ value: '', label: '— Nessuno —' }].concat(
-        (allAutomezzi || []).map(m => {
-            const nr = normalizzaNumero(m.nr_automezzo);
-            const label = [m.marca, m.modello].filter(Boolean).join(' - ') + (nr ? ` (${nr})` : '');
-            return { value: nr, label: label || nr };
-        })
-    );
-    const mezzoCorrente = normalizzaNumero(servizio.mezzo || '');
-    if (mezzoCorrente && !mezziOpts.some(o => o.value === mezzoCorrente)) {
-        mezziOpts.push({ value: mezzoCorrente, label: costruisciStringaMezzo(servizio) || mezzoCorrente });
-    }
-
-    const archiviaVal = String(servizio.archivia || '').toLowerCase();
-    const archiviaSi = ['true', 'si', 'sì', '1', 'yes'].includes(archiviaVal);
-
-    return `
-        <div class="modifica-form-grid">
-            ${creaInputModifica('mod-id', 'IDSERVIZIO', servizio.id, '', true)}
-            ${creaInputModifica('mod-idsocio', 'IDSOCIO', servizio.idsocio)}
-            ${creaInputModifica('mod-data-prelievo', 'DATA PRELIEVO', servizio.data_prelievo)}
-            ${creaInputModifica('mod-ora-inizio', 'ORA PRELIEVO (O.S.C.)', servizio.ora_inizio)}
-            ${creaInputModifica('mod-comune-prelievo', 'COMUNE PRELIEVO', servizio.comune_prelievo)}
-            ${creaInputModifica('mod-luogo-prelievo', 'LUOGO PRELIEVO', servizio.luogo_prelievo, 'span-2')}
-            ${creaInputModifica('mod-socio-trasportato', 'TRASPORTATO', servizio.socio_trasportato, 'span-2')}
-            ${creaSelectModifica('mod-richiedente', 'RICHIEDENTE', servizio.richiedente, ['', 'SOCIO', 'COMUNE', 'ALTRI'])}
-            ${creaSelectModifica('mod-tipo-servizio', 'TIPO SERVIZIO', servizio.tipo_servizio, ['', 'STANDARD', 'SOLLEVATORE'])}
-            ${creaSelectModifica('mod-carrozzina', 'CARROZZINA', servizio.carrozzina, ['', 'AUSER', 'SOCIO'])}
-            ${creaInputModifica('mod-motivazione', 'MOTIVAZIONE', servizio.motivazione, 'span-2')}
-            ${creaInputModifica('mod-ora-arrivo', 'DATA DESTINAZIONE (O.A.D.)', servizio.ora_arrivo)}
-            ${creaInputModifica('mod-comune-destinazione', 'COMUNE DESTINAZIONE', servizio.comune_destinazione)}
-            ${creaInputModifica('mod-luogo-destinazione', 'LUOGO DESTINAZIONE', servizio.luogo_destinazione, 'span-2')}
-            ${creaSelectModifica('mod-stato-incasso', 'STATO INCASSO', servizio.stato_incasso, ['DA INCASSARE', 'INCASSATO', 'GRATIS', 'ANNULLATO'])}
-            ${creaSelectModifica('mod-tipo-pagamento', 'TIPO PAGAMENTO', servizio.tipo_pagamento, ['', ...tipiPagamento])}
-            ${creaInputModifica('mod-pagamento', 'DONAZIONE / PAGAMENTO', servizio.pagamento)}
-            ${creaSelectModifica('mod-operatore', 'OPERATORE', servizio.operatore, operatoriOpts, 'span-2')}
-            ${creaInputModifica('mod-operatore-2', 'OPERATORE 2', servizio.operatore_2)}
-            ${creaSelectModifica('mod-mezzo', 'MEZZO USATO', mezzoCorrente, mezziOpts, 'span-2')}
-            ${creaInputModifica('mod-tempo', 'TEMPO', servizio.tempo)}
-            ${creaInputModifica('mod-km', 'KM', servizio.km)}
-            ${creaInputModifica('mod-data-bonifico', 'DATA BONIFICO', servizio.data_bonifico)}
-            ${creaInputModifica('mod-data-ricevuta', 'DATA INCASSO / RICEVUTA', servizio.data_ricevuta)}
-            ${creaSelectModifica('mod-stato-servizio', 'STATO SERVIZIO', servizio.stato_servizio, ['DA ESEGUIRE', 'ESEGUITO', 'ANNULLATO'])}
-            ${creaSelectModifica('mod-archivia', 'ARCHIVIA', archiviaSi ? 'SI' : 'NO', ['NO', 'SI'])}
-            ${creaTextareaModifica('mod-note-prelievo', 'NOTE PRELIEVO', servizio.note_prelievo, 'span-2')}
-            ${creaTextareaModifica('mod-note-arrivo', 'NOTE ARRIVO', servizio.note_arrivo, 'span-2')}
-            ${creaTextareaModifica('mod-note-fine-servizio', 'NOTE FINE SERVIZIO', servizio.note_fine_servizio, 'span-4')}
-        </div>
-    `;
-}
-
-function getValoreModifica(id) {
-    const el = document.getElementById(id);
-    return el ? el.value.trim() : '';
-}
-
-function raccogliPayloadModifica() {
-    return {
-        id: parseInt(getValoreModifica('mod-id'), 10),
-        data_prelievo: getValoreModifica('mod-data-prelievo'),
-        idsocio: getValoreModifica('mod-idsocio'),
-        socio_trasportato: getValoreModifica('mod-socio-trasportato'),
-        ora_inizio: getValoreModifica('mod-ora-inizio'),
-        comune_prelievo: getValoreModifica('mod-comune-prelievo'),
-        luogo_prelievo: getValoreModifica('mod-luogo-prelievo'),
-        tipo_servizio: getValoreModifica('mod-tipo-servizio'),
-        carrozzina: getValoreModifica('mod-carrozzina'),
-        richiedente: getValoreModifica('mod-richiedente'),
-        motivazione: getValoreModifica('mod-motivazione'),
-        ora_arrivo: getValoreModifica('mod-ora-arrivo'),
-        comune_destinazione: getValoreModifica('mod-comune-destinazione'),
-        luogo_destinazione: getValoreModifica('mod-luogo-destinazione'),
-        pagamento: getValoreModifica('mod-pagamento'),
-        stato_incasso: getValoreModifica('mod-stato-incasso'),
-        operatore: getValoreModifica('mod-operatore'),
-        operatore_2: getValoreModifica('mod-operatore-2'),
-        mezzo: getValoreModifica('mod-mezzo'),
-        tempo: getValoreModifica('mod-tempo'),
-        km: getValoreModifica('mod-km'),
-        tipo_pagamento: getValoreModifica('mod-tipo-pagamento'),
-        data_bonifico: getValoreModifica('mod-data-bonifico'),
-        data_ricevuta: getValoreModifica('mod-data-ricevuta'),
-        stato_servizio: getValoreModifica('mod-stato-servizio'),
-        note_prelievo: document.getElementById('mod-note-prelievo')?.value || '',
-        note_arrivo: document.getElementById('mod-note-arrivo')?.value || '',
-        note_fine_servizio: document.getElementById('mod-note-fine-servizio')?.value || '',
-        archivia: getValoreModifica('mod-archivia') === 'SI' ? 'SI' : 'NO'
-    };
-}
-
-async function apriModalModifica(servizioId) {
-    const modal = document.getElementById('modal-modifica');
-    const body = document.getElementById('modal-modifica-body');
-    const title = document.getElementById('modal-modifica-title');
-    if (!modal || !body) return;
-
-    let servizio = trovaServizioById(servizioId);
-
-    if (isTauri() && invoke) {
-        try {
-            await invoke('init_supabase_from_config').catch(() => {});
-            servizio = await invoke('get_servizio_completo', { servizio_id: parseInt(servizioId, 10) });
-        } catch (error) {
-            console.warn('Caricamento servizio da server:', error);
-            if (!servizio) {
-                alert('Impossibile caricare il servizio: ' + (error.message || error));
-                return;
-            }
-        }
-    }
-
-    if (!servizio) {
-        alert('Servizio non trovato.');
-        return;
-    }
-
-    servizioInModifica = servizio;
-    if (title) {
-        title.textContent = `MODIFICA SERVIZIO ${servizio.id || ''}`;
-    }
-    body.innerHTML = costruisciFormModifica(servizio);
-    modal.style.display = 'flex';
-    modal.setAttribute('aria-hidden', 'false');
-}
-
-function chiudiModalModifica() {
-    const modal = document.getElementById('modal-modifica');
-    if (!modal) return;
-    modal.style.display = 'none';
-    modal.setAttribute('aria-hidden', 'true');
-    servizioInModifica = null;
-}
-
-async function salvaModificaServizio() {
-    const payload = raccogliPayloadModifica();
-    if (!payload.id || Number.isNaN(payload.id)) {
-        alert('ID servizio non valido.');
-        return;
-    }
-
-    const btnSalva = document.getElementById('btn-salva-modifica');
-    if (btnSalva) btnSalva.disabled = true;
-
-    try {
-        if (isTauri() && invoke) {
-            await invoke('init_supabase_from_config').catch(() => {});
-            await invoke('update_servizio_completo', { payload });
-            const aggiornato = await invoke('get_servizio_completo', { servizio_id: payload.id });
-            aggiornaServizioInCache(aggiornato);
-            renderServiziView(false);
-            chiudiModalModifica();
-        } else {
-            const demo = { ...servizioInModifica, ...payload, id: String(payload.id) };
-            aggiornaServizioInCache(demo);
-            renderServiziView(false);
-            chiudiModalModifica();
-        }
-    } catch (error) {
-        console.error('Errore salvataggio servizio:', error);
-        alert('Errore nel salvataggio: ' + (error.message || error));
-    } finally {
-        if (btnSalva) btnSalva.disabled = false;
-    }
-}
-
-function setupModaleModifica() {
-    document.getElementById('btn-annulla-modifica')?.addEventListener('click', chiudiModalModifica);
-    document.getElementById('btn-close-modal-modifica')?.addEventListener('click', chiudiModalModifica);
-    document.getElementById('btn-salva-modifica')?.addEventListener('click', salvaModificaServizio);
-
-    const modal = document.getElementById('modal-modifica');
-    if (modal) {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) chiudiModalModifica();
-        });
-    }
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modal?.style.display === 'flex') {
-            chiudiModalModifica();
-        }
-    });
 }
 
 // ========== FUNZIONI MODALE RICERCA ==========
@@ -1683,8 +1757,10 @@ async function caricaDatiPerDropdown() {
     }
     
     try {
-        // Carica tutti i tesserati per il dropdown nominativo
+        await invoke('init_supabase_from_config').catch(() => {});
+
         const tesserati = await invoke('get_all_tesserati');
+
         allTesserati = tesserati || [];
         
         // Filtra solo gli operatori
@@ -1693,7 +1769,7 @@ async function caricaDatiPerDropdown() {
             return op === 'SI' || op === 'TRUE' || op === '1';
         });
         
-        console.log(`✓ Caricati ${allTesserati.length} tesserati e ${allOperatori.length} operatori`);
+        console.log(`✓ Caricati ${allTesserati.length} tesserati, ${allOperatori.length} operatori`);
         
         // Popola dropdown stato incasso e tipo pagamento dai servizi
         popolaDropdownDaServizi();

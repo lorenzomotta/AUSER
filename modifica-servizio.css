@@ -1,0 +1,281 @@
+/* Modale Modifica Servizio — shell (form layout da nuovoservizio.css) */
+
+.modal-modifica-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.55);
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    z-index: 2100;
+    padding: 0;
+}
+
+.modal-modifica-sola-lettura .modal-modifica-body input:disabled,
+.modal-modifica-sola-lettura .modal-modifica-body select:disabled,
+.modal-modifica-sola-lettura .modal-modifica-body textarea:disabled {
+    opacity: 1;
+    color: #222;
+    background-color: #eee;
+    cursor: default;
+}
+
+.modal-modifica-content {
+    background-color: #d8d6d3;
+    border-radius: 0;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    display: flex;
+    flex-direction: column;
+    box-shadow: none;
+    overflow: hidden;
+}
+
+.modal-modifica-header.ns-header {
+    margin-bottom: 0;
+    padding: 14px 20px 12px;
+    border-bottom: 3px solid #9ea09e;
+    background: #d8d6d3;
+    border-radius: 0;
+    flex-shrink: 0;
+}
+
+.modal-modifica-header .ns-title {
+    font-size: 1.35rem;
+}
+
+.modal-modifica-body {
+    padding: 12px 16px 20px;
+    overflow-y: auto;
+    flex: 1;
+    background: #d8d6d3;
+}
+
+.modal-modifica-body .modifica-servizio-form {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.modifica-errore {
+    padding: 24px;
+    text-align: center;
+    color: #b00020;
+    font-size: 14px;
+    line-height: 1.5;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #f5c6cb;
+}
+
+.mod-chiusura-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px 16px;
+    align-items: start;
+}
+
+.mod-chiusura-nota {
+    grid-column: 1 / 4;
+    margin-top: 6px;
+}
+
+.mod-chiusura-archivia {
+    grid-column: 4;
+    margin-top: 6px;
+}
+
+.mod-chiusura-nota .ns-textarea {
+    min-height: 72px;
+    resize: vertical;
+}
+
+.mod-dialog-overlay {
+    z-index: 3300;
+}
+
+.mod-dialog-duplica {
+    max-width: 520px;
+}
+
+.mod-duplica-check .mod-duplica-valore {
+    color: #555;
+    font-weight: normal;
+}
+
+.mod-dialog-duplica-titolo {
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.mod-duplica-opzioni {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+    text-align: left;
+}
+
+.mod-duplica-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.mod-duplica-check input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.modal-modifica-header .ns-header-left,
+.modal-modifica-header .ns-header-right {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.modal-modifica-header .btn {
+    width: auto;
+    flex: 0 0 auto;
+}
+
+.btn-elimina-modifica {
+    background-color: #000;
+    color: #fff;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+
+.btn-elimina-modifica:hover:not(:disabled) {
+    background-color: #222;
+}
+
+.btn-elimina-modifica:disabled,
+.btn-duplica-modifica:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-duplica-modifica {
+    background-color: #ffc107;
+    color: #000;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+
+.btn-duplica-modifica:hover:not(:disabled) {
+    background-color: #e0a800;
+}
+
+.btn-modifica-pagamento {
+    background-color: #1565c0;
+    color: #fff;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+
+.btn-modifica-pagamento:hover:not(:disabled) {
+    background-color: #0d47a1;
+}
+
+.modal-modifica-pagamento-edit .ns-section-pagamento.mod-pagamento-editabile {
+    outline: 2px solid #1565c0;
+    outline-offset: 4px;
+    border-radius: 6px;
+    background-color: rgba(21, 101, 192, 0.06);
+}
+
+.modal-modifica-pagamento-edit .ns-section-pagamento.mod-pagamento-editabile input:disabled,
+.modal-modifica-pagamento-edit .ns-section-pagamento.mod-pagamento-editabile select:disabled,
+.modal-modifica-pagamento-edit .ns-section-pagamento.mod-pagamento-editabile textarea:disabled {
+    background-color: #fff;
+}
+
+.mod-mezzo-dettagli-row {
+    margin-top: 10px;
+}
+
+.mod-mezzo-dettagli-row .ns-field label {
+    font-size: 10px;
+}
+
+.mod-mezzo-dettagli-row .ns-input,
+.mod-mezzo-dettagli-row .ns-textarea {
+    font-size: 11px;
+    padding: 5px 8px;
+}
+
+.ns-grid-mezzo-dettagli {
+    grid-template-columns: 98px 112px minmax(0, 1fr);
+    gap: 8px 10px;
+    align-items: end;
+}
+
+.mod-field-scadenza-ztl {
+    max-width: 98px;
+}
+
+.mod-field-scadenza-assic {
+    max-width: 112px;
+}
+
+.mod-field-scadenza.mod-scadenza-prossima .mod-input-scadenza {
+    background-color: #fff9c4;
+}
+
+.mod-field-scadenza.mod-scadenza-scaduta .mod-input-scadenza {
+    background-color: #ffcdd2;
+}
+
+.mod-field-note-mezzo.ns-field-note-mezzo-compact {
+    margin-top: 0;
+    width: auto;
+    min-width: 0;
+}
+
+@media (max-width: 992px) {
+    .ns-grid-mezzo-dettagli {
+        grid-template-columns: 98px 112px minmax(0, 1fr);
+    }
+
+    .mod-field-note-mezzo {
+        grid-column: auto;
+    }
+}
+
+@media (max-width: 992px) {
+    .mod-chiusura-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .mod-chiusura-nota {
+        grid-column: 1 / -1;
+    }
+
+    .mod-chiusura-archivia {
+        grid-column: auto;
+    }
+}
+
+@media (max-width: 768px) {
+    .modal-modifica-header.ns-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .modal-modifica-header .ns-title {
+        order: -1;
+        text-align: center;
+        margin-bottom: 8px;
+    }
+}
