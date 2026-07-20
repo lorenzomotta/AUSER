@@ -47,7 +47,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Installer Windows e aggiornamento automatico.
+            Dialogo aggiornamento in italiano e miglioramenti.
 
             Gli utenti con l'app già installata riceveranno un avviso all'avvio
             e potranno aggiornare con un clic.

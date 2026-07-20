@@ -2,6 +2,7 @@ import {
     loginConEmailPassword,
     vaiAllaHome
 } from './auth-session.js';
+import { controllaAggiornamenti } from './app-updater.js';
 
 let invoke;
 
@@ -79,6 +80,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     cancellaSessioneSilenziosa();
 
     document.getElementById('login-form')?.addEventListener('submit', gestisciLogin);
+
+    // Controllo aggiornamenti in italiano (non blocca il login se fallisce)
+    if (isTauri()) {
+        controllaAggiornamenti().catch((err) => {
+            console.warn('Updater all\'avvio:', err);
+        });
+    }
 });
 
 function cancellaSessioneSilenziosa() {

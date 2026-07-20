@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "AUSER Gestione Operativa",
-    "version": "1.0.2"
+    "version": "1.0.3"
   },
   "tauri": {
     "allowlist": {
@@ -16,6 +16,15 @@
       "shell": {
         "all": false,
         "open": true
+      },
+      "dialog": {
+        "all": false,
+        "ask": true,
+        "message": true
+      },
+      "process": {
+        "all": false,
+        "relaunch": true
       },
       "window": {
         "all": false,
@@ -39,7 +48,7 @@
       "endpoints": [
         "https://github.com/lorenzomotta/AUSER/releases/latest/download/latest.json"
       ],
-      "dialog": true,
+      "dialog": false,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJDNDUwMDJFNDhDMjE3MTUKUldRVkY4SklMZ0JGdkFBZUowM0lBd1lPYTBoc0lzWjlLVisrczRUaWZPODZRRUVlQnJBd3BzN08K"
     },
     "bundle": {

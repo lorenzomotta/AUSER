@@ -6,7 +6,7 @@ Quando pubblichi una nuova versione su GitHub, i PC che hanno già installato
 ## Cosa è già configurato nel progetto
 
 - Updater **attivo** in `src-tauri/tauri.conf.json`
-- Dialogo nativo Tauri (`dialog: true`) all'avvio se c'è una versione nuova
+- Dialogo **personalizzato in italiano** (`dialog: false` + `app-updater.js` sulla pagina di login)
 - Endpoint: release GitHub `lorenzomotta/AUSER` → file `latest.json`
 - Workflow `.github/workflows/release.yml` (build Windows + firma)
 
