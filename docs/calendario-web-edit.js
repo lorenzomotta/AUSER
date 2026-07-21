@@ -64,8 +64,19 @@ export function resolveColonna(row, candidates, fallback) {
             const hit = keys.find((k) => /destinazione.*note|note.*destinazione|note.*arrivo/i.test(k));
             if (hit) return hit;
         }
+        if (joined.includes('ricevuta') && joined.includes('numero')) {
+            const hit = keys.find((k) => /ricevuta.*numero|numero.*ricevuta/i.test(k));
+            if (hit) return hit;
+        }
+        // Con riga nota e nessun match: non usare fallback inventato
+        if (fallback === null || fallback === undefined) return null;
+        // Se la riga c'è ma la colonna no, meglio non inventare nomi
+        if (keys.length > 0 && fallback != null) {
+            const fbHit = keys.find((k) => k.toLowerCase() === String(fallback).toLowerCase());
+            return fbHit || null;
+        }
     }
-    return fallback;
+    return fallback ?? null;
 }
 
 function valoreBoolPerColonna(row, colName, value) {
@@ -251,6 +262,18 @@ function normalizzaTempo(tempoRaw) {
 }
 
 function setCampo(payload, row, candidates, fallback, value) {
+    const hasRow = row && typeof row === 'object' && Object.keys(row).length > 0;
+    if (hasRow) {
+        const key = resolveColonna(row, candidates, null);
+        if (!key) {
+            // Colonna assente nello schema reale della riga: non inviare (evita PGRST204)
+            return null;
+        }
+        // Conferma case-sensitive sul nome reale
+        const realKey = Object.keys(row).find((k) => k.toLowerCase() === String(key).toLowerCase()) || key;
+        payload[realKey] = value;
+        return realKey;
+    }
     const key = resolveColonna(row, candidates, fallback);
     payload[key] = value;
     return key;
@@ -346,18 +369,18 @@ export function buildPayloadUpdateServizio(servizio, dati, mergeNoteFineFn) {
         setCampo(payload, row, ['Mezzo', 'MEZZO'], 'Mezzo', mVal);
     }
 
-    const colTempo = s._colTempo || resolveColonna(row, ['Tempo', 'TEMPO', 'TEMPO_ORE'], 'Tempo');
-    const colKm = s._colKm || resolveColonna(row, ['Km', 'KM'], 'Km');
+    const colTempo = s._colTempo || resolveColonna(row, ['Tempo', 'TEMPO', 'TEMPO_ORE'], null);
+    const colKm = s._colKm || resolveColonna(row, ['Km', 'KM'], null);
     const colNote = s._colNote || resolveColonna(
         row,
         ['NoteFineServizio', 'NOTAFINESERVIZIO', 'NOTE_FINE_SERVIZIO', 'NotaFineServizio'],
-        'NoteFineServizio'
+        null
     );
 
     const tempoNorm = normalizzaTempo(dati.tempo);
-    payload[colTempo] = tempoNorm || null;
+    if (colTempo) payload[colTempo] = tempoNorm || null;
 
-    if (dati.km !== undefined && dati.km !== '') {
+    if (colKm && dati.km !== undefined && dati.km !== '') {
         const kmNum = parseFloat(String(dati.km).replace(',', '.'));
         payload[colKm] = Number.isFinite(kmNum) ? kmNum : dati.km;
     }
@@ -379,7 +402,7 @@ export function buildPayloadUpdateServizio(servizio, dati, mergeNoteFineFn) {
     setCampo(
         payload,
         row,
-        ['Ricevuta_numero', 'Ricevuta_Numero', 'RICEVUTA_NUMERO'],
+        ['Ricevuta_numero', 'Ricevuta_Numero', 'RICEVUTA_NUMERO', 'NumeroRicevuta', 'Numero_Ricevuta'],
         'Ricevuta_numero',
         dati.numero_ricevuta ?? ''
     );
@@ -389,7 +412,7 @@ export function buildPayloadUpdateServizio(servizio, dati, mergeNoteFineFn) {
     const noteMerged = typeof mergeNoteFineFn === 'function'
         ? mergeNoteFineFn(noteVisibili, s.note_fine_servizio || '')
         : noteVisibili;
-    payload[colNote] = noteMerged;
+    if (colNote) payload[colNote] = noteMerged;
 
     // Metadati utili per verifica post-salvataggio
     payload.__meta = {
