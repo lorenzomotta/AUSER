@@ -19,12 +19,19 @@
 }
 
 .web-login-logo {
-    text-align: center;
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: #2d7a32;
-    margin-bottom: 6px;
-    text-transform: lowercase;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+}
+
+.web-login-logo-asti {
+    display: block;
+    max-width: 260px;
+    max-height: 90px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
 }
 
 .web-login-title {
