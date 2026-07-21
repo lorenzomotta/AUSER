@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "AUSER Gestione Operativa",
-    "version": "1.0.3"
+    "version": "1.0.4"
   },
   "tauri": {
     "allowlist": {

@@ -47,7 +47,11 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Dialogo aggiornamento in italiano e miglioramenti.
+            Nuova versione con miglioramenti operativi:
+            - nuovo socio da Nuovo servizio
+            - export elenco soci e pagamenti
+            - calendario web (admin modifica, COMPLETATO, logo)
+            - impostazioni, report chilometri, icone
 
             Gli utenti con l'app già installata riceveranno un avviso all'avvio
             e potranno aggiornare con un clic.
