@@ -452,6 +452,7 @@ export const OPZIONI_DEFAULT = {
     statiServizio: [
         { value: 'DA ESEGUIRE', label: 'DA ESEGUIRE' },
         { value: 'ESEGUITO', label: 'ESEGUITO' },
+        { value: 'COMPLETATO', label: 'COMPLETATO' },
         { value: 'ANNULLATO', label: 'ANNULLATO' }
     ],
     tipiPagamento: [

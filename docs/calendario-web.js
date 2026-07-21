@@ -25,7 +25,7 @@ import {
     buildPayloadUpdateServizio,
     payloadSenzaMeta,
     OPZIONI_DEFAULT
-} from './calendario-web-edit.js?v=22';
+} from './calendario-web-edit.js?v=23';
 
 let supabaseClient = null;
 let publicConfig = null;
@@ -723,7 +723,7 @@ function costruisciStringaMezzo(servizio) {
 
 function coloriStatoServizioCalendario(stato) {
     const s = String(stato || 'DA ESEGUIRE').trim().toUpperCase();
-    if (s === 'ESEGUITO') {
+    if (s === 'ESEGUITO' || s === 'COMPLETATO') {
         return { backgroundColor: '#5cb85c', borderColor: '#449d44', textColor: '#1a1a1a' };
     }
     if (s === 'ANNULLATO') {
@@ -734,7 +734,7 @@ function coloriStatoServizioCalendario(stato) {
 
 function classeStatoServizioCalendario(stato) {
     const s = String(stato || 'DA ESEGUIRE').trim().toUpperCase();
-    if (s === 'ESEGUITO') return 'cal-stato-eseguito';
+    if (s === 'ESEGUITO' || s === 'COMPLETATO') return 'cal-stato-eseguito';
     if (s === 'ANNULLATO') return 'cal-stato-annullato';
     return 'cal-stato-da-eseguire';
 }
@@ -998,6 +998,18 @@ function buildPayloadFineServizio(servizio, km, kmUscita, kmRientro, tempoRaw, n
     const colTempo = servizio._colTempo || 'Tempo';
     const tempoNorm = normalizzaTempoPerSupabase(tempoRaw);
     if (tempoNorm !== null) payload[colTempo] = tempoNorm;
+
+    // Dopo compilazione dati fine servizio → stato COMPLETATO
+    const raw = servizio._raw || {};
+    const keys = Object.keys(raw);
+    let colStato = 'StatoServizio';
+    if (keys.length) {
+        const found = keys.find((k) => ['statoservizio', 'stato_servizio'].includes(k.toLowerCase()))
+            || keys.find((k) => k.toLowerCase().includes('statoservizio') || k.toLowerCase() === 'stato');
+        if (found) colStato = found;
+    }
+    payload[colStato] = 'COMPLETATO';
+
     return payload;
 }
 
