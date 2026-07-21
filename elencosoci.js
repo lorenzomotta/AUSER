@@ -1,6 +1,8 @@
 // Import Tauri API
 let invoke, appWindow;
 
+import { initExportElencoSoci } from './elencosoci-export.js';
+
 // Funzione per inizializzare le API Tauri
 async function initTauri() {
     try {
@@ -208,6 +210,22 @@ function applyAdvancedFilterCriteria(criteri) {
     renderSociView();
 }
 
+function parseComuniResidenza(value) {
+    if (!value || typeof value !== 'string') return [];
+    return value
+        .split(/[,;]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+}
+
+function matchesResidenzaComune(tesserato, criterioComune) {
+    const comuni = parseComuniResidenza(criterioComune);
+    if (!comuni.length) return true;
+
+    const socioComune = String(tesserato.residenza_comune || '').toLowerCase();
+    return comuni.some((comune) => socioComune.includes(comune.toLowerCase()));
+}
+
 function matchesAdvancedFilter(tesserato, criteri) {
     if (!criteri) return true;
 
@@ -226,7 +244,6 @@ function matchesAdvancedFilter(tesserato, criteri) {
         'residenza_indirizzo',
         'residenza_civico',
         'residenza_cap',
-        'residenza_comune',
         'residenza_provincia',
         'telefono',
         'tipologiasocio',
@@ -239,9 +256,13 @@ function matchesAdvancedFilter(tesserato, criteri) {
         }
     }
 
+    if (criteri.residenza_comune && !matchesResidenzaComune(tesserato, criteri.residenza_comune)) {
+        return false;
+    }
+
     if (criteri.operatore === true && !isTruthyFlag(tesserato.operatore)) return false;
     if (criteri.attivo === true && !isTruthyFlag(tesserato.attivo)) return false;
-    if (criteri.archivia === true && !isTruthyFlag(tesserato.archivia)) return false;
+    if (criteri.archivia === true && !isArchiviato(tesserato)) return false;
 
     const disp = String(tesserato.disponibilita || '').toUpperCase();
     if (criteri.disp_autista === true && !disp.includes('AUTISTA')) return false;
@@ -516,7 +537,7 @@ async function loadAllTesserati() {
             return;
         }
         
-        allTesserati = sortByNominativo(tesserati);
+        allTesserati = sortByNominativo(tesserati.map(normalizeTesseratoFlags));
         updateArchiviatiButtonUI();
         updateTessereScaduteUI();
         updateSociCount(getSociNonArchiviati().length);
@@ -530,8 +551,28 @@ async function loadAllTesserati() {
     }
 }
 
+function normalizeArchiviaValue(value) {
+    if (typeof value === 'boolean') return value ? 'true' : 'false';
+    if (value === undefined || value === null) return '';
+    return String(value).trim();
+}
+
+function getArchiviaFlag(tesserato) {
+    const raw = tesserato?.archivia ?? tesserato?.archiviazione ?? tesserato?.Archiviato ?? '';
+    return normalizeArchiviaValue(raw);
+}
+
+function normalizeTesseratoFlags(tesserato) {
+    return {
+        ...tesserato,
+        archivia: getArchiviaFlag(tesserato),
+        operatore: normalizeArchiviaValue(tesserato?.operatore),
+        attivo: normalizeArchiviaValue(tesserato?.attivo)
+    };
+}
+
 function isArchiviato(tesserato) {
-    return isTruthyFlag(tesserato.archivia);
+    return isTruthyFlag(getArchiviaFlag(tesserato));
 }
 
 function getSociArchiviati(list = allTesserati) {
@@ -553,20 +594,21 @@ function updateArchiviatiButtonUI() {
     const archiviatiCount = getSociArchiviati().length;
     btn.classList.toggle('active', showArchiviatiOnly);
     btn.textContent = showArchiviatiOnly ? 'Mostra Attivi' : 'Mostra Archiviati';
-    btn.disabled = archiviatiCount === 0 && !showArchiviatiOnly;
+    btn.disabled = false;
     btn.title = showArchiviatiOnly
         ? 'Torna ai soci non archiviati'
         : archiviatiCount === 0
-            ? 'Nessun socio archiviato'
+            ? 'Nessun socio archiviato nel database'
             : `Mostra ${archiviatiCount} soci archiviati`;
 }
 
 function toggleMostraArchiviati() {
-    if (!showArchiviatiOnly && getSociArchiviati().length === 0) return;
-
     showArchiviatiOnly = !showArchiviatiOnly;
     if (showArchiviatiOnly) {
         filterScaduteOnly = false;
+        if (hasAdvancedFilter()) {
+            clearAdvancedFilter();
+        }
     }
 
     updateArchiviatiButtonUI();
@@ -614,6 +656,26 @@ function toggleFilterScadute() {
 function getSearchTerm() {
     const searchInput = document.getElementById('search-input');
     return searchInput ? searchInput.value.trim() : '';
+}
+
+function getElencoFiltriDescrizione() {
+    const parts = [];
+    if (showArchiviatiOnly) {
+        parts.push('Soci archiviati');
+    } else {
+        parts.push('Soci non archiviati');
+    }
+    if (filterScaduteOnly && !showArchiviatiOnly) {
+        parts.push('solo tessere scadute');
+    }
+    if (hasAdvancedFilter()) {
+        parts.push('ricerca avanzata attiva');
+    }
+    const term = getSearchTerm();
+    if (term) {
+        parts.push(`ricerca nominativo: "${term}"`);
+    }
+    return parts.join(' · ');
 }
 
 function getDisplayedTesserati() {
@@ -731,7 +793,7 @@ function updatePaginationBar(totalItems, page, totalPages) {
 function createSocioBlock(tesserato) {
     const isOperatore = isTruthyFlag(tesserato.operatore);
     const isAttivo = isTruthyFlag(tesserato.attivo);
-    const isArchivia = isTruthyFlag(tesserato.archivia);
+    const isArchivia = isArchiviato(tesserato);
     const tesseraScaduta = isTesseraScaduta(tesserato.scadenzatessera);
     const scadenzaGroupClass = tesseraScaduta
         ? 'socio-form-group socio-form-group-scadenzatessera scadenza-scaduta'
@@ -940,7 +1002,7 @@ function applySocioUpdateFromAnagrafica(data) {
     }
 
     const prev = allTesserati[index];
-    const updated = {
+    const updated = normalizeTesseratoFlags({
         ...prev,
         nominativo: data.nominativo ?? prev.nominativo,
         codicefiscale: data.codicefiscale ?? prev.codicefiscale,
@@ -948,10 +1010,10 @@ function applySocioUpdateFromAnagrafica(data) {
         telefono: data.telefono ?? prev.telefono,
         notaaggiuntiva: data.notaaggiuntiva ?? prev.notaaggiuntiva,
         disponibilita: data.disponibilita ?? prev.disponibilita,
-        operatore: data.operatore,
-        attivo: data.attivo,
-        archivia: data.archivia
-    };
+        operatore: data.operatore ?? prev.operatore,
+        attivo: data.attivo ?? prev.attivo,
+        archivia: data.archivia ?? prev.archivia
+    });
 
     allTesserati[index] = updated;
 
@@ -1034,6 +1096,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-nuovo-socio')?.addEventListener('click', openNuovoSocioAnagrafica);
     document.getElementById('btn-ricerca-avanzata')?.addEventListener('click', openRicercaAvanzata);
     document.getElementById('btn-rimuovi-filtro')?.addEventListener('click', clearAdvancedFilter);
+
+    initExportElencoSoci({
+        getSoci: getDisplayedTesserati,
+        getFiltriDescrizione: getElencoFiltriDescrizione
+    });
     
     // Event listener per la ricerca in tempo reale
     const searchInput = document.getElementById('search-input');

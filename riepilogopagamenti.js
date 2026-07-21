@@ -6,6 +6,10 @@ import {
     apriModalModifica
 } from './modifica-servizio.js';
 import { richiediSessione, isAdmin } from './auth-session.js';
+import {
+    generaPdfRiepilogoPagamenti,
+    generaExcelRiepilogoPagamenti
+} from './riepilogopagamenti-export.js';
 
 let invoke;
 
@@ -410,6 +414,51 @@ async function apriServizioInLettura(id) {
     await apriModalModifica(idNum, { solaLettura: true });
 }
 
+function descrizioneFiltriAttivi() {
+    const parts = [];
+    const annoSel = document.getElementById('rp-anno')?.value || 'tutti';
+    parts.push(annoSel === 'tutti' ? 'Tutti gli anni' : `Anno ${annoSel}`);
+
+    const f = {
+        stato: document.getElementById('f-stato')?.value || '',
+        richiedente: document.getElementById('f-richiedente')?.value || '',
+        tipoPagam: document.getElementById('f-tipo-pagam')?.value || '',
+        dataDa: document.getElementById('f-data-da')?.value || '',
+        dataA: document.getElementById('f-data-a')?.value || ''
+    };
+
+    if (f.stato) parts.push(`Stato: ${f.stato}`);
+    if (f.richiedente) parts.push(`Richiedente: ${f.richiedente}`);
+    if (f.tipoPagam) parts.push(`Tipo pagam.: ${f.tipoPagam}`);
+    if (f.dataDa || f.dataA) {
+        parts.push(`Periodo: ${f.dataDa || '…'} → ${f.dataA || '…'}`);
+    }
+
+    return parts.join(' · ');
+}
+
+function esportaPdf() {
+    try {
+        generaPdfRiepilogoPagamenti(serviziFiltrati, {
+            filtriDescrizione: descrizioneFiltriAttivi()
+        });
+    } catch (err) {
+        console.error('Export PDF riepilogo pagamenti:', err);
+        alert(String(err?.message || err || 'Errore durante la generazione del PDF'));
+    }
+}
+
+function esportaExcel() {
+    try {
+        generaExcelRiepilogoPagamenti(serviziFiltrati, {
+            filtriDescrizione: descrizioneFiltriAttivi()
+        });
+    } catch (err) {
+        console.error('Export Excel riepilogo pagamenti:', err);
+        alert(String(err?.message || err || 'Errore durante la generazione del file Excel'));
+    }
+}
+
 async function chiudiFinestra() {
     if (isTauri()) {
         try {
@@ -453,6 +502,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     document.getElementById('btn-chiudi')?.addEventListener('click', chiudiFinestra);
+    document.getElementById('btn-export-pdf')?.addEventListener('click', esportaPdf);
+    document.getElementById('btn-export-excel')?.addEventListener('click', esportaExcel);
 
     document.getElementById('btn-toggle-ricerca')?.addEventListener('click', () => {
         const panel = document.getElementById('rp-ricerca');

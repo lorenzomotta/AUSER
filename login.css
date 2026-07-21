@@ -35,27 +35,16 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
     margin-bottom: 14px;
 }
 
-.login-logo-circle {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: #c62828;
-    color: #fff;
-    font-weight: 800;
-    font-size: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.login-logo-text {
-    font-size: 22px;
-    font-weight: 700;
-    color: #c62828;
+.login-logo-asti {
+    display: block;
+    max-width: 280px;
+    max-height: 95px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
 }
 
 .login-title {
@@ -64,7 +53,7 @@ html, body {
     font-size: 22px;
     font-weight: 800;
     letter-spacing: 0.03em;
-    color: #1565c0;
+    color: #2d7a32;
 }
 
 .login-subtitle {

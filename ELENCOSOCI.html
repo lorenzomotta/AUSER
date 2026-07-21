@@ -57,9 +57,64 @@
                 <button type="button" class="btn btn-mostra-archiviati" id="btn-mostra-archiviati">Mostra Archiviati</button>
             </div>
             <div class="soci-pagination-bar" id="soci-pagination-bar" aria-label="Paginazione elenco soci"></div>
-            <div class="soci-footer-right" aria-hidden="true"></div>
+            <div class="soci-footer-right">
+                <button type="button" class="btn btn-export-elenco" id="btn-export-elenco" title="Esporta l'elenco visualizzato in PDF o Excel">
+                    ESPORTA ELENCO
+                </button>
+            </div>
         </div>
     </footer>
+
+    <!-- Modale opzioni export elenco soci -->
+    <div class="soci-modal-pdf-overlay" id="modal-stampa-pdf" hidden>
+        <div class="soci-modal-pdf" role="dialog" aria-labelledby="modal-stampa-pdf-title" aria-modal="true">
+            <div class="soci-modal-pdf-header">
+                <h2 id="modal-stampa-pdf-title">Esporta elenco soci</h2>
+                <button type="button" class="soci-modal-pdf-close" id="btn-stampa-pdf-chiudi" title="Chiudi" aria-label="Chiudi">✕</button>
+            </div>
+            <p class="soci-modal-pdf-intro">
+                Verranno esportati <strong id="pdf-soci-count">0</strong> soci (filtri attuali a schermo).
+            </p>
+            <div class="soci-modal-pdf-options">
+                <label class="soci-modal-pdf-option">
+                    <input type="checkbox" id="pdf-include-anagrafica">
+                    <span>Includi dati anagrafici (codice fiscale, nascita, residenza, telefono…)</span>
+                </label>
+                <div class="soci-modal-pdf-subflags" id="export-anagrafica-subflags">
+                    <label class="soci-modal-pdf-subflag">
+                        <input type="checkbox" id="export-flag-operatore" checked>
+                        <span>Operatore</span>
+                    </label>
+                    <label class="soci-modal-pdf-subflag">
+                        <input type="checkbox" id="export-flag-disponibilita" checked>
+                        <span>Disponibilità</span>
+                    </label>
+                    <label class="soci-modal-pdf-subflag">
+                        <input type="checkbox" id="export-flag-nota" checked>
+                        <span>Note</span>
+                    </label>
+                    <label class="soci-modal-pdf-subflag">
+                        <input type="checkbox" id="export-flag-attivo" checked>
+                        <span>Attivo</span>
+                    </label>
+                    <label class="soci-modal-pdf-subflag">
+                        <input type="checkbox" id="export-flag-archiviato" checked>
+                        <span>Archiviato</span>
+                    </label>
+                </div>
+                <label class="soci-modal-pdf-option">
+                    <input type="checkbox" id="pdf-include-tesseramento">
+                    <span>Includi dati tesseramento (numero tessera e scadenza)</span>
+                </label>
+            </div>
+            <p id="pdf-stampa-errore" class="soci-modal-pdf-errore" role="alert" hidden></p>
+            <div class="soci-modal-pdf-actions">
+                <button type="button" class="btn btn-stampa-pdf-annulla" id="btn-stampa-pdf-annulla">ANNULLA</button>
+                <button type="button" class="btn btn-export-excel-genera" id="btn-export-excel-genera">ESPORTA EXCEL</button>
+                <button type="button" class="btn btn-stampa-pdf-genera" id="btn-stampa-pdf-genera">GENERA PDF</button>
+            </div>
+        </div>
+    </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script type="module" src="elencosoci.js"></script>

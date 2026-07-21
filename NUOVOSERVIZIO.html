@@ -39,7 +39,11 @@
                                 <input type="text" id="ns-idsocio" class="ns-input ns-input-idsocio" readonly tabindex="-1" maxlength="6">
                             </div>
                             <div class="ns-field ns-field-trasportato">
-                                <label for="ns-trasportato">TRASPORTATO <span class="required">*</span></label>
+                                <div class="ns-label-con-azione">
+                                    <label for="ns-trasportato">TRASPORTATO <span class="required">*</span></label>
+                                    <button type="button" class="ns-btn-nuovo-socio" id="btn-nuovo-socio-trasportato"
+                                        title="Aggiungi un nuovo socio">NUOVO</button>
+                                </div>
                                 <div class="ns-autocomplete-wrapper">
                                     <input type="text" id="ns-trasportato" class="ns-input" autocomplete="off"
                                         placeholder="Digita per cercare il socio...">
@@ -225,7 +229,7 @@
                 <h2 class="ns-section-title">5. Operatore e mezzo</h2>
                 <div class="ns-grid ns-grid-operatore">
                     <div class="ns-field ns-field-operatore">
-                        <label for="ns-operatore">OPERATORE <span class="required">*</span></label>
+                        <label for="ns-operatore">OPERATORE</label>
                         <select id="ns-operatore" class="ns-input">
                             <option value="">— Seleziona operatore —</option>
                         </select>
@@ -357,6 +361,125 @@
     </div>
 
     <!-- Info: mezzo già usato nella data di prelievo -->
+    <!-- Modale: nuovo socio (dal trasportato) -->
+    <div id="ns-modal-nuovo-socio" class="ns-dialog-overlay" hidden aria-hidden="true">
+        <div class="ns-dialog ns-dialog-nuovo-socio" role="dialog" aria-modal="true"
+            aria-labelledby="ns-modal-nuovo-socio-titolo">
+            <div class="ns-modal-nuovo-socio-header">
+                <h2 id="ns-modal-nuovo-socio-titolo" class="ns-dialog-titolo">NUOVO SOCIO</h2>
+                <button type="button" class="ns-modal-nuovo-socio-close" id="ns-modal-nuovo-socio-chiudi"
+                    title="Chiudi">&times;</button>
+            </div>
+            <form id="ns-form-nuovo-socio" class="ns-modal-nuovo-socio-body" autocomplete="off">
+                <p class="ns-modal-nuovo-socio-hint" id="ns-modal-nuovo-socio-hint">
+                    Inserisci il nominativo. La tipologia sarà impostata su NUOVO.
+                </p>
+                <div class="ns-modal-nuovo-socio-riga">
+                    <div class="ns-field ns-modal-field-idsocio">
+                        <label for="ns-ns-idsocio">ID</label>
+                        <input type="text" id="ns-ns-idsocio" class="ns-input" readonly tabindex="-1">
+                    </div>
+                    <div class="ns-field ns-modal-field-nominativo">
+                        <label for="ns-ns-nominativo">NOMINATIVO <span class="required">*</span></label>
+                        <input type="text" id="ns-ns-nominativo" class="ns-input" required
+                            placeholder="COGNOME NOME">
+                    </div>
+                    <div class="ns-field ns-modal-field-tipologia">
+                        <label for="ns-ns-tipologia">TIPOLOGIA</label>
+                        <select id="ns-ns-tipologia" class="ns-input" disabled>
+                            <option value="NUOVO">NUOVO</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="ns-modal-admin-opzione" id="ns-modal-admin-opzione" hidden>
+                    <label class="ns-modal-check-label">
+                        <input type="checkbox" id="ns-ns-extra-dati">
+                        Inserisci anche dati anagrafici e tesseramento
+                    </label>
+                </div>
+
+                <div id="ns-modal-extra-dati" class="ns-modal-extra-dati" hidden>
+                    <h3 class="ns-modal-sottotitolo">Anagrafica</h3>
+                    <div class="ns-modal-nuovo-socio-riga">
+                        <div class="ns-field">
+                            <label for="ns-ns-cf">COD. FISCALE</label>
+                            <input type="text" id="ns-ns-cf" class="ns-input" maxlength="16">
+                        </div>
+                        <div class="ns-field ns-modal-field-xs">
+                            <label for="ns-ns-sesso">SESSO</label>
+                            <select id="ns-ns-sesso" class="ns-input">
+                                <option value="">—</option>
+                                <option value="M">M</option>
+                                <option value="F">F</option>
+                            </select>
+                        </div>
+                        <div class="ns-field">
+                            <label for="ns-ns-nasc-comune">COMUNE NASCITA</label>
+                            <input type="text" id="ns-ns-nasc-comune" class="ns-input">
+                        </div>
+                        <div class="ns-field ns-modal-field-data">
+                            <label for="ns-ns-nasc-data">DATA NASC.</label>
+                            <input type="date" id="ns-ns-nasc-data" class="ns-input">
+                        </div>
+                    </div>
+                    <div class="ns-modal-nuovo-socio-riga">
+                        <div class="ns-field ns-modal-field-indirizzo">
+                            <label for="ns-ns-indirizzo">INDIRIZZO</label>
+                            <input type="text" id="ns-ns-indirizzo" class="ns-input">
+                        </div>
+                        <div class="ns-field ns-modal-field-xs">
+                            <label for="ns-ns-civico">CIV.</label>
+                            <input type="text" id="ns-ns-civico" class="ns-input">
+                        </div>
+                        <div class="ns-field ns-modal-field-xs">
+                            <label for="ns-ns-cap">CAP</label>
+                            <input type="text" id="ns-ns-cap" class="ns-input" maxlength="5" inputmode="numeric">
+                        </div>
+                        <div class="ns-field">
+                            <label for="ns-ns-comune">COMUNE</label>
+                            <input type="text" id="ns-ns-comune" class="ns-input">
+                        </div>
+                        <div class="ns-field ns-modal-field-xs">
+                            <label for="ns-ns-prov">PR.</label>
+                            <input type="text" id="ns-ns-prov" class="ns-input" maxlength="2">
+                        </div>
+                        <div class="ns-field">
+                            <label for="ns-ns-telefono">TELEFONO</label>
+                            <input type="text" id="ns-ns-telefono" class="ns-input">
+                        </div>
+                    </div>
+
+                    <h3 class="ns-modal-sottotitolo">Tesseramento <span class="ns-modal-opzionale">(opzionale)</span></h3>
+                    <div class="ns-modal-nuovo-socio-riga">
+                        <div class="ns-field ns-modal-field-xs">
+                            <label for="ns-ns-tess-anno">ANNO</label>
+                            <input type="number" id="ns-ns-tess-anno" class="ns-input" min="1990" max="2100">
+                        </div>
+                        <div class="ns-field">
+                            <label for="ns-ns-tess-numero">N. TESSERA</label>
+                            <input type="text" id="ns-ns-tess-numero" class="ns-input">
+                        </div>
+                        <div class="ns-field ns-modal-field-data">
+                            <label for="ns-ns-tess-data">DATA</label>
+                            <input type="date" id="ns-ns-tess-data" class="ns-input">
+                        </div>
+                        <div class="ns-field ns-modal-field-xs">
+                            <label for="ns-ns-tess-quota">QUOTA €</label>
+                            <input type="text" id="ns-ns-tess-quota" class="ns-input" inputmode="decimal">
+                        </div>
+                    </div>
+                </div>
+
+                <p id="ns-modal-nuovo-socio-errore" class="ns-modal-nuovo-socio-errore" role="alert" hidden></p>
+            </form>
+            <div class="ns-dialog-actions ns-modal-nuovo-socio-footer">
+                <button type="button" class="ns-dialog-btn ns-dialog-btn-no" id="ns-modal-nuovo-socio-annulla">ANNULLA</button>
+                <button type="button" class="ns-dialog-btn ns-dialog-btn-si" id="ns-modal-nuovo-socio-salva">SALVA</button>
+            </div>
+        </div>
+    </div>
+
     <div id="ns-dialog-mezzo-occupato" class="ns-dialog-overlay" hidden aria-hidden="true">
         <div class="ns-dialog ns-dialog-mezzo-occupato" role="dialog" aria-modal="true" aria-labelledby="ns-dialog-mezzo-occupato-titolo">
             <h2 id="ns-dialog-mezzo-occupato-titolo" class="ns-dialog-titolo">Mezzo già in uso</h2>

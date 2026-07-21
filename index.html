@@ -11,10 +11,20 @@
     <link rel="stylesheet" href="completa-servizio.css">
 </head>
 <body>
-    <!-- Main Content Wrapper -->
-    <div class="main-wrapper">
-        <!-- Header Section -->
-        <header class="header-section">
+    <!-- Header a tutta larghezza: logo a sinistra, titolo al centro, pulsanti a destra -->
+    <header class="header-section">
+        <div class="header-logo-wrap">
+            <img src="logo-Asti-01.png" alt="Asti" class="header-logo-asti">
+        </div>
+        <div class="header-titles">
+            <h1 class="main-title">GESTIONE OPERATIVA</h1>
+            <div class="date-info">
+                <span id="current-date"></span>
+                <span class="date-separator"> - </span>
+                <span id="week-number"></span>
+            </div>
+        </div>
+        <div class="header-main">
             <div class="header-app-actions">
                 <button type="button" class="btn btn-close-app-header" title="Chiudi Applicazione">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -36,21 +46,11 @@
                     </svg>
                 </button>
             </div>
-            <div class="container-fluid">
-                <div class="row align-items-center justify-content-center">
-                    <div class="col-12 text-center">
-                        <h1 class="main-title">GESTIONE OPERATIVA</h1>
-                        <div class="date-info">
-                            <span id="current-date"></span>
-                            <span class="date-separator"> - </span>
-                            <span id="week-number"></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </header>
+        </div>
+    </header>
 
-        <!-- Main Content Area -->
+    <!-- Main Content Wrapper -->
+    <div class="main-wrapper">
         <main class="main-content">
             <div class="container-fluid">
                 <div class="row">
@@ -87,15 +87,8 @@
         </main>
     </div>
 
-    <!-- Sidebar Section (destra) -->
+    <!-- Sidebar Section (destra) — solo pulsanti -->
     <aside class="sidebar">
-        <div class="sidebar-header">
-            <div class="logo-section">
-                <div class="logo-circle">a</div>
-                <div class="logo-text">auser Asti</div>
-            </div>
-        </div>
-        
         <div class="sidebar-buttons">
             <button class="btn btn-sidebar btn-sidebar-primary" id="btn-calendario-servizi">CALENDARIO SERVIZI</button>
             <button class="btn btn-sidebar btn-sidebar-secondary" id="btn-nuovo-servizio">NUOVO SERVIZIO</button>
@@ -105,11 +98,11 @@
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-elenco-servizi">ELENCO SERVIZI</button>
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-report-giorno">REPORT DEL GIORNO</button>
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-report-settimanale">REPORT SETTIMANALE</button>
-            <button class="btn btn-sidebar btn-sidebar-nav" id="btn-riepilogo-incassi">INCASSI GIORNALIERI</button>
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-elenco-soci">ELENCO SOCI</button>
-            <button class="btn btn-sidebar btn-sidebar-nav" id="btn-elenco-operatori">ELENCO OPERATORI</button>
-            <button class="btn btn-sidebar btn-sidebar-nav" id="btn-elenco-mezzi">ELENCO MEZZI</button>
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-tratte-fuori-asti">TRATTE FUORI ASTI</button>
+            <button class="btn btn-sidebar btn-sidebar-nav" id="btn-elenco-mezzi">ELENCO MEZZI</button>
+            <button class="btn btn-sidebar btn-sidebar-nav" id="btn-riepilogo-incassi" hidden>INCASSI GIORNALIERI</button>
+            <button class="btn btn-sidebar btn-sidebar-nav" id="btn-elenco-operatori" hidden>ELENCO OPERATORI</button>
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-riepilogo-pagamenti" hidden>RIEPILOGO PAGAMENTI</button>
             <div class="sidebar-divider"></div>
             <div class="sidebar-user" id="sidebar-user" hidden>
@@ -134,12 +127,9 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Log immediato per verificare se index-sidebar.html viene caricato
-        console.log('=== index-sidebar.html caricato ===');
+        console.log('=== index.html caricato ===');
         console.log('URL:', window.location.href);
-        console.log('Query string:', window.location.search);
     </script>
     <script type="module" src="main.js"></script>
 </body>
 </html>
-

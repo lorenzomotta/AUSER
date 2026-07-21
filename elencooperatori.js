@@ -1,4 +1,6 @@
 // Import Tauri API
+import { richiediSessione, isAdmin } from './auth-session.js';
+
 let invoke, appWindow;
 
 // Funzione per inizializzare le API Tauri
@@ -692,6 +694,14 @@ async function setupSocioAnagraficaListener() {
 // Event listeners
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('=== ELENCOOPERATORI.html caricato ===');
+
+    const sessione = richiediSessione();
+    if (!sessione) return;
+    if (!isAdmin(sessione)) {
+        alert('Accesso riservato agli amministratori.');
+        window.location.href = 'index.html';
+        return;
+    }
     
     // Inizializza Tauri
     await initTauri();

@@ -11,6 +11,7 @@ import {
     rimuoviTrattaDalForm,
     messaggioAvvisoDopoRimozioneTratta
 } from './tratta-riepilogo.js';
+import { setupNuovoSocioTrasportato } from './nuovoservizio-nuovo-socio.js';
 
 let invoke;
 
@@ -36,7 +37,6 @@ const CAMPI_OBBLIGATORI = [
     { id: 'ns-tipo-servizio', label: 'TIPO SERVIZIO' },
     { id: 'ns-comune-destinazione', label: 'COMUNE DI DESTINAZIONE' },
     { id: 'ns-luogo-destinazione', label: 'LUOGO DI DESTINAZIONE' },
-    { id: 'ns-operatore', label: 'OPERATORE' },
     { id: 'ns-stato-servizio', label: 'STATO DEL SERVIZIO' }
 ];
 
@@ -1763,6 +1763,24 @@ function setupEventListeners() {
 
     setupCopiaDataPrelievoSuDestinazione();
     setupModaleMezzoOccupato();
+    setupNuovoSocioTrasportato({
+        getInvoke: () => invoke,
+        isTauri,
+        onSocioCreato: async (tesserato) => {
+            if (!tesserato?.idsocio) return;
+            const idx = allTesserati.findIndex(
+                (t) => String(t.idsocio || '').trim() === String(tesserato.idsocio).trim()
+            );
+            if (idx >= 0) {
+                allTesserati[idx] = { ...allTesserati[idx], ...tesserato };
+            } else {
+                allTesserati.push(tesserato);
+            }
+            // Forza ricaricamento dettaglio anche se stesso ID (improbabile)
+            ultimoTrasportatoCaricatoId = null;
+            await selezionaTrasportato(tesserato);
+        }
+    });
 
     document.getElementById('form-nuovo-servizio')?.addEventListener('submit', (e) => {
         e.preventDefault();

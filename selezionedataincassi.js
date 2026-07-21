@@ -1,3 +1,5 @@
+import { richiediSessione, isAdmin } from './auth-session.js';
+
 function isTauri() {
     return typeof window !== 'undefined' &&
         (window.__TAURI_INTERNALS__ !== undefined ||
@@ -23,8 +25,13 @@ async function chiudiFinestra() {
     if (isTauri()) {
         try {
             const { getCurrent } = await import('@tauri-apps/api/window');
-            await getCurrent().close();
-            return;
+            const win = getCurrent();
+            const label = win?.label || '';
+            // Chiude solo la finestra popup, mai la home principale
+            if (label === 'selezione-data-incassi') {
+                await win.close();
+                return;
+            }
         } catch (e) {
             console.warn(e);
         }
@@ -50,8 +57,14 @@ async function apriReport() {
 
     if (isTauri()) {
         try {
-            const { Window, getCurrent } = await import('@tauri-apps/api/window');
-            const webview = await Window.create('riepilogo-incassi', {
+            const { WebviewWindow, getCurrent } = await import('@tauri-apps/api/window');
+            const existing = WebviewWindow.getByLabel('riepilogo-incassi');
+            if (existing) {
+                try {
+                    await existing.close();
+                } catch (_) { /* ok */ }
+            }
+            const webview = new WebviewWindow('riepilogo-incassi', {
                 url,
                 title: 'INCASSI GIORNALIERI',
                 width: 1400,
@@ -62,8 +75,15 @@ async function apriReport() {
                 alwaysOnTop: false,
                 center: true
             });
-            await webview.setFocus();
-            await getCurrent().close();
+            await new Promise((resolve, reject) => {
+                webview.once('tauri://created', resolve);
+                webview.once('tauri://error', (event) => reject(event?.payload || event));
+            });
+            await webview.setFocus().catch(() => {});
+            const current = getCurrent();
+            if (current?.label === 'selezione-data-incassi') {
+                await current.close();
+            }
             return;
         } catch (error) {
             console.error('Errore apertura report incassi:', error);
@@ -86,6 +106,14 @@ function setupEventListeners() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    const sessione = richiediSessione();
+    if (!sessione) return;
+    if (!isAdmin(sessione)) {
+        alert('Accesso riservato agli amministratori.');
+        window.location.href = 'index.html';
+        return;
+    }
+
     impostaDataPredefinita();
     setupEventListeners();
 });

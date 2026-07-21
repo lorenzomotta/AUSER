@@ -204,6 +204,9 @@ fn supabase_row_to_tesserato(row: &serde_json::Value) -> Option<Tesserato> {
         archivia: get_bool_field(
             row,
             &[
+                "Archiviato",
+                "ARCHIVIATO",
+                "archiviato",
                 "Archiviazione",
                 "ARCHIVIAZIONE",
                 "archiviazione",
@@ -2170,18 +2173,27 @@ async fn get_all_tesserati() -> Result<Vec<Tesserato>, String> {
             })
             .count();
 
+        let archiviati_count = tesserati
+            .iter()
+            .filter(|t| {
+                let v = t.archivia.trim().to_lowercase();
+                v == "true" || v == "si" || v == "sì" || v == "1" || v == "yes"
+            })
+            .count();
+
         if let Some(first) = tesserati.first() {
             println!(
-                "  📋 Esempio socio: Operatore='{}', Attivo='{}'",
-                first.operatore, first.attivo
+                "  📋 Esempio socio: Operatore='{}', Attivo='{}', Archivia='{}'",
+                first.operatore, first.attivo, first.archivia
             );
         }
 
         println!(
-            "✓ Convertiti {} soci da Supabase (operatori: {}, attivi: {})",
+            "✓ Convertiti {} soci da Supabase (operatori: {}, attivi: {}, archiviati: {})",
             tesserati.len(),
             operatore_count,
-            attivo_count
+            attivo_count,
+            archiviati_count
         );
 
         Ok(tesserati)
@@ -2344,15 +2356,8 @@ fn build_socio_anagrafica_body(
             "Nascita_Data",
             serde_json::json!(iso),
         );
-    } else if for_insert {
-        put_field(
-            &mut body,
-            row,
-            &["Nascita_Data", "NASCITA_DATA", "DataNascita"],
-            "Nascita_Data",
-            serde_json::json!(""),
-        );
     }
+    // Non inviare "" su colonne date: Postgres risponde 22007 invalid input syntax
 
     put_field(
         &mut body,
@@ -2439,8 +2444,18 @@ fn build_socio_anagrafica_body(
     put_bool(
         &mut body,
         row,
-        &["Archivia", "ARCHIVIA", "archivia"],
-        "Archivia",
+        &[
+            "Archiviato",
+            "ARCHIVIATO",
+            "archiviato",
+            "Archivia",
+            "ARCHIVIA",
+            "archivia",
+            "Archiviazione",
+            "ARCHIVIAZIONE",
+            "archiviazione",
+        ],
+        "Archiviato",
         anagrafica.archivia,
     );
 
@@ -3186,6 +3201,22 @@ fn supabase_row_to_impostazione(row: &serde_json::Value) -> ImpostazioneRecord {
     }
 }
 
+fn valore_column_name_impostazione(row: &serde_json::Value) -> &'static str {
+    const CANDIDATES: &[&str] = &[
+        "ValoreImpostazione",
+        "Valore",
+        "VALORE",
+        "Valore_Impostazione",
+        "Impostazione_Valore",
+    ];
+    for name in CANDIDATES {
+        if row.get(*name).is_some() {
+            return name;
+        }
+    }
+    "Valore"
+}
+
 #[tauri::command]
 async fn get_all_impostazioni() -> Result<Vec<ImpostazioneRecord>, String> {
     println!("=== get_all_impostazioni chiamato (Supabase / Impostazioni_supa) ===");
@@ -3205,6 +3236,59 @@ async fn get_all_impostazioni() -> Result<Vec<ImpostazioneRecord>, String> {
     } else {
         Err("Client Supabase non disponibile".to_string())
     }
+}
+
+#[tauri::command]
+async fn update_impostazione(id: String, valore: String) -> Result<(), String> {
+    println!(
+        "=== update_impostazione id={} valore_len={} ===",
+        id,
+        valore.len()
+    );
+
+    let id = id.trim().to_string();
+    if id.is_empty() {
+        return Err("Id impostazione mancante".to_string());
+    }
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    let rows = client
+        .fetch_impostazioni(None)
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+
+    let row = rows
+        .iter()
+        .find(|r| {
+            let rid = r
+                .get("id")
+                .map(|v| {
+                    v.as_u64()
+                        .map(|n| n.to_string())
+                        .unwrap_or_else(|| v.as_str().unwrap_or("").to_string())
+                })
+                .unwrap_or_default();
+            rid == id
+        })
+        .ok_or_else(|| format!("Impostazione id={} non trovata", id))?;
+
+    let col = valore_column_name_impostazione(row);
+    let mut body = serde_json::Map::new();
+    body.insert(col.to_string(), serde_json::json!(valore));
+
+    client
+        .patch_impostazione(&id, &body)
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+
+    println!("✓ Impostazione id={} aggiornata (colonna {})", id, col);
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -5304,6 +5388,7 @@ fn main() {
             get_all_richiedenti,
             get_all_tipi_pagamento,
             get_all_impostazioni,
+            update_impostazione,
             get_supabase_auth_config,
             get_user_permissions,
             get_all_user_permissions,

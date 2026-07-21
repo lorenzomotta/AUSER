@@ -306,7 +306,8 @@ body {
 
 .soci-footer-left,
 .soci-footer-right {
-    flex: 0 0 180px;
+    flex: 0 0 auto;
+    min-width: 180px;
 }
 
 .soci-footer-left {
@@ -315,7 +316,203 @@ body {
 }
 
 .soci-footer-right {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-export-elenco {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: bold;
+    background-color: #1565c0;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.btn-export-elenco:hover {
+    background-color: #0d47a1;
+}
+
+/* Modale stampa PDF */
+.soci-modal-pdf-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.soci-modal-pdf-overlay[hidden] {
+    display: none !important;
+}
+
+.soci-modal-pdf {
+    width: 100%;
+    max-width: 520px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+    padding: 18px 20px 16px;
+}
+
+.soci-modal-pdf-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.soci-modal-pdf-header h2 {
+    margin: 0;
+    font-size: 18px;
+    color: #1565c0;
+}
+
+.soci-modal-pdf-close {
+    border: none;
+    background: transparent;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    color: #666;
+    padding: 2px 6px;
+}
+
+.soci-modal-pdf-close:hover {
+    color: #000;
+}
+
+.soci-modal-pdf-intro {
+    margin: 0 0 14px;
+    font-size: 14px;
+    color: #444;
+    line-height: 1.4;
+}
+
+.soci-modal-pdf-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.soci-modal-pdf-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    color: #333;
+    cursor: pointer;
+    line-height: 1.35;
+}
+
+.soci-modal-pdf-option input {
+    margin-top: 3px;
     flex-shrink: 0;
+}
+
+.soci-modal-pdf-subflags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin: -4px 0 10px 22px;
+    padding: 8px 10px;
+    background: #f5f8f5;
+    border-radius: 4px;
+    border-left: 3px solid #2d7a32;
+}
+
+.soci-modal-pdf-subflags.disabled {
+    opacity: 0.55;
+}
+
+.soci-modal-pdf-subflag {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: #444;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.soci-modal-pdf-subflag input {
+    margin: 0;
+}
+
+.soci-modal-pdf-errore {
+    margin: 0 0 12px;
+    padding: 8px 10px;
+    background: #ffebee;
+    color: #c62828;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.soci-modal-pdf-errore[hidden] {
+    display: none !important;
+}
+
+.soci-modal-pdf-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.btn-stampa-pdf-annulla {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: bold;
+    background: #fff;
+    color: #555;
+    border: 1px solid #999;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-stampa-pdf-annulla:hover {
+    background: #f5f5f5;
+}
+
+.btn-stampa-pdf-genera {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: bold;
+    background: #1565c0;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-stampa-pdf-genera:hover {
+    background: #0d47a1;
+}
+
+.btn-export-excel-genera {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: bold;
+    background: #2e7d32;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-export-excel-genera:hover {
+    background: #1b5e20;
 }
 
 .soci-pagination-bar {

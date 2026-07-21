@@ -14,7 +14,11 @@ const GRUPPI = [
 
 let operatoreNome = '';
 let operatoreIdsocio = '';
-let dataRif = new Date();
+let annoRif = new Date().getFullYear();
+/** Mese inizio periodo (0–11) */
+let meseDa = new Date().getMonth();
+/** Mese fine periodo (0–11) */
+let meseA = new Date().getMonth();
 let serviziAnnoCache = {};
 
 async function initTauri() {
@@ -45,26 +49,77 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function popolaSelectMesi() {
+    const selDa = document.getElementById('rc-mese-da');
+    const selA = document.getElementById('rc-mese-a');
+    if (!selDa || !selA) return;
+
+    const options = MESI_IT.map((nome, i) =>
+        `<option value="${i}">${nome}</option>`
+    ).join('');
+    selDa.innerHTML = options;
+    selA.innerHTML = options;
+}
+
+function normalizzaPeriodo() {
+    if (meseDa > meseA) {
+        const tmp = meseDa;
+        meseDa = meseA;
+        meseA = tmp;
+    }
+}
+
+function testoPeriodo() {
+    if (meseDa === meseA) {
+        return `${MESI_IT[meseDa]} ${annoRif}`;
+    }
+    return `${MESI_IT[meseDa]} – ${MESI_IT[meseA]} ${annoRif}`;
+}
+
 function leggiParametriUrl() {
     const params = new URLSearchParams(window.location.search);
     operatoreNome = (params.get('operatore') || params.get('nominativo') || '').trim();
     operatoreIdsocio = (params.get('idsocio') || '').trim();
-    const mese = parseInt(params.get('mese') || '', 10);
+
+    const oggi = new Date();
+    annoRif = oggi.getFullYear();
+    meseDa = oggi.getMonth();
+    meseA = oggi.getMonth();
+
     const anno = parseInt(params.get('anno') || '', 10);
-    dataRif = new Date();
-    if (Number.isFinite(anno) && anno >= 2000) dataRif.setFullYear(anno);
-    if (Number.isFinite(mese) && mese >= 1 && mese <= 12) {
-        dataRif.setMonth(mese - 1);
+    const mese = parseInt(params.get('mese') || '', 10);
+    const meseDaUrl = parseInt(params.get('mese_da') || params.get('meseDa') || '', 10);
+    const meseAUrl = parseInt(params.get('mese_a') || params.get('meseA') || '', 10);
+
+    if (Number.isFinite(anno) && anno >= 2000) annoRif = anno;
+
+    if (Number.isFinite(meseDaUrl) && meseDaUrl >= 1 && meseDaUrl <= 12) {
+        meseDa = meseDaUrl - 1;
+    } else if (Number.isFinite(mese) && mese >= 1 && mese <= 12) {
+        meseDa = mese - 1;
     }
-    dataRif.setDate(1);
-    dataRif.setHours(12, 0, 0, 0);
+
+    if (Number.isFinite(meseAUrl) && meseAUrl >= 1 && meseAUrl <= 12) {
+        meseA = meseAUrl - 1;
+    } else if (Number.isFinite(mese) && mese >= 1 && mese <= 12) {
+        meseA = mese - 1;
+    }
+
+    normalizzaPeriodo();
 }
 
 function aggiornaPeriodoUI() {
-    const meseEl = document.getElementById('rc-mese');
     const annoEl = document.getElementById('rc-anno');
-    if (meseEl) meseEl.textContent = MESI_IT[dataRif.getMonth()];
-    if (annoEl) annoEl.textContent = String(dataRif.getFullYear());
+    if (annoEl) annoEl.textContent = String(annoRif);
+
+    const selDa = document.getElementById('rc-mese-da');
+    const selA = document.getElementById('rc-mese-a');
+    if (selDa) selDa.value = String(meseDa);
+    if (selA) selA.value = String(meseA);
+
+    const printEl = document.getElementById('rc-periodo-label-print');
+    if (printEl) printEl.textContent = testoPeriodo();
+
     const opEl = document.getElementById('rc-operatore');
     if (opEl) opEl.textContent = operatoreNome || '—';
     document.title = `Chilometri ${operatoreNome || ''} — AUSER Asti`;
@@ -151,20 +206,30 @@ async function fetchServiziAnno(anno) {
     return serviziAnnoCache[anno];
 }
 
-function filtraServiziMese(servizi) {
-    const mese = dataRif.getMonth();
-    const anno = dataRif.getFullYear();
+function servizioEseguito(servizio) {
+    const stato = String(servizio?.stato_servizio || '')
+        .trim()
+        .toUpperCase();
+    return stato === 'ESEGUITO';
+}
+
+function filtraServiziPeriodo(servizi) {
+    const da = Math.min(meseDa, meseA);
+    const a = Math.max(meseDa, meseA);
     return servizi
         .filter((s) => {
             if (!servizioDellOperatore(s)) return false;
+            if (!servizioEseguito(s)) return false;
             const d = parseDataItaliana(s.data_prelievo);
             if (!d) return false;
-            return d.getMonth() === mese && d.getFullYear() === anno;
+            if (d.getFullYear() !== annoRif) return false;
+            const m = d.getMonth();
+            return m >= da && m <= a;
         })
         .sort((a, b) => {
-            const da = parseDataItaliana(a.data_prelievo)?.getTime() || 0;
-            const db = parseDataItaliana(b.data_prelievo)?.getTime() || 0;
-            if (da !== db) return da - db;
+            const daDate = parseDataItaliana(a.data_prelievo)?.getTime() || 0;
+            const dbDate = parseDataItaliana(b.data_prelievo)?.getTime() || 0;
+            if (daDate !== dbDate) return daDate - dbDate;
             return String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
         });
 }
@@ -221,6 +286,7 @@ async function caricaERender() {
     const contenuto = document.getElementById('rc-contenuto');
     const gruppiEl = document.getElementById('rc-gruppi');
 
+    normalizzaPeriodo();
     aggiornaPeriodoUI();
 
     if (!operatoreNome && !operatoreIdsocio) {
@@ -243,15 +309,15 @@ async function caricaERender() {
         if (!invoke) await initTauri();
         if (!invoke) throw new Error('Apri questo report dall\'app AUSER');
 
-        const serviziAnno = await fetchServiziAnno(dataRif.getFullYear());
-        const delMese = filtraServiziMese(serviziAnno);
+        const serviziAnno = await fetchServiziAnno(annoRif);
+        const delPeriodo = filtraServiziPeriodo(serviziAnno);
 
         const perGruppo = {
             'TESSERATI': [],
             'AUSER RIMBORSO': [],
             'AUSER GRATIS': []
         };
-        delMese.forEach((s) => {
+        delPeriodo.forEach((s) => {
             const cat = categoriaDaRichiedente(s.richiedente);
             perGruppo[cat].push(s);
         });
@@ -292,8 +358,24 @@ async function caricaERender() {
     }
 }
 
-function cambiaMese(delta) {
-    dataRif.setMonth(dataRif.getMonth() + delta);
+function cambiaAnno(delta) {
+    annoRif += delta;
+    caricaERender();
+}
+
+function onCambioMeseDa() {
+    const sel = document.getElementById('rc-mese-da');
+    if (!sel) return;
+    meseDa = parseInt(sel.value, 10);
+    if (meseDa > meseA) meseA = meseDa;
+    caricaERender();
+}
+
+function onCambioMeseA() {
+    const sel = document.getElementById('rc-mese-a');
+    if (!sel) return;
+    meseA = parseInt(sel.value, 10);
+    if (meseA < meseDa) meseDa = meseA;
     caricaERender();
 }
 
@@ -313,12 +395,15 @@ async function chiudiFinestra() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     leggiParametriUrl();
+    popolaSelectMesi();
     await initTauri();
 
     document.getElementById('btn-chiudi')?.addEventListener('click', chiudiFinestra);
     document.getElementById('btn-stampa')?.addEventListener('click', () => window.print());
-    document.getElementById('btn-mese-prev')?.addEventListener('click', () => cambiaMese(-1));
-    document.getElementById('btn-mese-next')?.addEventListener('click', () => cambiaMese(1));
+    document.getElementById('btn-anno-prev')?.addEventListener('click', () => cambiaAnno(-1));
+    document.getElementById('btn-anno-next')?.addEventListener('click', () => cambiaAnno(1));
+    document.getElementById('rc-mese-da')?.addEventListener('change', onCambioMeseDa);
+    document.getElementById('rc-mese-a')?.addEventListener('change', onCambioMeseA);
 
     await caricaERender();
 });

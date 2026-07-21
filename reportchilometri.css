@@ -93,7 +93,8 @@ html, body {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 8px 10px;
     margin-bottom: 14px;
 }
 
@@ -103,8 +104,24 @@ html, body {
     padding: 6px 18px;
     font-weight: 800;
     font-size: 14px;
-    min-width: 110px;
+    min-width: 80px;
     text-align: center;
+}
+
+.rc-periodo-label {
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.rc-periodo-select {
+    background: #fff;
+    border: 1px solid #111;
+    padding: 6px 10px;
+    font-weight: 800;
+    font-size: 13px;
+    min-width: 130px;
+    text-align: center;
+    cursor: pointer;
 }
 
 .rc-nav {
@@ -115,6 +132,10 @@ html, body {
     font-size: 20px;
     cursor: pointer;
     line-height: 1;
+}
+
+.print-only {
+    display: none;
 }
 
 .rc-loading,
@@ -245,6 +266,12 @@ html, body {
     }
 
     .no-print { display: none !important; }
+
+    .print-only { display: block !important; }
+
+    .rc-periodo-select {
+        display: none !important;
+    }
 
     .rc-page {
         max-width: none;

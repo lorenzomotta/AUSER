@@ -716,9 +716,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btnImpostazioni = document.getElementById('btn-impostazioni');
     const btnUtenti = document.getElementById('btn-utenti');
     const btnRiepilogoPagamenti = document.getElementById('btn-riepilogo-pagamenti');
+    const btnElencoOperatori = document.getElementById('btn-elenco-operatori');
+    const btnRiepilogoIncassi = document.getElementById('btn-riepilogo-incassi');
     if (btnImpostazioni) btnImpostazioni.hidden = !admin;
     if (btnUtenti) btnUtenti.hidden = !admin;
     if (btnRiepilogoPagamenti) btnRiepilogoPagamenti.hidden = !admin;
+    if (btnElencoOperatori) btnElencoOperatori.hidden = !admin;
+    if (btnRiepilogoIncassi) btnRiepilogoIncassi.hidden = !admin;
 
     const sidebarUser = document.getElementById('sidebar-user');
     const sidebarUserLabel = document.getElementById('sidebar-user-label');
@@ -956,14 +960,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Imposta il listener per il pulsante INCASSI GIORNALIERI
+    // Imposta il listener per il pulsante INCASSI GIORNALIERI — solo is_admin
     const riepilogoIncassiBtn = document.getElementById('btn-riepilogo-incassi');
     if (riepilogoIncassiBtn) {
         riepilogoIncassiBtn.addEventListener('click', async () => {
+            if (!isAdmin()) {
+                alert('Solo gli amministratori possono aprire Incassi Giornalieri.');
+                return;
+            }
             if (isTauri()) {
                 try {
-                    const { Window } = await import('@tauri-apps/api/window');
-                    const webview = await Window.create('selezione-data-incassi', {
+                    await apriFinestraPopup('selezione-data-incassi', {
                         url: 'SELEZIONEDATAINCASSI.html',
                         title: 'Seleziona data incassi',
                         width: 480,
@@ -974,10 +981,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         alwaysOnTop: false,
                         center: true
                     });
-                    await webview.setFocus();
                 } catch (error) {
                     console.error('Errore apertura selezione data incassi:', error);
-                    window.location.href = 'SELEZIONEDATAINCASSI.html';
+                    alert('Impossibile aprire Incassi Giornalieri.');
                 }
             } else {
                 window.open('SELEZIONEDATAINCASSI.html', '_blank', 'width=480,height=340');
@@ -1075,10 +1081,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     
-    // Imposta il listener per il pulsante ELENCO OPERATORI
+    // Imposta il listener per il pulsante ELENCO OPERATORI — solo is_admin
     const elencoOperatoriBtn = document.getElementById('btn-elenco-operatori');
     if (elencoOperatoriBtn) {
         elencoOperatoriBtn.addEventListener('click', async () => {
+            if (!isAdmin()) {
+                alert('Solo gli amministratori possono aprire Elenco Operatori.');
+                return;
+            }
             if (isTauri()) {
                 try {
                     // Crea una nuova finestra Tauri per ELENCO OPERATORI

@@ -1,4 +1,6 @@
 // Riepilogo servizi incassati — data incasso = data selezionata (Supabase via Tauri)
+import { richiediSessione, isAdmin } from './auth-session.js';
+
 let invoke;
 
 let dataSelezionata = new Date();
@@ -230,6 +232,14 @@ function setupEventListeners() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    const sessione = richiediSessione();
+    if (!sessione) return;
+    if (!isAdmin(sessione)) {
+        alert('Accesso riservato agli amministratori.');
+        window.location.href = 'index.html';
+        return;
+    }
+
     await initTauri();
     dataSelezionata = leggiDataDaUrl() || new Date();
     dataSelezionata.setHours(0, 0, 0, 0);

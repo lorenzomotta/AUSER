@@ -8,6 +8,7 @@ let isNewTesseramento = false;
 let isAnagraficaEditMode = false;
 let anagraficaEditSnapshot = null;
 let allTipologieSocio = [];
+let allComuniResidenza = [];
 let isNuovoSocioMode = false;
 let isRicercaMode = false;
 
@@ -85,7 +86,8 @@ async function closeAnagraficaWindow() {
         try {
             const { getCurrent } = await import('@tauri-apps/api/window');
             const win = getCurrent();
-            if (win?.label?.startsWith('anagrafica-socio')) {
+            const label = win?.label || '';
+            if (label.startsWith('anagrafica-')) {
                 await win.close();
                 return;
             }
@@ -285,12 +287,16 @@ async function loadTipologieSocio() {
 
 function populateTipologiaSelect(select, currentValue) {
     const options = getTipologieSelectOptions(currentValue);
-    const parts = ['<option value="">— Scegli tipologia —</option>'];
+    const parts = isRicercaMode
+        ? ['<option value="">Tutti</option>']
+        : ['<option value="">— Scegli tipologia —</option>'];
 
     options.forEach((value) => {
         parts.push(`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`);
     });
-    parts.push('<option value="__custom__">➕ Nuova tipologia…</option>');
+    if (!isRicercaMode) {
+        parts.push('<option value="__custom__">➕ Nuova tipologia…</option>');
+    }
 
     select.innerHTML = parts.join('');
 }
@@ -510,6 +516,14 @@ function setAnagraficaEditMode(editing) {
         renderStoricoTesseramenti();
     }
     setupTipologiaSocioField(editing);
+
+    if (isRicercaMode) {
+        const comuneInput = document.getElementById('field-residenza-comune');
+        if (comuneInput) {
+            comuneInput.readOnly = true;
+            comuneInput.classList.add('ricerca-comune-input-hidden');
+        }
+    }
 }
 
 function enableAnagraficaEdit() {
@@ -561,6 +575,7 @@ function populateAnagrafica(data) {
     document.getElementById('field-archivia').checked = isTruthyFlag(data.archivia);
     document.getElementById('field-nota').value = data.notaaggiuntiva || '';
     setDisponibilitaCheckboxes(parseDisponibilita(data.disponibilita));
+    syncComuniMultiFromInput();
 
     const subtitle = document.getElementById('socio-subtitle');
     if (subtitle) {
@@ -851,14 +866,207 @@ function readStoredRicercaCriteri() {
     }
 }
 
+function parseComuniResidenza(value) {
+    if (!value || typeof value !== 'string') return [];
+    return value
+        .split(/[,;]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+}
+
+function sortComuni(list) {
+    return [...list].sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
+}
+
+async function loadComuniResidenza() {
+    if (!invoke) {
+        allComuniResidenza = [];
+        return;
+    }
+
+    try {
+        await initSupabase();
+        const tesserati = await invoke('get_all_tesserati');
+        const set = new Set();
+        (Array.isArray(tesserati) ? tesserati : []).forEach((t) => {
+            const comune = normalizeTipologiaValue(t?.residenza_comune);
+            if (comune) set.add(comune);
+        });
+        allComuniResidenza = sortComuni([...set]);
+    } catch (error) {
+        console.error('Errore caricamento comuni residenza:', error);
+        allComuniResidenza = [];
+    }
+}
+
+function updateComuniMultiToggleLabel() {
+    const toggle = document.getElementById('ricerca-comuni-toggle');
+    const input = document.getElementById('field-residenza-comune');
+    if (!toggle || !input) return;
+
+    const selected = parseComuniResidenza(input.value);
+    if (!selected.length) {
+        toggle.textContent = 'Tutti i comuni';
+        return;
+    }
+    if (selected.length === 1) {
+        toggle.textContent = selected[0];
+        return;
+    }
+    toggle.textContent = `${selected.length} comuni selezionati`;
+}
+
+function syncComuniMultiFromInput() {
+    if (!isRicercaMode) return;
+
+    const input = document.getElementById('field-residenza-comune');
+    const list = document.getElementById('ricerca-comuni-list');
+    if (!input || !list) return;
+
+    const selected = new Set(parseComuniResidenza(input.value).map((c) => c.toLowerCase()));
+    list.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+        checkbox.checked = selected.has(String(checkbox.value).toLowerCase());
+    });
+    updateComuniMultiToggleLabel();
+}
+
+function syncInputFromComuniMulti() {
+    const input = document.getElementById('field-residenza-comune');
+    const list = document.getElementById('ricerca-comuni-list');
+    if (!input || !list) return;
+
+    const selected = [];
+    list.querySelectorAll('input[type="checkbox"]:checked').forEach((checkbox) => {
+        selected.push(checkbox.value);
+    });
+    input.value = sortComuni(selected).join(', ');
+    updateComuniMultiToggleLabel();
+}
+
+function clearComuniMultiSelection() {
+    const input = document.getElementById('field-residenza-comune');
+    if (input) input.value = '';
+    syncComuniMultiFromInput();
+}
+
+function closeComuniMultiPanel() {
+    const panel = document.getElementById('ricerca-comuni-panel');
+    const toggle = document.getElementById('ricerca-comuni-toggle');
+    if (panel) panel.hidden = true;
+    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+}
+
+function renderComuniMultiList() {
+    const list = document.getElementById('ricerca-comuni-list');
+    if (!list) return;
+
+    if (!allComuniResidenza.length) {
+        list.innerHTML = '<p class="ricerca-comuni-empty">Nessun comune disponibile</p>';
+        return;
+    }
+
+    list.innerHTML = allComuniResidenza.map((comune, index) => `
+        <div class="ricerca-comuni-item" role="option">
+            <input type="checkbox" id="ricerca-comune-${index}" value="${escapeHtml(comune)}">
+            <label for="ricerca-comune-${index}">${escapeHtml(comune)}</label>
+        </div>
+    `).join('');
+
+    list.querySelectorAll('.ricerca-comuni-item').forEach((row) => {
+        const checkbox = row.querySelector('input[type="checkbox"]');
+        row.addEventListener('click', (e) => {
+            if (e.target === checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            syncInputFromComuniMulti();
+        });
+        checkbox?.addEventListener('change', syncInputFromComuniMulti);
+    });
+
+    syncComuniMultiFromInput();
+}
+
+function setupRicercaComuneField() {
+    const group = document.querySelector('.field-comune');
+    const input = document.getElementById('field-residenza-comune');
+    const label = document.querySelector('label[for="field-residenza-comune"]');
+    if (!group || !input) return;
+
+    if (label) {
+        label.textContent = 'COMUNE/I';
+        label.title = 'Seleziona uno o più comuni di residenza';
+    }
+
+    input.classList.add('ricerca-comune-input-hidden');
+    input.readOnly = true;
+    input.tabIndex = -1;
+
+    if (!document.getElementById('ricerca-comuni-multi')) {
+        const wrapper = document.createElement('div');
+        wrapper.id = 'ricerca-comuni-multi';
+        wrapper.className = 'ricerca-comuni-multi';
+        wrapper.innerHTML = `
+            <button type="button" class="ricerca-comuni-toggle" id="ricerca-comuni-toggle" aria-expanded="false">
+                Tutti i comuni
+            </button>
+            <div class="ricerca-comuni-panel" id="ricerca-comuni-panel" hidden>
+                <div class="ricerca-comuni-actions">
+                    <button type="button" class="ricerca-comuni-action" id="ricerca-comuni-seleziona-tutti">Seleziona tutti</button>
+                    <button type="button" class="ricerca-comuni-action" id="ricerca-comuni-deseleziona-tutti">Deseleziona tutti</button>
+                </div>
+                <div class="ricerca-comuni-list" id="ricerca-comuni-list"></div>
+            </div>
+        `;
+        group.appendChild(wrapper);
+
+        document.getElementById('ricerca-comuni-toggle')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const panel = document.getElementById('ricerca-comuni-panel');
+            const toggle = document.getElementById('ricerca-comuni-toggle');
+            if (!panel || !toggle) return;
+            const open = panel.hidden;
+            panel.hidden = !open;
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+
+        document.getElementById('ricerca-comuni-seleziona-tutti')?.addEventListener('click', () => {
+            document.querySelectorAll('#ricerca-comuni-list input[type="checkbox"]').forEach((cb) => {
+                cb.checked = true;
+            });
+            syncInputFromComuniMulti();
+        });
+
+        document.getElementById('ricerca-comuni-deseleziona-tutti')?.addEventListener('click', () => {
+            clearComuniMultiSelection();
+        });
+
+        document.addEventListener('click', (e) => {
+            const multi = document.getElementById('ricerca-comuni-multi');
+            if (multi && !multi.contains(e.target)) {
+                closeComuniMultiPanel();
+            }
+        });
+    }
+
+    renderComuniMultiList();
+    updateComuniMultiToggleLabel();
+}
+
 function clearRicercaForm() {
-    populateAnagrafica(createNuovoSocioTemplate(''));
-    document.getElementById('field-operatore').checked = false;
-    document.getElementById('field-attivo').checked = false;
-    document.getElementById('field-archivia').checked = false;
+    populateAnagrafica({
+        ...createNuovoSocioTemplate(''),
+        tipologiasocio: '',
+        operatore: false,
+        attivo: false,
+        archivia: false
+    });
     setDisponibilitaCheckboxes([]);
     const nominativo = document.getElementById('field-nominativo');
     if (nominativo) nominativo.required = false;
+    if (isAnagraficaEditMode) {
+        setupTipologiaSocioField(true);
+    }
+    clearComuniMultiSelection();
+    closeComuniMultiPanel();
 }
 
 function collectRicercaCriteri() {
@@ -948,6 +1156,7 @@ async function loadRicercaMode() {
     try {
         await initSupabase();
         await loadTipologieSocio();
+        await loadComuniResidenza();
     } catch (err) {
         console.warn('Init ricerca (opzionale):', err);
     }
@@ -993,12 +1202,15 @@ async function loadRicercaMode() {
         const hint = document.createElement('p');
         hint.id = 'hint-ricerca';
         hint.className = 'anagraficasoci-hint-ricerca';
-        hint.textContent = 'Modalità ricerca: i campi compilati filtrano l\'elenco soci (anche corrispondenza parziale). Le caselle spuntate richiedono quel flag.';
+        hint.textContent = 'Modalità ricerca: i campi compilati filtrano l\'elenco soci (anche corrispondenza parziale). Le caselle spuntate richiedono quel flag. Nel campo COMUNE/I seleziona uno o più comuni dal menu a tendina.';
         sectionAnag?.parentNode?.insertBefore(hint, sectionAnag);
     }
 
+    setupRicercaComuneField();
     setAnagraficaEditMode(true);
-    const focusEl = document.getElementById('field-residenza-comune') || document.getElementById('field-nominativo');
+    closeComuniMultiPanel();
+
+    const focusEl = document.getElementById('ricerca-comuni-toggle') || document.getElementById('field-nominativo');
     focusEl?.focus();
 }
 

@@ -108,6 +108,141 @@ body {
     border-radius: 4px;
     border-left: 3px solid #1565c0;
 }
+
+.anagrafica-container.mode-ricerca .field-comune {
+    flex: 1.4 1 180px;
+    min-width: min(100%, 160px);
+    position: relative;
+}
+
+.ricerca-comune-input-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.ricerca-comuni-multi {
+    position: relative;
+    width: 100%;
+}
+
+.ricerca-comuni-toggle {
+    width: 100%;
+    min-height: 24px;
+    padding: 2px 24px 2px 6px;
+    font-size: 12px;
+    line-height: 1.25;
+    border: 1px solid #aaa;
+    border-radius: 3px;
+    background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23555' d='M2 4l4 4 4-4'/%3E%3C/svg%3E") no-repeat right 6px center;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ricerca-comuni-toggle:hover {
+    border-color: #1565c0;
+}
+
+.ricerca-comuni-panel {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    min-width: 240px;
+    width: max(100%, 240px);
+    z-index: 30;
+    background: #fff;
+    border: 1px solid #90caf9;
+    border-radius: 4px;
+    box-shadow: 0 6px 18px rgba(21, 101, 192, 0.18);
+    padding: 6px;
+}
+
+.ricerca-comuni-actions {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.ricerca-comuni-action {
+    flex: 1;
+    font-size: 10px;
+    padding: 3px 4px;
+    border: 1px solid #bbb;
+    border-radius: 3px;
+    background: #f5f5f5;
+    cursor: pointer;
+}
+
+.ricerca-comuni-action:hover {
+    background: #e3f2fd;
+    border-color: #1565c0;
+}
+
+.ricerca-comuni-list {
+    max-height: 180px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ricerca-comuni-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: normal;
+    padding: 4px 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+    margin-bottom: 0;
+    color: #222;
+}
+
+.field-comune .ricerca-comuni-item {
+    display: flex;
+}
+
+.ricerca-comuni-item:hover {
+    background: #f1f8ff;
+}
+
+.ricerca-comuni-item input {
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.field-comune .ricerca-comuni-item label {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: 12px;
+    font-weight: normal;
+    line-height: 1.3;
+    color: #222;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+    cursor: pointer;
+    display: inline;
+}
+
+.ricerca-comuni-empty {
+    margin: 0;
+    font-size: 11px;
+    color: #777;
+    padding: 4px;
+}
 .btn-nuovo-tesseramento { background-color: #1565c0; color: #fff; }
 .btn-nuovo-tesseramento:hover { background-color: #0d47a1; }
 .btn-annulla-tess,
@@ -279,7 +414,8 @@ body {
     overflow: visible;
 }
 
-.anagrafica-container.mode-editing .field-tipologia .tipologia-select {
+.anagrafica-container.mode-editing .field-tipologia .tipologia-select,
+.anagrafica-container.mode-ricerca .field-tipologia .tipologia-select {
     background-color: #fff;
 }
 
@@ -288,6 +424,7 @@ body {
 }
 
 .anagrafica-container.mode-editing .field-tipologia input.tipologia-input-hidden,
+.anagrafica-container.mode-ricerca .field-tipologia input.tipologia-input-hidden,
 .field-tess-tipologia input.tipologia-input-hidden {
     display: none;
 }

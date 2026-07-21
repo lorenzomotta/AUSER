@@ -616,6 +616,63 @@ impl SupabaseClient {
             .await
     }
 
+    /// Aggiorna un'impostazione per id (PATCH PostgREST)
+    pub async fn patch_impostazione(
+        &self,
+        id: &str,
+        body: &serde_json::Map<String, Value>,
+    ) -> Result<(), String> {
+        if body.is_empty() {
+            return Ok(());
+        }
+
+        let id = id.trim();
+        if id.is_empty() {
+            return Err("Id impostazione mancante".to_string());
+        }
+
+        let table_name = &self.config.tables.impostazioni;
+        let base = self.config.url.trim_end_matches('/');
+        let mut last_error: Option<String> = None;
+
+        for id_col in ["id", "Id", "ID"] {
+            let url = format!(
+                "{}/rest/v1/{}?{}=eq.{}",
+                base, table_name, id_col, id
+            );
+
+            println!(
+                "📡 Supabase PATCH [impostazioni → {}] {}={} body={:?}",
+                table_name, id_col, id, body
+            );
+
+            let request = self
+                .http
+                .patch(&url)
+                .header("Content-Type", "application/json")
+                .header("Prefer", "return=minimal")
+                .json(body);
+
+            let response = self
+                .apply_auth_headers(request)
+                .send()
+                .await
+                .map_err(|e| format!("Errore connessione Supabase PATCH impostazioni: {}", e))?;
+
+            if response.status().is_success() {
+                return Ok(());
+            }
+
+            let status = response.status();
+            let err_body = response.text().await.unwrap_or_default();
+            last_error = Some(format!("HTTP {}: {}", status, err_body));
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            format!("Impossibile aggiornare impostazione id={}", id)
+        }))
+    }
+
     pub async fn fetch_dotazioni_mezzi(&self, filter: Option<&str>) -> Result<Vec<Value>, String> {
         self.fetch_table("dotazioni_mezzi", filter, None, Some("Dotazione.asc"))
             .await

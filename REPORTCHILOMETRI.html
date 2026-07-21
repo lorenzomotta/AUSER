@@ -24,10 +24,14 @@
         </section>
 
         <section class="rc-periodo">
-            <button type="button" class="rc-nav no-print" id="btn-mese-prev" title="Mese precedente">&lsaquo;</button>
-            <div class="rc-periodo-box" id="rc-mese">—</div>
+            <button type="button" class="rc-nav no-print" id="btn-anno-prev" title="Anno precedente">&lsaquo;</button>
             <div class="rc-periodo-box" id="rc-anno">—</div>
-            <button type="button" class="rc-nav no-print" id="btn-mese-next" title="Mese successivo">&rsaquo;</button>
+            <button type="button" class="rc-nav no-print" id="btn-anno-next" title="Anno successivo">&rsaquo;</button>
+            <label class="rc-periodo-label no-print" for="rc-mese-da">Da</label>
+            <select class="rc-periodo-select" id="rc-mese-da" title="Mese di inizio"></select>
+            <label class="rc-periodo-label no-print" for="rc-mese-a">A</label>
+            <select class="rc-periodo-select" id="rc-mese-a" title="Mese di fine"></select>
+            <div class="rc-periodo-box print-only" id="rc-periodo-label-print">—</div>
         </section>
 
         <div class="rc-loading" id="rc-loading">Caricamento servizi...</div>
@@ -45,21 +49,21 @@
 
             <section class="rc-totali">
                 <div class="rc-totale-riga">
-                    <span class="rc-totale-label">NUMERO SERVIZI MENSILI RIMBORSABILI</span>
+                    <span class="rc-totale-label">NUMERO SERVIZI RIMBORSABILI</span>
                     <div class="rc-box" id="rc-num-rimborsabili">0</div>
                     <span class="rc-totale-label">TOTALE KM RIMBORSABILI</span>
                     <div class="rc-box" id="rc-km-rimborsabili">0</div>
                 </div>
                 <div class="rc-totale-riga">
-                    <span class="rc-totale-label">NUMERO SERVIZI MENSILI NON RIMBORSABILI</span>
+                    <span class="rc-totale-label">NUMERO SERVIZI NON RIMBORSABILI</span>
                     <div class="rc-box" id="rc-num-non-rimborsabili">0</div>
                     <span class="rc-totale-label">TOTALE KM NON RIMBORSABILI</span>
                     <div class="rc-box" id="rc-km-non-rimborsabili">0</div>
                 </div>
                 <div class="rc-totale-riga">
-                    <span class="rc-totale-label">NUMERO SERVIZI MENSILI COMPLESSIVO</span>
+                    <span class="rc-totale-label">NUMERO SERVIZI COMPLESSIVO</span>
                     <div class="rc-box" id="rc-num-complessivo">0</div>
-                    <span class="rc-totale-label">TOTALE KM MENSILI</span>
+                    <span class="rc-totale-label">TOTALE KM DEL PERIODO</span>
                     <div class="rc-box" id="rc-km-complessivo">0</div>
                 </div>
             </section>
