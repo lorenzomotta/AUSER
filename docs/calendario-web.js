@@ -17,15 +17,25 @@ import {
     htmlContenutoRiepilogoTratta,
     mergeTrattaInNote
 } from './tratta-riepilogo.js';
+import {
+    isUtenteAdmin,
+    htmlDettaglioServizioEditabile,
+    valorizzaNoteFineEditabili,
+    raccogliDatiModaleAdmin,
+    buildPayloadUpdateServizio,
+    OPZIONI_DEFAULT
+} from './calendario-web-edit.js';
 
 let supabaseClient = null;
 let publicConfig = null;
 let nominativiMap = {};
+let allOperatori = [];
 let calendar = null;
 let allAutomezzi = [];
 const serviziPerRangeCache = new Map();
 const serviziById = new Map();
 let vistaCorrente = 'dayGridMonth';
+let permessiCorrenti = null;
 
 /** Rimette il blocco tratta nascosto dopo la modifica delle note utente */
 function mergeNoteFineConTratta(noteUtente, noteOriginali) {
@@ -456,6 +466,8 @@ async function gestisciLogout() {
     invalidaCacheServizi();
     serviziById.clear();
     nominativiMap = {};
+    allOperatori = [];
+    permessiCorrenti = null;
     mostraSchermataLogin();
     mostraErroreLogin('');
 }
@@ -480,17 +492,33 @@ async function controllaSessioneEsistente() {
 async function caricaNominativi() {
     if (Object.keys(nominativiMap).length) return;
     const { data } = await supabaseClient.from(tabella('tesserati')).select('*').limit(5000);
+    const operatori = [];
     (data || []).forEach(row => {
         const id = getFieldAny(row, ['IdSocio', 'IDSOCIO', 'idsocio']);
         const nom = getFieldAny(row, ['NominativoSocio', 'NOMINATIVO', 'Nominativo', 'nominativo']);
         if (id && nom) nominativiMap[id] = nom;
+        const opFlag = getFieldAny(row, ['Operatore', 'OPERATORE', 'operatore']);
+        if (id && nom && isTruthyFlag(opFlag)) {
+            operatori.push({ value: String(id), label: nom });
+        }
     });
+    allOperatori = operatori.sort((a, b) => a.label.localeCompare(b.label, 'it'));
 }
 
 function resolveOperatoreNome(row) {
-    const idOp = getFieldAny(row, ['Operatore', 'OPERATORE', 'IdOperatore']);
+    const idOp = getFieldAny(row, ['IdOperatore', 'IDOPERATORE', 'Id_Operatore', 'Operatore', 'OPERATORE']);
     if (idOp && nominativiMap[idOp]) return nominativiMap[idOp];
     return idOp;
+}
+
+function resolveOperatoreId(row) {
+    return getFieldAny(row, ['IdOperatore', 'IDOPERATORE', 'Id_Operatore', 'Operatore', 'OPERATORE']);
+}
+
+function buildTipoServizioDaRow(row) {
+    if (isTruthyFlag(getFieldAny(row, ['Sollevatore', 'SOLLEVATORE']))) return 'SOLLEVATORE';
+    if (isTruthyFlag(getFieldAny(row, ['Standard', 'STANDARD']))) return 'STANDARD';
+    return getFieldAny(row, ['Tipo_Servizio', 'TIPO_SERVIZIO', 'TipoServizio']);
 }
 
 function trovaColonnaRow(row, candidates) {
@@ -536,7 +564,7 @@ function rowToServizioCompleto(row) {
         ora_inizio: formatTimeIso(getFieldAny(row, ['Prelievo_Ora', 'ORA_PRELIEVO', 'OraPrelievo'])),
         comune_prelievo: getFieldAny(row, ['Prelievo_Comune', 'PRELIEVO_COMUNE']),
         luogo_prelievo: getFieldAny(row, ['Prelievo_Indirizzo', 'PRELIEVO_INDIRIZZO']),
-        tipo_servizio: getFieldAny(row, ['Motivazione', 'MOTIVAZIONE']),
+        tipo_servizio: buildTipoServizioDaRow(row),
         carrozzina: getFieldAny(row, ['Carrozzina', 'CARROZZINA']),
         richiedente: getFieldAny(row, ['Richiedente', 'RICHIEDENTE']),
         motivazione: getFieldAny(row, ['Motivazione', 'MOTIVAZIONE']),
@@ -546,6 +574,7 @@ function rowToServizioCompleto(row) {
         pagamento: formatEuroItaliano(donazioni),
         stato_incasso: incassato || 'DA INCASSARE',
         operatore: resolveOperatoreNome(row),
+        operatore_id: resolveOperatoreId(row),
         operatore_2: getFieldAny(row, ['Oper2', 'OPER2']),
         mezzo_usato: '',
         mezzo: getFieldAny(row, ['Mezzo', 'MEZZO']),
@@ -1025,6 +1054,32 @@ function creaNotaDettaglio(label, value) {
     </div>`;
 }
 
+function getOpzioniModificaAdmin() {
+    const mezzi = (allAutomezzi || [])
+        .filter((a) => a.nr_automezzo)
+        .map((a) => {
+            const nr = String(a.nr_automezzo).trim();
+            const parti = [];
+            if (a.marca) parti.push(a.marca.trim());
+            if (a.modello) parti.push(a.modello.trim());
+            if (nr) parti.push(`(${nr})`);
+            return { value: nr, label: parti.join(' - ') || nr };
+        })
+        .sort((a, b) => a.label.localeCompare(b.label, 'it'));
+
+    return {
+        ...OPZIONI_DEFAULT,
+        operatori: allOperatori.length ? allOperatori : [],
+        mezzi
+    };
+}
+
+function aggiornaPulsantiFooterModale() {
+    const btnSalva = document.getElementById('btn-salva-modifiche-servizio');
+    const admin = isUtenteAdmin(permessiCorrenti);
+    if (btnSalva) btnSalva.hidden = !admin;
+}
+
 function apriModalServizio(servizio) {
     const modal = document.getElementById('modal-servizio');
     const body = document.getElementById('modal-servizio-body');
@@ -1035,6 +1090,7 @@ function apriModalServizio(servizio) {
     if (title) title.textContent = `SERVIZIO ${servizio.id || ''} — ${servizio.socio_trasportato || ''}`;
 
     body.innerHTML = '<p class="modal-caricamento">Caricamento dati servizio...</p>';
+    aggiornaPulsantiFooterModale();
     modal.style.display = 'flex';
     modal.setAttribute('aria-hidden', 'false');
 }
@@ -1047,6 +1103,14 @@ function renderModalServizio(servizio) {
     servizioCorrente = servizio;
     const mezzo = costruisciStringaMezzo(servizio);
     if (title) title.textContent = `SERVIZIO ${servizio.id || ''} — ${servizio.socio_trasportato || ''}`;
+    aggiornaPulsantiFooterModale();
+
+    if (isUtenteAdmin(permessiCorrenti)) {
+        body.innerHTML = htmlDettaglioServizioEditabile(servizio, getOpzioniModificaAdmin())
+            + htmlRigaTrattaSePresente(servizio);
+        valorizzaNoteFineEditabili(body, testoNoteFineVisibile(servizio.note_fine_servizio));
+        return;
+    }
 
     body.innerHTML = `
         <div class="dettaglio-section">
@@ -1097,6 +1161,105 @@ function renderModalServizio(servizio) {
             </div>
         </div>
     `;
+}
+
+async function patchServizioCompletoSupabase(servizio, payload) {
+    const table = tabella('servizi');
+    const idCols = [...new Set([servizio.idColonna, ...colonneIdServizio()].filter(Boolean))];
+    let ultimoErrore = null;
+
+    for (const idCol of idCols) {
+        for (const idVal of valoriIdPerFiltro(servizio.id)) {
+            const { data, error } = await supabaseClient
+                .from(table)
+                .update(payload)
+                .eq(idCol, idVal)
+                .select('*');
+
+            if (error) {
+                ultimoErrore = error;
+                continue;
+            }
+            if (data && data.length > 0) {
+                const aggiornato = rowToServizioCompleto(data[0]);
+                if (aggiornato) return aggiornato;
+            }
+        }
+    }
+
+    if (ultimoErrore) throw ultimoErrore;
+    throw new Error(
+        'Nessuna riga aggiornata su Supabase. Controlla permessi UPDATE e idservizio.'
+    );
+}
+
+function mostraErroreModaleServizio(msg) {
+    const body = document.getElementById('modal-servizio-body');
+    if (!body) return;
+    let el = document.getElementById('modal-servizio-errore-edit');
+    if (!msg) {
+        el?.remove();
+        return;
+    }
+    if (!el) {
+        el = document.createElement('p');
+        el.id = 'modal-servizio-errore-edit';
+        el.className = 'modal-servizio-errore-edit';
+        el.setAttribute('role', 'alert');
+        body.prepend(el);
+    }
+    el.textContent = msg;
+}
+
+async function salvaModificheServizioAdmin() {
+    if (!isUtenteAdmin(permessiCorrenti) || !servizioCorrente?.id) return;
+
+    const body = document.getElementById('modal-servizio-body');
+    const btn = document.getElementById('btn-salva-modifiche-servizio');
+    const dati = raccogliDatiModaleAdmin(body);
+
+    if (dati.tempo && !/^\d{1,2}:\d{2}(:\d{2})?$/.test(dati.tempo)) {
+        mostraErroreModaleServizio('Formato TEMPO non valido. Usa ore:minuti, es. 01:30');
+        return;
+    }
+
+    mostraErroreModaleServizio('');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'SALVATAGGIO...';
+    }
+
+    try {
+        const payload = buildPayloadUpdateServizio(
+            servizioCorrente,
+            dati,
+            mergeNoteFineConTratta
+        );
+        const aggiornato = await patchServizioCompletoSupabase(servizioCorrente, payload);
+        servizioCorrente = aggiornato;
+        aggiornaServizioInCache(aggiornato);
+        invalidaCachePeriodoServizio();
+        if (calendar) {
+            const ev = calendar.getEventById(String(aggiornato.id));
+            if (ev) {
+                ev.setExtendedProp('servizio', aggiornato);
+                const colori = coloriStatoServizioCalendario(aggiornato.stato_servizio);
+                ev.setProp('backgroundColor', colori.backgroundColor);
+                ev.setProp('borderColor', colori.borderColor);
+                ev.setProp('textColor', colori.textColor);
+            }
+            await aggiornaEventiCalendario();
+        }
+        renderModalServizio(aggiornato);
+    } catch (err) {
+        console.error('Errore salvataggio modifiche servizio:', err);
+        mostraErroreModaleServizio(messaggioErroreSalvataggio(err));
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'SALVA MODIFICHE';
+        }
+    }
 }
 
 async function apriModalServizioConRefresh(servizio) {
@@ -1314,6 +1477,7 @@ function setupEventListenersCalendario() {
     document.getElementById('btn-close-modal')?.addEventListener('click', chiudiModalServizio);
     document.getElementById('btn-chiudi-modal')?.addEventListener('click', chiudiModalServizio);
     document.getElementById('btn-compila-fine-servizio')?.addEventListener('click', apriModalCompila);
+    document.getElementById('btn-salva-modifiche-servizio')?.addEventListener('click', salvaModificheServizioAdmin);
     document.getElementById('btn-close-compila')?.addEventListener('click', chiudiModalCompila);
     document.getElementById('btn-annulla-compila')?.addEventListener('click', chiudiModalCompila);
     document.getElementById('btn-salva-compila')?.addEventListener('click', salvaDatiFineServizio);
@@ -1343,6 +1507,7 @@ function setupEventListenersCalendario() {
 }
 
 async function avviaCalendario(user, perm) {
+    permessiCorrenti = perm || null;
     mostraCalendario(etichettaUtente(user, perm));
     configuraVistaInizialeMobile();
     initCalendario();

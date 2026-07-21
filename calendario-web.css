@@ -559,6 +559,82 @@
     background-color: #256829;
 }
 
+.btn-salva-modifiche-modal {
+    padding: 10px 18px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: bold;
+    line-height: 1.2;
+    background-color: #1b5e20;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    display: inline-block;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.btn-salva-modifiche-modal:hover:not(:disabled) {
+    background-color: #144a18;
+}
+
+.btn-salva-modifiche-modal:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+.btn-salva-modifiche-modal[hidden] {
+    display: none !important;
+}
+
+.dettaglio-edit-hint {
+    margin: 0 0 12px;
+    padding: 8px 10px;
+    background: #e8f5e9;
+    border: 1px solid #c5e0c7;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    color: #1e5a22;
+}
+
+.dettaglio-editabile .dettaglio-edit-control,
+.dettaglio-editabile input.dettaglio-edit-control,
+.dettaglio-editabile select.dettaglio-edit-control,
+.dettaglio-editabile textarea.dettaglio-edit-control {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 13px;
+    border: 1px solid #2d7a32;
+    border-radius: 4px;
+    background: #fff;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.dettaglio-editabile input.dettaglio-edit-control[readonly],
+.dettaglio-editabile select.dettaglio-edit-control:disabled {
+    background: #eee;
+    border-color: #bbb;
+    color: #555;
+}
+
+.dettaglio-editabile textarea.dettaglio-edit-control {
+    min-height: 56px;
+    resize: vertical;
+}
+
+.modal-servizio-errore-edit {
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    background: #fdecea;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    color: #a94442;
+    font-size: 0.9rem;
+    white-space: pre-wrap;
+}
+
 /* Modale compilazione dati fine servizio */
 .modal-compila-overlay {
     position: fixed;

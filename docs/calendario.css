@@ -430,6 +430,7 @@ body {
 }
 
 .dettaglio-field input,
+.dettaglio-field select,
 .dettaglio-field textarea {
     padding: 6px 8px;
     border: 1px solid #bbb;
