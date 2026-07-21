@@ -40,7 +40,45 @@ export function inputDateToItalian(iso) {
 }
 
 export function isUtenteAdmin(perm) {
-    return perm?.is_admin === true;
+    return perm?.is_admin === true || perm?.is_admin === 'true' || perm?.is_admin === 1;
+}
+
+/** Trova il nome colonna reale nella riga Supabase (case-insensitive). */
+export function resolveColonna(row, candidates, fallback) {
+    if (row && typeof row === 'object') {
+        const keys = Object.keys(row);
+        for (const name of candidates) {
+            if (Object.prototype.hasOwnProperty.call(row, name)) return name;
+        }
+        for (const name of candidates) {
+            const found = keys.find((k) => k.toLowerCase() === String(name).toLowerCase());
+            if (found) return found;
+        }
+        // euristica: note + prelievo
+        const joined = candidates.join(' ').toLowerCase();
+        if (joined.includes('prelievo') && joined.includes('note')) {
+            const hit = keys.find((k) => /prelievo.*note|note.*prelievo/i.test(k));
+            if (hit) return hit;
+        }
+        if (joined.includes('destinazione') && joined.includes('note')) {
+            const hit = keys.find((k) => /destinazione.*note|note.*destinazione|note.*arrivo/i.test(k));
+            if (hit) return hit;
+        }
+    }
+    return fallback;
+}
+
+function valoreBoolPerColonna(row, colName, value) {
+    const raw = row?.[colName];
+    if (typeof raw === 'boolean') return Boolean(value);
+    if (typeof raw === 'number') return value ? 1 : 0;
+    if (typeof raw === 'string') {
+        const u = raw.trim().toUpperCase();
+        if (u === 'SI' || u === 'NO' || u === 'SÌ') return value ? 'SI' : 'NO';
+        if (u === 'TRUE' || u === 'FALSE') return value ? 'TRUE' : 'FALSE';
+        if (u === '1' || u === '0') return value ? '1' : '0';
+    }
+    return Boolean(value);
 }
 
 function optionsHtml(opzioni, selected, emptyLabel = '—') {
@@ -116,8 +154,6 @@ export function creaNotaModale(label, name, value, readonly = false) {
 
 /**
  * HTML corpo modale in modalità modifica admin.
- * @param {object} servizio
- * @param {object} opzioni { operatori, mezzi, richiedenti, tipiPagamento, statiServizio, statiIncasso, tipiServizio, carrozzine }
  */
 export function htmlDettaglioServizioEditabile(servizio, opzioni = {}) {
     const s = servizio || {};
@@ -175,7 +211,6 @@ export function htmlDettaglioServizioEditabile(servizio, opzioni = {}) {
     `;
 }
 
-/** Dopo aver creato l'HTML, valorizza le note fine (senza blocco tratta) */
 export function valorizzaNoteFineEditabili(root, noteVisibili) {
     const el = root?.querySelector?.('[data-field="note_fine_servizio_visibili"]');
     if (el) el.value = noteVisibili || '';
@@ -185,10 +220,18 @@ export function raccogliDatiModaleAdmin(root) {
     if (!root) return {};
     const dati = {};
     root.querySelectorAll('[data-field]').forEach((el) => {
+        if (el.disabled) return;
         const key = el.getAttribute('data-field');
         if (!key) return;
         dati[key] = String(el.value ?? '').trim();
     });
+    // Lettura esplicita note (più affidabile)
+    const noteP = root.querySelector('[data-field="note_prelievo"]');
+    const noteA = root.querySelector('[data-field="note_arrivo"]');
+    const noteF = root.querySelector('[data-field="note_fine_servizio_visibili"]');
+    if (noteP) dati.note_prelievo = String(noteP.value ?? '');
+    if (noteA) dati.note_arrivo = String(noteA.value ?? '');
+    if (noteF) dati.note_fine_servizio_visibili = String(noteF.value ?? '');
     return dati;
 }
 
@@ -207,93 +250,140 @@ function normalizzaTempo(tempoRaw) {
     return t;
 }
 
+function setCampo(payload, row, candidates, fallback, value) {
+    const key = resolveColonna(row, candidates, fallback);
+    payload[key] = value;
+    return key;
+}
+
 /**
  * Costruisce il payload PATCH Supabase dai dati del form admin.
+ * Usa i nomi colonna reali della riga (_raw) quando disponibili.
  */
 export function buildPayloadUpdateServizio(servizio, dati, mergeNoteFineFn) {
     const payload = {};
     const s = servizio || {};
+    const row = s._raw || {};
 
-    // Supabase date column vuole ISO
     if (dati.data_prelievo) {
-        payload.Prelievo_Data = dataToInputDate(dati.data_prelievo) || null;
+        const iso = dataToInputDate(dati.data_prelievo);
+        if (iso) setCampo(payload, row, ['Prelievo_Data', 'DATA_PRELIEVO', 'Data_Prelievo'], 'Prelievo_Data', iso);
     }
 
-    if (dati.idsocio !== undefined) {
+    if (dati.idsocio !== undefined && dati.idsocio !== '') {
         const idNum = parseInt(dati.idsocio, 10);
-        payload.IdSocio = Number.isNaN(idNum) ? (dati.idsocio || null) : idNum;
+        setCampo(
+            payload,
+            row,
+            ['IdSocio', 'IDSOCIO'],
+            'IdSocio',
+            Number.isNaN(idNum) ? dati.idsocio : idNum
+        );
     }
 
-    payload.Trasportato = dati.socio_trasportato ?? '';
-    payload.Prelievo_Ora = dati.ora_inizio ? (dati.ora_inizio.length === 5 ? `${dati.ora_inizio}:00` : dati.ora_inizio) : null;
-    payload.Prelievo_Comune = dati.comune_prelievo ?? '';
-    payload.Prelievo_Indirizzo = dati.luogo_prelievo ?? '';
-    payload.Prelievo_Note = dati.note_prelievo ?? '';
-    payload.Richiedente = dati.richiedente ?? '';
-    payload.Motivazione = dati.motivazione ?? '';
-    payload.Carrozzina = dati.carrozzina ?? '';
+    setCampo(payload, row, ['Trasportato', 'TRASP', 'Trasp'], 'Trasportato', dati.socio_trasportato ?? '');
+
+    if (dati.ora_inizio) {
+        const ora = dati.ora_inizio.length === 5 ? `${dati.ora_inizio}:00` : dati.ora_inizio;
+        setCampo(payload, row, ['Prelievo_Ora', 'ORA_PRELIEVO', 'OraPrelievo', 'Ora_Prelievo'], 'Prelievo_Ora', ora);
+    }
+
+    setCampo(payload, row, ['Prelievo_Comune', 'PRELIEVO_COMUNE'], 'Prelievo_Comune', dati.comune_prelievo ?? '');
+    setCampo(payload, row, ['Prelievo_Indirizzo', 'PRELIEVO_INDIRIZZO'], 'Prelievo_Indirizzo', dati.luogo_prelievo ?? '');
+
+    const colNotePrelievo = setCampo(
+        payload,
+        row,
+        ['Prelievo_Note', 'PRELIEVO_NOTE', 'Note_Prelievo', 'NotePrelievo'],
+        'Prelievo_Note',
+        dati.note_prelievo ?? ''
+    );
+
+    setCampo(payload, row, ['Richiedente', 'RICHIEDENTE'], 'Richiedente', dati.richiedente ?? '');
+    setCampo(payload, row, ['Motivazione', 'MOTIVAZIONE'], 'Motivazione', dati.motivazione ?? '');
+    setCampo(payload, row, ['Carrozzina', 'CARROZZINA'], 'Carrozzina', dati.carrozzina ?? '');
 
     const tipo = String(dati.tipo_servizio || '').trim().toUpperCase();
     if (tipo === 'SOLLEVATORE' || tipo === 'STANDARD' || tipo === '') {
-        // In Servizi_supa i flag sono tipicamente boolean o SI/NO: inviamo boolean
-        payload.Sollevatore = tipo === 'SOLLEVATORE';
-        payload.Standard = tipo === 'STANDARD';
+        const colSol = resolveColonna(row, ['Sollevatore', 'SOLLEVATORE'], 'Sollevatore');
+        const colStd = resolveColonna(row, ['Standard', 'STANDARD'], 'Standard');
+        const hasSol = !row || !Object.keys(row).length
+            || Object.keys(row).some((k) => k.toLowerCase() === colSol.toLowerCase());
+        const hasStd = !row || !Object.keys(row).length
+            || Object.keys(row).some((k) => k.toLowerCase() === colStd.toLowerCase());
+        if (hasSol) payload[colSol] = valoreBoolPerColonna(row, colSol, tipo === 'SOLLEVATORE');
+        if (hasStd) payload[colStd] = valoreBoolPerColonna(row, colStd, tipo === 'STANDARD');
     }
 
     if (dati.ora_arrivo) {
-        payload.Destinazione_Data = dataToInputDate(dati.ora_arrivo) || null;
-    } else {
-        payload.Destinazione_Data = null;
+        const iso = dataToInputDate(dati.ora_arrivo);
+        if (iso) {
+            setCampo(payload, row, ['Destinazione_Data', 'DATA_DESTINAZIONE', 'Data_Destinazione'], 'Destinazione_Data', iso);
+        }
     }
-    payload.Destinazione_Comune = dati.comune_destinazione ?? '';
-    payload.Destinazione_Indirizzo = dati.luogo_destinazione ?? '';
-    payload.Destinazione_Note = dati.note_arrivo ?? '';
-    payload.Incassato = dati.stato_incasso || 'DA INCASSARE';
-    payload.TipoPagamento = dati.tipo_pagamento ?? '';
+
+    setCampo(payload, row, ['Destinazione_Comune', 'DESTINAZIONE_COMUNE'], 'Destinazione_Comune', dati.comune_destinazione ?? '');
+    setCampo(payload, row, ['Destinazione_Indirizzo', 'DESTINAZIONE_INDIRIZZO'], 'Destinazione_Indirizzo', dati.luogo_destinazione ?? '');
+    setCampo(
+        payload,
+        row,
+        ['Destinazione_Note', 'DESTINAZIONE_NOTE', 'Note_Destinazione'],
+        'Destinazione_Note',
+        dati.note_arrivo ?? ''
+    );
+    setCampo(payload, row, ['Incassato', 'INCASSATO'], 'Incassato', dati.stato_incasso || 'DA INCASSARE');
+    setCampo(payload, row, ['TipoPagamento', 'TIPOPAGAMENTO'], 'TipoPagamento', dati.tipo_pagamento ?? '');
 
     if (dati.operatore_id !== undefined) {
         const op = String(dati.operatore_id || '').trim();
-        if (!op) {
-            payload.IdOperatore = null;
-        } else {
-            const n = parseInt(op, 10);
-            payload.IdOperatore = Number.isNaN(n) ? op : n;
-        }
+        const opVal = !op ? null : (Number.isNaN(parseInt(op, 10)) ? op : parseInt(op, 10));
+        setCampo(payload, row, ['IdOperatore', 'IDOPERATORE', 'Id_Operatore'], 'IdOperatore', opVal);
     }
 
     if (dati.mezzo !== undefined) {
         const m = String(dati.mezzo || '').trim();
-        if (!m) payload.Mezzo = null;
-        else {
-            const n = parseInt(m, 10);
-            payload.Mezzo = Number.isNaN(n) ? m : n;
-        }
+        const mVal = !m ? null : (Number.isNaN(parseInt(m, 10)) ? m : parseInt(m, 10));
+        setCampo(payload, row, ['Mezzo', 'MEZZO'], 'Mezzo', mVal);
     }
 
-    const colTempo = s._colTempo || 'Tempo';
-    const colKm = s._colKm || 'Km';
-    const colNote = s._colNote || 'NoteFineServizio';
+    const colTempo = s._colTempo || resolveColonna(row, ['Tempo', 'TEMPO', 'TEMPO_ORE'], 'Tempo');
+    const colKm = s._colKm || resolveColonna(row, ['Km', 'KM'], 'Km');
+    const colNote = s._colNote || resolveColonna(
+        row,
+        ['NoteFineServizio', 'NOTAFINESERVIZIO', 'NOTE_FINE_SERVIZIO', 'NotaFineServizio'],
+        'NoteFineServizio'
+    );
 
     const tempoNorm = normalizzaTempo(dati.tempo);
     payload[colTempo] = tempoNorm || null;
 
-    if (dati.km !== undefined) {
+    if (dati.km !== undefined && dati.km !== '') {
         const kmNum = parseFloat(String(dati.km).replace(',', '.'));
-        payload[colKm] = Number.isFinite(kmNum) ? kmNum : (dati.km || null);
+        payload[colKm] = Number.isFinite(kmNum) ? kmNum : dati.km;
     }
 
     const euro = parseEuroToNumber(dati.pagamento);
-    if (euro !== null) payload.Donazioni = euro;
-    else if (dati.pagamento === '') payload.Donazioni = null;
+    if (euro !== null) {
+        setCampo(payload, row, ['Donazioni', 'DONAZIONI'], 'Donazioni', euro);
+    }
 
-    if (dati.data_bonifico) payload.Bonifico_Data = dataToInputDate(dati.data_bonifico) || null;
-    else payload.Bonifico_Data = null;
+    if (dati.data_bonifico) {
+        const iso = dataToInputDate(dati.data_bonifico);
+        if (iso) setCampo(payload, row, ['Bonifico_Data', 'DATABONIFICO'], 'Bonifico_Data', iso);
+    }
+    if (dati.data_ricevuta) {
+        const iso = dataToInputDate(dati.data_ricevuta);
+        if (iso) setCampo(payload, row, ['Ricevuta_Data', 'DATARICEVUTA'], 'Ricevuta_Data', iso);
+    }
 
-    if (dati.data_ricevuta) payload.Ricevuta_Data = dataToInputDate(dati.data_ricevuta) || null;
-    else payload.Ricevuta_Data = null;
-
-    payload.Ricevuta_numero = dati.numero_ricevuta ?? '';
-    payload.StatoServizio = dati.stato_servizio ?? '';
+    setCampo(
+        payload,
+        row,
+        ['Ricevuta_numero', 'Ricevuta_Numero', 'RICEVUTA_NUMERO'],
+        'Ricevuta_numero',
+        dati.numero_ricevuta ?? ''
+    );
+    setCampo(payload, row, ['StatoServizio', 'STATOSERVIZIO'], 'StatoServizio', dati.stato_servizio ?? '');
 
     const noteVisibili = dati.note_fine_servizio_visibili ?? '';
     const noteMerged = typeof mergeNoteFineFn === 'function'
@@ -301,10 +391,20 @@ export function buildPayloadUpdateServizio(servizio, dati, mergeNoteFineFn) {
         : noteVisibili;
     payload[colNote] = noteMerged;
 
-    // Rimuovi chiavi inutili se date prelievo vuota non deve essere null forzato
-    if (!dati.data_prelievo) delete payload.Prelievo_Data;
+    // Metadati utili per verifica post-salvataggio
+    payload.__meta = {
+        colNotePrelievo,
+        notePrelievoInviate: dati.note_prelievo ?? ''
+    };
 
     return payload;
+}
+
+/** Rimuove chiavi tecniche prima dell'invio a Supabase */
+export function payloadSenzaMeta(payload) {
+    const out = { ...payload };
+    delete out.__meta;
+    return out;
 }
 
 export const OPZIONI_DEFAULT = {

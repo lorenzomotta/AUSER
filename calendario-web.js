@@ -23,6 +23,7 @@ import {
     valorizzaNoteFineEditabili,
     raccogliDatiModaleAdmin,
     buildPayloadUpdateServizio,
+    payloadSenzaMeta,
     OPZIONI_DEFAULT
 } from './calendario-web-edit.js';
 
@@ -587,12 +588,17 @@ function rowToServizioCompleto(row) {
         data_ricevuta: formatDateItalian(getFieldAny(row, ['Ricevuta_Data', 'DATARICEVUTA'])),
         numero_ricevuta: getFieldAny(row, ['Ricevuta_numero', 'Ricevuta_Numero']),
         stato_servizio: getFieldAny(row, ['StatoServizio', 'STATOSERVIZIO']),
-        note_prelievo: getFieldAny(row, ['Prelievo_Note', 'PRELIEVO_NOTE']),
-        note_arrivo: getFieldAny(row, ['Destinazione_Note', 'DESTINAZIONE_NOTE']),
+        note_prelievo: getFieldAny(row, [
+            'Prelievo_Note', 'PRELIEVO_NOTE', 'Note_Prelievo', 'NotePrelievo', 'PrelievoNote'
+        ]),
+        note_arrivo: getFieldAny(row, [
+            'Destinazione_Note', 'DESTINAZIONE_NOTE', 'Note_Destinazione', 'NoteDestinazione'
+        ]),
         note_fine_servizio: getFieldAny(row, [
             'NoteFineServizio', 'NOTAFINESERVIZIO', 'NOTE_FINE_SERVIZIO', 'NotaFineServizio'
         ]),
-        archivia: getFieldAny(row, ['Archiviazione', 'ARCHIVIAZIONE'])
+        archivia: getFieldAny(row, ['Archiviazione', 'ARCHIVIAZIONE']),
+        _raw: row
     };
     const fine = leggiCampiFineServizioDaRow(row);
     return {
@@ -606,7 +612,8 @@ function rowToServizioCompleto(row) {
         _colKmUscita: fine._colKmUscita || 'Km_uscita',
         _colKmRientro: fine._colKmRientro || 'Km_rientro',
         _colTempo: fine._colTempo || base._colTempo,
-        _colNote: fine._colNote || base._colNote
+        _colNote: fine._colNote || base._colNote,
+        _raw: row
     };
 }
 
@@ -1163,8 +1170,9 @@ function renderModalServizio(servizio) {
     `;
 }
 
-async function patchServizioCompletoSupabase(servizio, payload) {
+async function patchServizioCompletoSupabase(servizio, payloadConMeta) {
     const table = tabella('servizi');
+    const payload = payloadSenzaMeta(payloadConMeta);
     const idCols = [...new Set([servizio.idColonna, ...colonneIdServizio()].filter(Boolean))];
     let ultimoErrore = null;
 
@@ -1178,6 +1186,11 @@ async function patchServizioCompletoSupabase(servizio, payload) {
 
             if (error) {
                 ultimoErrore = error;
+                const msg = String(error.message || error);
+                // Errori di schema: non ha senso ritentare con lo stesso payload
+                if (/column|schema|PGRST204|Could not find|invalid input/i.test(msg)) {
+                    throw error;
+                }
                 continue;
             }
             if (data && data.length > 0) {
@@ -1211,6 +1224,25 @@ function mostraErroreModaleServizio(msg) {
     el.textContent = msg;
 }
 
+function mostraOkModaleServizio(msg) {
+    const body = document.getElementById('modal-servizio-body');
+    if (!body) return;
+    document.getElementById('modal-servizio-errore-edit')?.remove();
+    let el = document.getElementById('modal-servizio-ok-edit');
+    if (!msg) {
+        el?.remove();
+        return;
+    }
+    if (!el) {
+        el = document.createElement('p');
+        el.id = 'modal-servizio-ok-edit';
+        el.className = 'modal-servizio-ok-edit';
+        el.setAttribute('role', 'status');
+        body.prepend(el);
+    }
+    el.textContent = msg;
+}
+
 async function salvaModificheServizioAdmin() {
     if (!isUtenteAdmin(permessiCorrenti) || !servizioCorrente?.id) return;
 
@@ -1223,7 +1255,17 @@ async function salvaModificheServizioAdmin() {
         return;
     }
 
+    // Se manca _raw (riga grezza), ricarica prima del salvataggio
+    if (!servizioCorrente._raw) {
+        try {
+            servizioCorrente = await ricaricaServizioDaSupabase(servizioCorrente);
+        } catch (err) {
+            console.warn('Ricarica prima del salvataggio:', err);
+        }
+    }
+
     mostraErroreModaleServizio('');
+    mostraOkModaleServizio('');
     if (btn) {
         btn.disabled = true;
         btn.textContent = 'SALVATAGGIO...';
@@ -1235,7 +1277,31 @@ async function salvaModificheServizioAdmin() {
             dati,
             mergeNoteFineConTratta
         );
-        const aggiornato = await patchServizioCompletoSupabase(servizioCorrente, payload);
+        const noteAttese = String(dati.note_prelievo ?? '');
+        console.log('Salvataggio servizio', servizioCorrente.id, {
+            note_prelievo: noteAttese,
+            colNote: payload.__meta?.colNotePrelievo,
+            chiaviPayload: Object.keys(payloadSenzaMeta(payload))
+        });
+
+        if (noteAttese && !payload.__meta?.colNotePrelievo) {
+            console.warn('Colonna note prelievo non risoluta, provo comunque Prelievo_Note');
+        }
+
+        let aggiornato = await patchServizioCompletoSupabase(servizioCorrente, payload);
+
+        // Verifica rileggendo da Supabase (evita falsi positivi)
+        aggiornato = await ricaricaServizioDaSupabase(aggiornato);
+        const noteLette = String(aggiornato?.note_prelievo ?? '');
+        if (noteAttese && noteLette.trim() !== noteAttese.trim()) {
+            throw new Error(
+                `Salvataggio non confermato su Supabase.\n` +
+                `Note inviate: "${noteAttese}"\n` +
+                `Note rilette: "${noteLette || '(vuoto)'}"\n` +
+                `Colonna usata: ${payload.__meta?.colNotePrelievo || '?'}`
+            );
+        }
+
         servizioCorrente = aggiornato;
         aggiornaServizioInCache(aggiornato);
         invalidaCachePeriodoServizio();
@@ -1251,6 +1317,7 @@ async function salvaModificheServizioAdmin() {
             await aggiornaEventiCalendario();
         }
         renderModalServizio(aggiornato);
+        mostraOkModaleServizio('Modifiche salvate su Supabase.');
     } catch (err) {
         console.error('Errore salvataggio modifiche servizio:', err);
         mostraErroreModaleServizio(messaggioErroreSalvataggio(err));

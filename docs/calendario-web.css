@@ -635,6 +635,16 @@
     white-space: pre-wrap;
 }
 
+.modal-servizio-ok-edit {
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    background: #e8f5e9;
+    border: 1px solid #c5e0c7;
+    border-radius: 4px;
+    color: #1e5a22;
+    font-size: 0.9rem;
+}
+
 /* Modale compilazione dati fine servizio */
 .modal-compila-overlay {
     position: fixed;
