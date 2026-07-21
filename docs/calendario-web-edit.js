@@ -40,7 +40,11 @@ export function inputDateToItalian(iso) {
 }
 
 export function isUtenteAdmin(perm) {
-    return perm?.is_admin === true || perm?.is_admin === 'true' || perm?.is_admin === 1;
+    if (!perm) return false;
+    const v = perm.is_admin ?? perm.Is_Admin ?? perm.isAdmin ?? perm.IS_ADMIN;
+    if (v === true || v === 1) return true;
+    const s = String(v ?? '').trim().toLowerCase();
+    return s === 'true' || s === '1' || s === 'si' || s === 'sì' || s === 'yes' || s === 't';
 }
 
 /** Trova il nome colonna reale nella riga Supabase (case-insensitive). */

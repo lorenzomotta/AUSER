@@ -25,7 +25,7 @@ import {
     buildPayloadUpdateServizio,
     payloadSenzaMeta,
     OPZIONI_DEFAULT
-} from './calendario-web-edit.js';
+} from './calendario-web-edit.js?v=22';
 
 let supabaseClient = null;
 let publicConfig = null;
@@ -395,7 +395,10 @@ function mostraCalendario(email) {
     const app = document.getElementById('web-calendario-app');
     app?.removeAttribute('hidden');
     const label = document.getElementById('web-user-label');
-    if (label && email) label.textContent = email;
+    if (label && email) {
+        const adminTag = isUtenteAdmin(permessiCorrenti) ? ' · ADMIN' : '';
+        label.textContent = `${email}${adminTag}`;
+    }
 }
 
 async function verificaOperatore(user) {
@@ -425,11 +428,15 @@ function etichettaUtente(user, perm) {
 }
 
 async function caricaPermessiUtente(user) {
-    const { data: perm } = await supabaseClient
+    const { data: perm, error } = await supabaseClient
         .from(tabella('user_permissions'))
-        .select('Calendario, is_admin, username')
+        .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
+    if (error) {
+        console.warn('Errore lettura permessi:', error.message);
+        return null;
+    }
     return perm;
 }
 
@@ -1084,7 +1091,10 @@ function getOpzioniModificaAdmin() {
 function aggiornaPulsantiFooterModale() {
     const btnSalva = document.getElementById('btn-salva-modifiche-servizio');
     const admin = isUtenteAdmin(permessiCorrenti);
-    if (btnSalva) btnSalva.hidden = !admin;
+    if (btnSalva) {
+        if (admin) btnSalva.removeAttribute('hidden');
+        else btnSalva.setAttribute('hidden', 'hidden');
+    }
 }
 
 function apriModalServizio(servizio) {
@@ -1575,6 +1585,7 @@ function setupEventListenersCalendario() {
 
 async function avviaCalendario(user, perm) {
     permessiCorrenti = perm || null;
+    console.log('Calendario permessi:', permessiCorrenti, 'admin=', isUtenteAdmin(permessiCorrenti));
     mostraCalendario(etichettaUtente(user, perm));
     configuraVistaInizialeMobile();
     initCalendario();
