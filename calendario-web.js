@@ -25,7 +25,7 @@ import {
     buildPayloadUpdateServizio,
     payloadSenzaMeta,
     OPZIONI_DEFAULT
-} from './calendario-web-edit.js?v=23';
+} from './calendario-web-edit.js?v=24';
 
 let supabaseClient = null;
 let publicConfig = null;
@@ -723,7 +723,10 @@ function costruisciStringaMezzo(servizio) {
 
 function coloriStatoServizioCalendario(stato) {
     const s = String(stato || 'DA ESEGUIRE').trim().toUpperCase();
-    if (s === 'ESEGUITO' || s === 'COMPLETATO') {
+    if (s === 'COMPLETATO') {
+        return { backgroundColor: '#e57373', borderColor: '#c62828', textColor: '#1a1a1a' };
+    }
+    if (s === 'ESEGUITO') {
         return { backgroundColor: '#5cb85c', borderColor: '#449d44', textColor: '#1a1a1a' };
     }
     if (s === 'ANNULLATO') {
@@ -734,7 +737,8 @@ function coloriStatoServizioCalendario(stato) {
 
 function classeStatoServizioCalendario(stato) {
     const s = String(stato || 'DA ESEGUIRE').trim().toUpperCase();
-    if (s === 'ESEGUITO' || s === 'COMPLETATO') return 'cal-stato-eseguito';
+    if (s === 'COMPLETATO') return 'cal-stato-completato';
+    if (s === 'ESEGUITO') return 'cal-stato-eseguito';
     if (s === 'ANNULLATO') return 'cal-stato-annullato';
     return 'cal-stato-da-eseguire';
 }

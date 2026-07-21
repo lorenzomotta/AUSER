@@ -259,6 +259,14 @@ body {
     border-color: #449d44 !important;
 }
 
+#calendario-mount .fc-event.cal-stato-completato,
+#calendario-mount .fc-daygrid-event.cal-stato-completato {
+    --fc-event-bg-color: #e57373 !important;
+    --fc-event-border-color: #c62828 !important;
+    background-color: #e57373 !important;
+    border-color: #c62828 !important;
+}
+
 #calendario-mount .fc-event.cal-stato-annullato,
 #calendario-mount .fc-daygrid-event.cal-stato-annullato {
     --fc-event-bg-color: #bdbdbd !important;
