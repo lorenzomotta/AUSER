@@ -241,6 +241,19 @@ body {
     box-sizing: border-box;
 }
 
+.es-tratta-riepilogo.ns-tariffa-calcolata {
+    background: #e8f5e9;
+    border-color: #81c784;
+}
+
+.es-tratta-riepilogo.ns-tariffa-calcolata .ns-tratta-selezionata-titolo {
+    color: #1b5e20;
+}
+
+.es-tratta-riepilogo.ns-tariffa-calcolata .ns-tratta-campo-val {
+    color: #2e7d32;
+}
+
 .form-row {
     display: flex;
     flex-wrap: nowrap;

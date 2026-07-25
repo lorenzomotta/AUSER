@@ -188,7 +188,9 @@ html, body {
     border-radius: 8px;
     padding: 18px 16px;
     width: 100%;
-    max-width: 420px;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
@@ -231,6 +233,48 @@ html, body {
     align-items: center;
     gap: 8px;
     cursor: pointer;
+}
+
+.ut-sidebar-fieldset {
+    margin: 10px 0 14px;
+    padding: 10px 12px 12px;
+    border: 1px solid #cfd8dc;
+    border-radius: 6px;
+}
+
+.ut-sidebar-fieldset > legend {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1565c0;
+    padding: 0 4px;
+}
+
+.ut-sidebar-hint {
+    margin: 0 0 8px;
+    font-size: 11px;
+    color: #607d8b;
+    line-height: 1.35;
+}
+
+.ut-checks-sidebar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 10px;
+    margin: 0;
+}
+
+.ut-checks-sidebar label {
+    font-size: 12px;
+}
+
+.ut-sidebar-fieldset:disabled,
+.ut-sidebar-fieldset[disabled] {
+    opacity: 0.65;
+}
+
+.ut-sidebar-fieldset:disabled label,
+.ut-sidebar-fieldset[disabled] label {
+    cursor: not-allowed;
 }
 
 .ut-modal-azioni {

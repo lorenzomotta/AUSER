@@ -554,7 +554,7 @@ body {
     grid-row: 2;
 }
 
-.ns-tratta-selezionata {
+.ns-pagamento-layout .ns-tratta-selezionata {
     grid-column: 1 / -1;
     grid-row: 3;
     margin-top: 10px;
@@ -562,6 +562,11 @@ body {
     background: #e3f2fd;
     border: 1px solid #64b5f6;
     border-radius: 6px;
+}
+
+.ns-pagamento-layout .ns-tariffa-calcolata {
+    background: #e8f5e9;
+    border-color: #81c784;
 }
 
 .ns-tratta-selezionata-titolo {
@@ -1177,7 +1182,7 @@ body {
     width: min(100%, 780px);
 }
 
-/* Pulsante NUOVO accanto a TRASPORTATO */
+/* Pulsante NUOVO accanto a TRASPORTATO / azioni accanto a TIPO SERVIZIO */
 .ns-label-con-azione {
     display: flex;
     align-items: center;
@@ -1188,6 +1193,42 @@ body {
 
 .ns-label-con-azione label {
     margin-bottom: 0;
+}
+
+.ns-tipo-servizio-azioni {
+    display: flex;
+    gap: 3px;
+    flex-shrink: 0;
+}
+
+.ns-btn-tipo-servizio {
+    padding: 1px 5px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.2;
+    color: #1565c0;
+    background-color: #e3f2fd;
+    border: 1px solid #90caf9;
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.ns-btn-tipo-servizio:hover {
+    background-color: #bbdefb;
+}
+
+.ns-btn-tipo-servizio.ns-btn-tipo-attivo {
+    background-color: #1565c0;
+    border-color: #1565c0;
+    color: #fff;
+}
+
+.ns-field:has(.ns-tipo-servizio-azioni) .ns-label-con-azione label {
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .ns-btn-nuovo-socio {

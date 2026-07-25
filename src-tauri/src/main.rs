@@ -3100,6 +3100,9 @@ fn richiedenti_da_righe(rows: &[serde_json::Value]) -> Vec<String> {
             let value = get_field_any(
                 row,
                 &[
+                    "TipoRichiedente",
+                    "TIPORICHIEDENTE",
+                    "Tipo_Richiedente",
                     "Richiedente",
                     "RICHIEDENTE",
                     "Richiedenti",
@@ -3315,6 +3318,41 @@ struct UserPermissionsRecord {
     is_admin: bool,
     programma: bool,
     calendario: bool,
+    /// JSON object delle voci sidebar consentite (stringa serializzata o oggetto)
+    #[serde(default)]
+    sidebar_menu: serde_json::Value,
+}
+
+fn parse_sidebar_menu_from_row(row: &serde_json::Value) -> serde_json::Value {
+    for key in [
+        "SidebarMenu",
+        "sidebar_menu",
+        "SIDEBAR_MENU",
+        "sidebarMenu",
+        "MenuSidebar",
+        "menu_sidebar",
+    ] {
+        if let Some(v) = row.get(key) {
+            if v.is_null() {
+                continue;
+            }
+            if v.is_object() {
+                return v.clone();
+            }
+            if let Some(s) = v.as_str() {
+                let t = s.trim();
+                if t.is_empty() {
+                    continue;
+                }
+                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(t) {
+                    if parsed.is_object() {
+                        return parsed;
+                    }
+                }
+            }
+        }
+    }
+    serde_json::json!({})
 }
 
 fn supabase_row_to_user_permissions(row: &serde_json::Value) -> UserPermissionsRecord {
@@ -3324,6 +3362,7 @@ fn supabase_row_to_user_permissions(row: &serde_json::Value) -> UserPermissionsR
         is_admin: get_bool_from_row(row, &["is_admin", "isadmin", "IsAdmin", "IS_ADMIN"]),
         programma: get_bool_from_row(row, &["Programma", "programma", "PROGRAMMA"]),
         calendario: get_bool_from_row(row, &["Calendario", "calendario", "CALENDARIO"]),
+        sidebar_menu: parse_sidebar_menu_from_row(row),
     }
 }
 
@@ -3453,6 +3492,9 @@ struct UpdateUserPermissionsPayload {
     is_admin: bool,
     programma: bool,
     calendario: bool,
+    /// JSON object voci sidebar (opzionale)
+    #[serde(default)]
+    sidebar_menu: Option<serde_json::Value>,
     /// Se valorizzata, aggiorna anche la password Auth
     #[serde(default)]
     nuova_password: Option<String>,
@@ -3479,6 +3521,15 @@ async fn update_user_permissions(payload: UpdateUserPermissionsPayload) -> Resul
     body.insert("is_admin".to_string(), serde_json::json!(payload.is_admin));
     body.insert("Programma".to_string(), serde_json::json!(payload.programma));
     body.insert("Calendario".to_string(), serde_json::json!(payload.calendario));
+    if let Some(ref menu) = payload.sidebar_menu {
+        // Salva come testo JSON (colonna text) — compatibile anche con jsonb
+        let as_text = if menu.is_string() {
+            menu.as_str().unwrap_or("{}").to_string()
+        } else {
+            menu.to_string()
+        };
+        body.insert("SidebarMenu".to_string(), serde_json::json!(as_text));
+    }
 
     {
         let client_guard = get_supabase_client().lock().await;
@@ -3560,6 +3611,8 @@ struct CreateAppUserPayload {
     is_admin: bool,
     programma: bool,
     calendario: bool,
+    #[serde(default)]
+    sidebar_menu: Option<serde_json::Value>,
 }
 
 #[tauri::command]
@@ -3591,12 +3644,23 @@ async fn create_app_user(payload: CreateAppUserPayload) -> Result<UserPermission
         username.to_string()
     };
 
+    let sidebar_val = payload
+        .sidebar_menu
+        .clone()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let sidebar_text = if sidebar_val.is_string() {
+        sidebar_val.as_str().unwrap_or("{}").to_string()
+    } else {
+        sidebar_val.to_string()
+    };
+
     let row = serde_json::json!({
         "user_id": user_id,
         "username": display_name,
         "is_admin": payload.is_admin,
         "Programma": payload.programma,
         "Calendario": payload.calendario,
+        "SidebarMenu": sidebar_text,
         "can_insert": payload.is_admin || payload.programma,
         "can_update": payload.is_admin || payload.programma,
         "can_delete": payload.is_admin,
@@ -3629,6 +3693,7 @@ async fn create_app_user(payload: CreateAppUserPayload) -> Result<UserPermission
         is_admin: payload.is_admin,
         programma: payload.programma,
         calendario: payload.calendario,
+        sidebar_menu: sidebar_val,
     })
 }
 
@@ -3839,6 +3904,9 @@ fn lookup_kind_meta(kind: &str) -> Result<(&'static str, &'static [&'static str]
         "richiedenti" => Ok((
             "richiedenti",
             &[
+                "TipoRichiedente",
+                "TIPORICHIEDENTE",
+                "Tipo_Richiedente",
                 "Richiedente",
                 "RICHIEDENTE",
                 "Richiedenti",

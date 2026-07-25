@@ -1,0 +1,112 @@
+/* Modale Calcola tariffa — Nuovo servizio / Modifica servizio */
+
+.ct-dialog-overlay {
+    z-index: 3400;
+}
+
+.ct-dialog {
+    width: min(100%, 420px);
+    padding: 20px 22px 18px;
+}
+
+.ct-dialog-titolo {
+    margin: 0 0 16px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #222;
+    text-align: center;
+}
+
+.ct-dialog-campi {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.ct-field label {
+    display: block;
+    margin-bottom: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: #444;
+}
+
+.ct-field .ns-input,
+.ct-field input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ct-field-totale {
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px solid #ddd;
+}
+
+.ct-field-totale label {
+    color: #1565c0;
+}
+
+.ct-totale-valore {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0d47a1;
+    background: #e3f2fd;
+    border: 1px solid #90caf9;
+    border-radius: 4px;
+    text-align: right;
+}
+
+.ct-dialog-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 4px;
+}
+
+.ns-btn-calcola-tariffa {
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #1b5e20;
+    background-color: #e8f5e9;
+    border: 1px solid #81c784;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s ease;
+}
+
+.ns-btn-calcola-tariffa:hover {
+    background-color: #c8e6c9;
+}
+
+.ns-btn-calcola-tariffa:active {
+    background-color: #a5d6a7;
+}
+
+.ns-pagamento-azioni-destra {
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+/* Stesso slot della tratta: uno solo è visibile per volta */
+.ns-pagamento-layout .ns-tariffa-calcolata {
+    background: #e8f5e9;
+    border-color: #81c784;
+}
+
+.ns-tariffa-calcolata .ns-tratta-selezionata-titolo {
+    color: #1b5e20;
+}
+
+.ns-tariffa-calcolata .ns-tratta-campo-val {
+    color: #2e7d32;
+}

@@ -37,9 +37,14 @@
             </div>
             <div class="ut-checks">
                 <label><input type="checkbox" id="edit-is-admin"> Amministratore (is_admin)</label>
-                <label><input type="checkbox" id="edit-programma"> Programma (app desktop)</label>
                 <label><input type="checkbox" id="edit-calendario"> Calendario (web)</label>
+                <label><input type="checkbox" id="edit-programma"> Programma (app desktop)</label>
             </div>
+            <fieldset class="ut-sidebar-fieldset" id="edit-sidebar-fieldset">
+                <legend>Pulsanti sidebar (Programma)</legend>
+                <p class="ut-sidebar-hint">Scegli quali voci può vedere in home. Gli admin vedono tutto.</p>
+                <div class="ut-checks ut-checks-sidebar" id="edit-sidebar-checks"></div>
+            </fieldset>
             <div class="ut-field">
                 <label for="edit-password">Nuova password (opzionale)</label>
                 <input type="password" id="edit-password" placeholder="Lascia vuoto per non cambiare" autocomplete="new-password">
@@ -86,9 +91,14 @@
             </div>
             <div class="ut-checks">
                 <label><input type="checkbox" id="nuovo-is-admin"> Amministratore</label>
-                <label><input type="checkbox" id="nuovo-programma" checked> Programma</label>
                 <label><input type="checkbox" id="nuovo-calendario"> Calendario</label>
+                <label><input type="checkbox" id="nuovo-programma" checked> Programma</label>
             </div>
+            <fieldset class="ut-sidebar-fieldset" id="nuovo-sidebar-fieldset">
+                <legend>Pulsanti sidebar (Programma)</legend>
+                <p class="ut-sidebar-hint">Scegli quali voci può vedere in home. Gli admin vedono tutto.</p>
+                <div class="ut-checks ut-checks-sidebar" id="nuovo-sidebar-checks"></div>
+            </fieldset>
             <div class="ut-modal-azioni">
                 <button type="button" class="ut-btn ut-btn-salva" id="btn-salva-nuovo">CREA</button>
                 <button type="button" class="ut-btn ut-btn-annulla" id="btn-annulla-nuovo">ANNULLA</button>

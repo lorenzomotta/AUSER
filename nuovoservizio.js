@@ -13,6 +13,7 @@ import {
 } from './tratta-riepilogo.js';
 import { setupNuovoSocioTrasportato } from './nuovoservizio-nuovo-socio.js';
 import { formatoAccountSessione } from './auth-session.js';
+import { apriCalcolaTariffa, ensureCalcolaTariffaMarkup, applicaRiepilogoTariffaNelDom, rimuoviRiepilogoTariffaDalForm, mergeTariffaInNote, leggiTariffaDalDom } from './calcola-tariffa.js';
 
 let invoke;
 
@@ -1307,6 +1308,106 @@ function chiediSiNo(messaggio) {
     });
 }
 
+/** Evidenzia STANDARD / SOLLEVATORE in base al select. */
+function aggiornaPulsantiTipoServizioAttivi() {
+    const select = document.getElementById('ns-tipo-servizio');
+    const valore = String(select?.value || '').trim().toUpperCase();
+    document.querySelectorAll('.ns-btn-tipo-servizio').forEach((btn) => {
+        const tipo = String(btn.getAttribute('data-tipo') || '').toUpperCase();
+        btn.classList.toggle('ns-btn-tipo-attivo', tipo !== '' && tipo === valore);
+    });
+}
+
+/**
+ * Modale: di chi sarà la carrozzina?
+ * @returns {Promise<'SOCIO'|'AUSER'|null>}
+ */
+function chiediCarrozzinaSocioOAuser() {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById('ns-dialog-carrozzina');
+        const btnSocio = document.getElementById('ns-dialog-btn-carrozzina-socio');
+        const btnAuser = document.getElementById('ns-dialog-btn-carrozzina-auser');
+
+        if (!overlay || !btnSocio || !btnAuser) {
+            const scelta = window.prompt('DI CHI SARÀ LA CARROZZINA? (SOCIO / AUSER)', 'SOCIO');
+            const v = String(scelta || '').trim().toUpperCase();
+            resolve(v === 'SOCIO' || v === 'AUSER' ? v : null);
+            return;
+        }
+
+        overlay.hidden = false;
+        overlay.setAttribute('aria-hidden', 'false');
+
+        const chiudi = (risposta) => {
+            btnSocio.disabled = true;
+            btnAuser.disabled = true;
+            overlay.hidden = true;
+            overlay.setAttribute('aria-hidden', 'true');
+            window.setTimeout(() => {
+                btnSocio.disabled = false;
+                btnAuser.disabled = false;
+                resolve(risposta);
+            }, 150);
+        };
+
+        const onSocio = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            btnSocio.removeEventListener('click', onSocio);
+            btnAuser.removeEventListener('click', onAuser);
+            chiudi('SOCIO');
+        };
+
+        const onAuser = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            btnSocio.removeEventListener('click', onSocio);
+            btnAuser.removeEventListener('click', onAuser);
+            chiudi('AUSER');
+        };
+
+        btnSocio.addEventListener('click', onSocio);
+        btnAuser.addEventListener('click', onAuser);
+    });
+}
+
+async function onClickTipoServizioRapido(tipo) {
+    const selectTipo = document.getElementById('ns-tipo-servizio');
+    const selectCarr = document.getElementById('ns-carrozzina');
+    if (!selectTipo) return;
+
+    const valore = String(tipo || '').trim().toUpperCase();
+    if (valore !== 'STANDARD' && valore !== 'SOLLEVATORE') return;
+
+    selectTipo.value = valore;
+    selectTipo.classList.remove('ns-campo-errore');
+    selectTipo.dispatchEvent(new Event('change', { bubbles: true }));
+    aggiornaPulsantiTipoServizioAttivi();
+
+    if (valore === 'STANDARD') {
+        if (selectCarr) selectCarr.value = '';
+        return;
+    }
+
+    // SOLLEVATORE → chiedi di chi è la carrozzina
+    const scelta = await chiediCarrozzinaSocioOAuser();
+    if (scelta && selectCarr) {
+        selectCarr.value = scelta;
+        selectCarr.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+}
+
+function setupPulsantiTipoServizio() {
+    document.getElementById('btn-tipo-standard')?.addEventListener('click', () => {
+        onClickTipoServizioRapido('STANDARD');
+    });
+    document.getElementById('btn-tipo-sollevatore')?.addEventListener('click', () => {
+        onClickTipoServizioRapido('SOLLEVATORE');
+    });
+    document.getElementById('ns-tipo-servizio')?.addEventListener('change', aggiornaPulsantiTipoServizioAttivi);
+    aggiornaPulsantiTipoServizioAttivi();
+}
+
 function avvisaSeTrattaRimossa(trattaRimossa) {
     if (!trattaRimossa) return;
     mostraAvviso(messaggioAvvisoDopoRimozioneTratta(trattaRimossa)).catch(() => {});
@@ -1315,6 +1416,7 @@ function avvisaSeTrattaRimossa(trattaRimossa) {
 // Pulsanti importo rapido
 function onPagamentoGratis() {
     avvisaSeTrattaRimossa(rimuoviTrattaDalForm('ns-tratta-fuori-asti'));
+    rimuoviRiepilogoTariffaDalForm('ns-tariffa-calcolata');
     impostaPagamentoEuro(0);
     setValore('ns-stato-incasso', 'GRATIS');
     impostaSelectValore('ns-tipo-pagamento', 'GRATIS');
@@ -1345,8 +1447,9 @@ async function applicaPagamentoConDomande(importo) {
     pagamentoRapidoInCorso = true;
 
     try {
-        // Qualsiasi importo rapido cambia la donazione → togli tratta
+        // Qualsiasi importo rapido cambia la donazione → togli tratta / tariffa
         avvisaSeTrattaRimossa(rimuoviTrattaDalForm('ns-tratta-fuori-asti'));
+        rimuoviRiepilogoTariffaDalForm('ns-tariffa-calcolata');
 
         if (importo != null) {
             impostaPagamentoEuro(importo);
@@ -1399,6 +1502,26 @@ function setupPagamentoQuickButtons() {
         apriFinestraSelezioneTratta();
     });
 
+    document.getElementById('btn-calcola-tariffa')?.addEventListener('click', async () => {
+        await apriCalcolaTariffa({
+            getInvoke: () => invoke,
+            isTauri,
+            onConferma: (totale, dettaglio) => {
+                avvisaSeTrattaRimossa(rimuoviTrattaDalForm('ns-tratta-fuori-asti'));
+                impostaPagamentoEuro(totale);
+                attivaCampoDonazionePagamento();
+                applicaRiepilogoTariffaNelDom(dettaglio, { hiddenId: 'ns-tariffa-calcolata' });
+                const statoIncasso = document.getElementById('ns-stato-incasso');
+                if (statoIncasso && String(statoIncasso.value || '').toUpperCase() === 'GRATIS') {
+                    statoIncasso.value = 'DA INCASSARE';
+                }
+                document.querySelectorAll('.ns-btn-importo').forEach((b) => {
+                    b.classList.remove('ns-btn-importo-attivo');
+                });
+            }
+        });
+    });
+
     const campoPagamento = document.getElementById('ns-pagamento');
     campoPagamento?.addEventListener('focus', preparaCampoPagamentoPerModifica);
     campoPagamento?.addEventListener('blur', () => {
@@ -1407,10 +1530,12 @@ function setupPagamentoQuickButtons() {
     campoPagamento?.addEventListener('input', () => {
         if (ignoraCambioPagamentoPerTratta) return;
         avvisaSeTrattaRimossa(rimuoviTrattaDalForm('ns-tratta-fuori-asti'));
+        rimuoviRiepilogoTariffaDalForm('ns-tariffa-calcolata');
     });
     campoPagamento?.addEventListener('change', () => {
         if (ignoraCambioPagamentoPerTratta) return;
         avvisaSeTrattaRimossa(rimuoviTrattaDalForm('ns-tratta-fuori-asti'));
+        rimuoviRiepilogoTariffaDalForm('ns-tariffa-calcolata');
     });
 }
 
@@ -1434,6 +1559,7 @@ async function applicaTotaleTrattaFuoriAsti(payload) {
         }
 
         const conRuolo = { ...payload, ruolo: dove };
+        rimuoviRiepilogoTariffaDalForm('ns-tariffa-calcolata');
         applicaRiepilogoTrattaNelDom(conRuolo, { hiddenId: 'ns-tratta-fuori-asti' });
         if (dove === 'partenza' || dove === 'arrivo') {
             compilaCampiLocalitaDaTratta(conRuolo, dove, 'ns');
@@ -1451,6 +1577,7 @@ async function applicaTotaleTrattaFuoriAsti(payload) {
         }
     } catch (err) {
         console.warn('Applicazione tratta fuori Asti:', err);
+        rimuoviRiepilogoTariffaDalForm('ns-tariffa-calcolata');
         applicaRiepilogoTrattaNelDom(payload, { hiddenId: 'ns-tratta-fuori-asti' });
     } finally {
         window.setTimeout(() => {
@@ -1579,7 +1706,10 @@ function raccogliDatiForm() {
         data_bonifico: dataIsoToItaliana(getValore('ns-data-bonifico')),
         data_ricevuta: dataIsoToItaliana(getValore('ns-data-ricevuta')),
         numero_ricevuta: getValore('ns-numero-ricevuta'),
-        note_fine_servizio: mergeTrattaInNote('', leggiTrattaDalDom('ns-tratta-fuori-asti')),
+        note_fine_servizio: mergeTariffaInNote(
+            mergeTrattaInNote('', leggiTrattaDalDom('ns-tratta-fuori-asti')),
+            leggiTariffaDalDom('ns-tariffa-calcolata')
+        ),
         archivia: 'NO'
     };
 }
@@ -1662,6 +1792,7 @@ function resetForm() {
     setValore('ns-idsocio', '');
     aggiornaDettaglioDaMezzo();
     applicaRiepilogoTrattaNelDom(null, { hiddenId: 'ns-tratta-fuori-asti' });
+    rimuoviRiepilogoTariffaDalForm('ns-tariffa-calcolata');
 }
 
 async function chiudiPagina() {
@@ -1802,6 +1933,7 @@ function setupEventListeners() {
     document.getElementById('btn-modifica-nota-aggiuntiva')?.addEventListener('click', toggleModificaNotaAggiuntiva);
     document.getElementById('btn-modifica-note-mezzo')?.addEventListener('click', toggleModificaNoteMezzo);
 
+    setupPulsantiTipoServizio();
     setupCopiaDataPrelievoSuDestinazione();
     setupModaleMezzoOccupato();
     setupNuovoSocioTrasportato({
@@ -1837,6 +1969,7 @@ function setupEventListeners() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     await initTauri();
+    ensureCalcolaTariffaMarkup();
     await setupListenerTrattaFuoriAsti();
     setupEventListeners();
     await caricaDatiIniziali();

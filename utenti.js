@@ -1,4 +1,10 @@
 import { richiediSessione, isAdmin, leggiSessione } from './auth-session.js';
+import {
+    SIDEBAR_VOCI_UI,
+    defaultSidebarMenu,
+    fullSidebarMenu,
+    normalizzaSidebarMenu
+} from './sidebar-permessi.js';
 
 let invoke;
 let adminUserId = '';
@@ -27,6 +33,61 @@ function escapeHtml(str) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+function montaCheckboxSidebar(containerId, prefix) {
+    const box = document.getElementById(containerId);
+    if (!box || box.dataset.ready === '1') return;
+    box.innerHTML = SIDEBAR_VOCI_UI.map((v) => `
+        <label>
+            <input type="checkbox" id="${prefix}-sb-${v.key}" data-sidebar-key="${v.key}">
+            ${escapeHtml(v.label)}
+        </label>
+    `).join('');
+    box.dataset.ready = '1';
+}
+
+function leggiSidebarDaCheckbox(prefix) {
+    const menu = {};
+    SIDEBAR_VOCI_UI.forEach((v) => {
+        const el = document.getElementById(`${prefix}-sb-${v.key}`);
+        menu[v.key] = !!el?.checked;
+    });
+    return menu;
+}
+
+function applicaSidebarAiCheckbox(prefix, rawMenu) {
+    const menu = normalizzaSidebarMenu(rawMenu);
+    SIDEBAR_VOCI_UI.forEach((v) => {
+        const el = document.getElementById(`${prefix}-sb-${v.key}`);
+        if (el) el.checked = menu[v.key] === true;
+    });
+}
+
+function aggiornaAbilitazioneSidebarChecks(prefix, isAdminFlag, programmaFlag) {
+    const fieldset = document.getElementById(`${prefix}-sidebar-fieldset`);
+    const disabled = !!isAdminFlag || !programmaFlag;
+    if (fieldset) fieldset.disabled = disabled;
+    SIDEBAR_VOCI_UI.forEach((v) => {
+        const el = document.getElementById(`${prefix}-sb-${v.key}`);
+        if (!el) return;
+        el.disabled = disabled;
+        if (isAdminFlag) el.checked = true;
+    });
+}
+
+function setupToggleSidebarUi(prefix) {
+    const adminEl = document.getElementById(`${prefix}-is-admin`);
+    const progEl = document.getElementById(`${prefix}-programma`);
+    const sync = () => {
+        aggiornaAbilitazioneSidebarChecks(
+            prefix,
+            !!adminEl?.checked,
+            !!progEl?.checked
+        );
+    };
+    adminEl?.addEventListener('change', sync);
+    progEl?.addEventListener('change', sync);
 }
 
 function mostraMsg(tipo, testo) {
@@ -105,12 +166,15 @@ async function caricaUtenti() {
 }
 
 function apriModifica(user) {
+    montaCheckboxSidebar('edit-sidebar-checks', 'edit');
     document.getElementById('edit-user-id').value = user.user_id || '';
     document.getElementById('edit-username').value = user.username || '';
     document.getElementById('edit-is-admin').checked = !!user.is_admin;
     document.getElementById('edit-programma').checked = !!user.programma;
     document.getElementById('edit-calendario').checked = !!user.calendario;
     document.getElementById('edit-password').value = '';
+    applicaSidebarAiCheckbox('edit', user.sidebar_menu);
+    aggiornaAbilitazioneSidebarChecks('edit', !!user.is_admin, !!user.programma);
 
     const btnElimina = document.getElementById('btn-elimina-edit');
     if (btnElimina) {
@@ -183,12 +247,15 @@ async function eliminaUtenteConfermato() {
 }
 
 function apriNuovo() {
+    montaCheckboxSidebar('nuovo-sidebar-checks', 'nuovo');
     document.getElementById('nuovo-email').value = '';
     document.getElementById('nuovo-password').value = '';
     document.getElementById('nuovo-username').value = '';
     document.getElementById('nuovo-is-admin').checked = false;
     document.getElementById('nuovo-programma').checked = true;
     document.getElementById('nuovo-calendario').checked = false;
+    applicaSidebarAiCheckbox('nuovo', defaultSidebarMenu());
+    aggiornaAbilitazioneSidebarChecks('nuovo', false, true);
     document.getElementById('modal-nuovo').hidden = false;
 }
 
@@ -203,6 +270,7 @@ async function salvaModifica() {
     const programma = !!document.getElementById('edit-programma')?.checked;
     const calendario = !!document.getElementById('edit-calendario')?.checked;
     const nuovaPassword = document.getElementById('edit-password')?.value || '';
+    const sidebarMenu = isAdminFlag ? fullSidebarMenu() : leggiSidebarDaCheckbox('edit');
 
     if (!username) {
         mostraMsg('errore', 'Inserisci uno username.');
@@ -218,11 +286,12 @@ async function salvaModifica() {
                 is_admin: isAdminFlag,
                 programma,
                 calendario,
+                sidebar_menu: sidebarMenu,
                 nuova_password: nuovaPassword.trim() ? nuovaPassword.trim() : null
             }
         });
         chiudiModifica();
-        mostraMsg('ok', `Username aggiornato: ${username}`);
+        mostraMsg('ok', `Utente aggiornato: ${username}`);
         await caricaUtenti();
     } catch (error) {
         console.error(error);
@@ -237,6 +306,7 @@ async function salvaNuovo() {
     const isAdminFlag = !!document.getElementById('nuovo-is-admin')?.checked;
     const programma = !!document.getElementById('nuovo-programma')?.checked;
     const calendario = !!document.getElementById('nuovo-calendario')?.checked;
+    const sidebarMenu = isAdminFlag ? fullSidebarMenu() : leggiSidebarDaCheckbox('nuovo');
 
     if (!email || !password) {
         mostraMsg('errore', 'Email e password obbligatorie.');
@@ -252,7 +322,8 @@ async function salvaNuovo() {
                 username,
                 is_admin: isAdminFlag,
                 programma,
-                calendario
+                calendario,
+                sidebar_menu: sidebarMenu
             }
         });
         chiudiNuovo();
@@ -308,6 +379,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = 'LOGIN.html';
         return;
     }
+
+    montaCheckboxSidebar('edit-sidebar-checks', 'edit');
+    montaCheckboxSidebar('nuovo-sidebar-checks', 'nuovo');
+    setupToggleSidebarUi('edit');
+    setupToggleSidebarUi('nuovo');
 
     document.getElementById('btn-chiudi')?.addEventListener('click', chiudiFinestra);
     document.getElementById('btn-nuovo')?.addEventListener('click', apriNuovo);

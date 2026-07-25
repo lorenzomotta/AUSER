@@ -15,6 +15,10 @@ import {
     isAdmin,
     logout
 } from './auth-session.js';
+import {
+    applicaVisibilitaSidebar,
+    puoVedereSidebar
+} from './sidebar-permessi.js';
 
 // Import Tauri API
 let invoke, appWindow;
@@ -710,14 +714,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const admin = isAdmin(sessione);
     const btnImpostazioni = document.getElementById('btn-impostazioni');
     const btnUtenti = document.getElementById('btn-utenti');
-    const btnRiepilogoPagamenti = document.getElementById('btn-riepilogo-pagamenti');
-    const btnElencoOperatori = document.getElementById('btn-elenco-operatori');
-    const btnRiepilogoIncassi = document.getElementById('btn-riepilogo-incassi');
+    // Impostazioni e Gestione utenti restano solo admin (header)
     if (btnImpostazioni) btnImpostazioni.hidden = !admin;
     if (btnUtenti) btnUtenti.hidden = !admin;
-    if (btnRiepilogoPagamenti) btnRiepilogoPagamenti.hidden = !admin;
-    if (btnElencoOperatori) btnElencoOperatori.hidden = !admin;
-    if (btnRiepilogoIncassi) btnRiepilogoIncassi.hidden = !admin;
+    // Pulsanti sidebar: in base alle spunte in Gestione utenti (admin = tutti)
+    applicaVisibilitaSidebar(sessione);
 
     const sidebarUser = document.getElementById('sidebar-user');
     const sidebarUserLabel = document.getElementById('sidebar-user-label');
@@ -955,12 +956,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Imposta il listener per il pulsante INCASSI GIORNALIERI — solo is_admin
+    // Imposta il listener per il pulsante INCASSI GIORNALIERI
     const riepilogoIncassiBtn = document.getElementById('btn-riepilogo-incassi');
     if (riepilogoIncassiBtn) {
         riepilogoIncassiBtn.addEventListener('click', async () => {
-            if (!isAdmin()) {
-                alert('Solo gli amministratori possono aprire Incassi Giornalieri.');
+            if (!puoVedereSidebar('riepilogo_incassi', sessione)) {
+                alert('Non hai il permesso per aprire Incassi Giornalieri.');
                 return;
             }
             if (isTauri()) {
@@ -986,12 +987,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Pulsante RIEPILOGO PAGAMENTI — solo is_admin
+    // Pulsante RIEPILOGO PAGAMENTI
     const riepilogoPagamentiBtn = document.getElementById('btn-riepilogo-pagamenti');
     if (riepilogoPagamentiBtn) {
         riepilogoPagamentiBtn.addEventListener('click', async () => {
-            if (!isAdmin()) {
-                alert('Solo gli amministratori possono aprire il Riepilogo Pagamenti.');
+            if (!puoVedereSidebar('riepilogo_pagamenti', sessione)) {
+                alert('Non hai il permesso per aprire il Riepilogo Pagamenti.');
                 return;
             }
             if (isTauri()) {
@@ -1076,12 +1077,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     
-    // Imposta il listener per il pulsante ELENCO OPERATORI — solo is_admin
+    // Imposta il listener per il pulsante ELENCO OPERATORI
     const elencoOperatoriBtn = document.getElementById('btn-elenco-operatori');
     if (elencoOperatoriBtn) {
         elencoOperatoriBtn.addEventListener('click', async () => {
-            if (!isAdmin()) {
-                alert('Solo gli amministratori possono aprire Elenco Operatori.');
+            if (!puoVedereSidebar('elenco_operatori', sessione)) {
+                alert('Non hai il permesso per aprire Elenco Operatori.');
                 return;
             }
             if (isTauri()) {

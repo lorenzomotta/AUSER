@@ -145,7 +145,8 @@ export async function loginConEmailPassword(invoke, email, password) {
         expires_at: Date.now() + (expiresIn - 60) * 1000,
         is_admin: isAdminFlag,
         programma: programmaFlag,
-        calendario: perm.calendario === true
+        calendario: perm.calendario === true,
+        sidebar_menu: perm.sidebar_menu ?? {}
     };
 
     salvaSessione(sessione);

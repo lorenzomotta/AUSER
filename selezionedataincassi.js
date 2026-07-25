@@ -1,4 +1,5 @@
-import { richiediSessione, isAdmin } from './auth-session.js';
+import { richiediSessione } from './auth-session.js';
+import { puoVedereSidebar } from './sidebar-permessi.js';
 
 function isTauri() {
     return typeof window !== 'undefined' &&
@@ -108,8 +109,8 @@ function setupEventListeners() {
 document.addEventListener('DOMContentLoaded', () => {
     const sessione = richiediSessione();
     if (!sessione) return;
-    if (!isAdmin(sessione)) {
-        alert('Accesso riservato agli amministratori.');
+    if (!puoVedereSidebar('riepilogo_incassi', sessione)) {
+        alert('Non hai il permesso per questa pagina.');
         window.location.href = 'index.html';
         return;
     }

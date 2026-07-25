@@ -1,5 +1,6 @@
 // Import Tauri API
-import { richiediSessione, isAdmin } from './auth-session.js';
+import { richiediSessione } from './auth-session.js';
+import { puoVedereSidebar } from './sidebar-permessi.js';
 
 let invoke, appWindow;
 
@@ -697,8 +698,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const sessione = richiediSessione();
     if (!sessione) return;
-    if (!isAdmin(sessione)) {
-        alert('Accesso riservato agli amministratori.');
+    if (!puoVedereSidebar('elenco_operatori', sessione)) {
+        alert('Non hai il permesso per questa pagina.');
         window.location.href = 'index.html';
         return;
     }

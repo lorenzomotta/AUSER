@@ -48,10 +48,13 @@ jobs:
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
             Nuova versione con miglioramenti operativi:
-            - nuovo socio da Nuovo servizio
-            - export elenco soci e pagamenti
-            - calendario web (admin modifica, COMPLETATO, logo)
-            - impostazioni, report chilometri, icone
+            - permessi sidebar per utente (Gestione utenti)
+            - calcola tariffa in Nuovo/Modifica servizio
+            - sollevatore / carrozzina SOCIO-AUSER
+            - richiedenti e tipi pagamento da Supabase in modifica servizio
+
+            Nota admin: eseguire su Supabase lo script `supabase-sidebar-menu.sql`
+            (colonna SidebarMenu) prima di salvare i permessi sidebar.
 
             Gli utenti con l'app già installata riceveranno un avviso all'avvio
             e potranno aggiornare con un clic.

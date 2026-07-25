@@ -11,6 +11,7 @@ import {
     caricaDatiCompletaServizio
 } from './completa-servizio.js';
 import { testoNoteFineVisibile, parseTrattaDaNote, htmlContenutoRiepilogoTratta, normalizzaPayloadTratta } from './tratta-riepilogo.js';
+import { parseTariffaDaNote, htmlContenutoRiepilogoTariffa } from './calcola-tariffa.js';
 
 function escapeHtmlElenco(str) {
     if (str === undefined || str === null) return '';
@@ -964,6 +965,18 @@ function createServizioBlock(servizio) {
             </div>
         `;
         formSections.appendChild(trattaSection);
+    }
+
+    const tariffaSalvata = parseTariffaDaNote(servizio.note_fine_servizio).tariffa;
+    if (tariffaSalvata && String(tariffaSalvata.totale || '').trim() !== '') {
+        const tariffaSection = document.createElement('div');
+        tariffaSection.className = 'form-section es-tratta-riepilogo-section';
+        tariffaSection.innerHTML = `
+            <div class="ns-tratta-selezionata ns-tariffa-calcolata es-tratta-riepilogo">
+                ${htmlContenutoRiepilogoTariffa(tariffaSalvata)}
+            </div>
+        `;
+        formSections.appendChild(tariffaSection);
     }
 
     servizioBlock.appendChild(formSections);

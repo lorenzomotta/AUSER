@@ -12,9 +12,15 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
-/** Note da mostrare all'utente (senza blocco tecnico della tratta) */
+/** Note da mostrare all'utente (senza blocchi tecnici tratta / tariffa) */
 export function testoNoteFineVisibile(noteFine) {
-    return parseTrattaDaNote(noteFine).notePulite;
+    let note = parseTrattaDaNote(noteFine).notePulite;
+    // Rimuove anche il blocco tariffa calcolata [[CT]]...[[/CT]]
+    note = String(note || '')
+        .replace(/\[\[CT\]\]([\s\S]*?)\[\[\/CT\]\]/g, '')
+        .replace(/^\s*\n/, '')
+        .trim();
+    return note;
 }
 
 /** Estrae JSON tratta dalle note e restituisce note senza marker */

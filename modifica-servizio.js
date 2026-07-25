@@ -15,6 +15,7 @@ import {
     messaggioAvvisoDopoRimozioneTratta
 } from './tratta-riepilogo.js';
 import { formatoAccountSessione, soloUsernameAccount } from './auth-session.js';
+import { apriCalcolaTariffa, ensureCalcolaTariffaMarkup, formatEuroCalcolaTariffa, applicaRiepilogoTariffaNelDom, rimuoviRiepilogoTariffaDalForm, htmlBloccoRiepilogoTariffa, parseTariffaDaNote, mergeTariffaInNote, leggiTariffaDalDom } from './calcola-tariffa.js';
 
 let getInvokeFn = () => null;
 let isTauriEnv = () => false;
@@ -26,6 +27,8 @@ let trovaServizioLocal = () => null;
 let allOperatori = [];
 let allAutomezzi = [];
 let allStatiServizio = [];
+let allRichiedenti = [];
+let allTipiPagamento = [];
 let servizioInModifica = null;
 let solaLetturaAttiva = false;
 let pagamentoModificabile = false;
@@ -111,6 +114,15 @@ const MODALE_MODIFICA_MARKUP = `
             <button type="button" id="mod-dialog-mezzo-occupato-chiudi" class="ns-dialog-btn ns-dialog-btn-si">CHIUDI</button>
         </div>
     </div>
+</div>
+<div id="mod-dialog-carrozzina" class="mod-dialog-overlay ns-dialog-overlay" hidden aria-hidden="true">
+    <div class="ns-dialog" role="dialog" aria-modal="true" aria-labelledby="mod-dialog-carrozzina-messaggio">
+        <p id="mod-dialog-carrozzina-messaggio" class="ns-dialog-messaggio">DI CHI SARÀ LA CARROZZINA?</p>
+        <div class="ns-dialog-actions">
+            <button type="button" id="mod-dialog-btn-carrozzina-socio" class="ns-dialog-btn ns-dialog-btn-si">SOCIO</button>
+            <button type="button" id="mod-dialog-btn-carrozzina-auser" class="ns-dialog-btn ns-dialog-btn-arrivo">AUSER</button>
+        </div>
+    </div>
 </div>`;
 
 function injectModaleModificaMarkup() {
@@ -146,6 +158,18 @@ function injectModaleModificaMarkup() {
     </div>
 </div>`;
         document.body.insertAdjacentHTML('beforeend', pezzo);
+    }
+    if (!document.getElementById('mod-dialog-carrozzina')) {
+        document.body.insertAdjacentHTML('beforeend', `
+<div id="mod-dialog-carrozzina" class="mod-dialog-overlay ns-dialog-overlay" hidden aria-hidden="true">
+    <div class="ns-dialog" role="dialog" aria-modal="true" aria-labelledby="mod-dialog-carrozzina-messaggio">
+        <p id="mod-dialog-carrozzina-messaggio" class="ns-dialog-messaggio">DI CHI SARÀ LA CARROZZINA?</p>
+        <div class="ns-dialog-actions">
+            <button type="button" id="mod-dialog-btn-carrozzina-socio" class="ns-dialog-btn ns-dialog-btn-si">SOCIO</button>
+            <button type="button" id="mod-dialog-btn-carrozzina-auser" class="ns-dialog-btn ns-dialog-btn-arrivo">AUSER</button>
+        </div>
+    </div>
+</div>`);
     }
 }
 
@@ -218,6 +242,7 @@ export function initModificaServizio(options = {}) {
     onDeleteSuccess = options.onDeleteSuccess || options.onSaveSuccess || (async () => {});
     getTipiPagamentoExtra = options.getTipiPagamentoExtra || (() => []);
     trovaServizioLocal = options.trovaServizioLocal || (() => null);
+    ensureCalcolaTariffaMarkup();
 }
 
 function normalizzaNumero(numStrOrNum) {
@@ -255,6 +280,40 @@ function costruisciStringaMezzo(servizio) {
 
 function getStatiServizioOptions() {
     return allStatiServizio.length ? [...allStatiServizio] : [];
+}
+
+function getRichiedentiOptions(valoreCorrente = '') {
+    const opts = [{ value: '', label: '— Seleziona —' }];
+    allRichiedenti.forEach((r) => {
+        const v = String(r || '').trim();
+        if (v && !opts.some((o) => String(typeof o === 'object' ? o.value : o).toUpperCase() === v.toUpperCase())) {
+            opts.push(v);
+        }
+    });
+    const corrente = String(valoreCorrente || '').trim();
+    if (corrente && !opts.some((o) => String(typeof o === 'object' ? o.value : o).toUpperCase() === corrente.toUpperCase())) {
+        opts.push(corrente);
+    }
+    return opts;
+}
+
+function getTipiPagamentoOptions(valoreCorrente = '', tipiExtra = null) {
+    const opts = [{ value: '', label: '— Nessuno —' }];
+    const aggiungi = (lista) => {
+        (lista || []).forEach((t) => {
+            const v = String(t || '').trim();
+            if (v && !opts.some((o) => String(typeof o === 'object' ? o.value : o).toUpperCase() === v.toUpperCase())) {
+                opts.push(v);
+            }
+        });
+    };
+    aggiungi(allTipiPagamento);
+    aggiungi(tipiExtra ?? getTipiPagamentoExtra());
+    const corrente = String(valoreCorrente || '').trim();
+    if (corrente && !opts.some((o) => String(typeof o === 'object' ? o.value : o).toUpperCase() === corrente.toUpperCase())) {
+        opts.push(corrente);
+    }
+    return opts;
 }
 
 /** Stato selezionato solo se presente nella lookup Supabase */
@@ -668,6 +727,31 @@ function creaSelectNs(id, label, value, options, fieldClass = '') {
     </div>`;
 }
 
+/** Select TIPO SERVIZIO con pulsanti rapidi STANDARD / SOLLEVATORE. */
+function creaSelectTipoServizioNs(idPrefix, value) {
+    const id = `${idPrefix}-tipo-servizio`;
+    const valore = String(value || '').trim().toUpperCase();
+    const opts = ['', 'STANDARD', 'SOLLEVATORE'].map((opt) => {
+        const selected = opt === valore || (opt === '' && !valore) ? ' selected' : '';
+        const text = opt === '' ? '— Seleziona —' : opt;
+        return `<option value="${escapeHtmlModifica(opt)}"${selected}>${escapeHtmlModifica(text)}</option>`;
+    }).join('');
+    const attivoStd = valore === 'STANDARD' ? ' ns-btn-tipo-attivo' : '';
+    const attivoSol = valore === 'SOLLEVATORE' ? ' ns-btn-tipo-attivo' : '';
+    return `<div class="ns-field">
+        <div class="ns-label-con-azione">
+            <label for="${id}">TIPO SERVIZIO</label>
+            <div class="ns-tipo-servizio-azioni" role="group" aria-label="Scelta rapida tipo servizio">
+                <button type="button" class="ns-btn-tipo-servizio${attivoStd}" id="${idPrefix}-btn-tipo-standard"
+                    data-tipo="STANDARD" data-serv-tipo="${idPrefix}" title="Imposta tipo STANDARD">STANDARD</button>
+                <button type="button" class="ns-btn-tipo-servizio${attivoSol}" id="${idPrefix}-btn-tipo-sollevatore"
+                    data-tipo="SOLLEVATORE" data-serv-tipo="${idPrefix}" title="Imposta tipo SOLLEVATORE">SOLLEVATORE</button>
+            </div>
+        </div>
+        <select id="${id}" class="ns-input">${opts}</select>
+    </div>`;
+}
+
 function creaInputNs(id, label, value, fieldClass = '', { type = 'text', readonly = false, inputMode = '' } = {}) {
     const inputModeAttr = inputMode ? ` inputmode="${inputMode}"` : '';
     return `<div class="ns-field ${fieldClass}">
@@ -686,7 +770,7 @@ function creaTextareaNs(id, label, value, fieldClass = '', rows = 2, { readonly 
 }
 
 export async function ensureDatiFormServizioCaricati() {
-    if (!allOperatori.length || !allAutomezzi.length) {
+    if (!allOperatori.length || !allAutomezzi.length || !allRichiedenti.length || !allTipiPagamento.length) {
         await caricaDatiModificaServizio();
     }
 }
@@ -700,10 +784,7 @@ export function costruisciFormServizio(
     { idPrefix = 'mod', chiusuraPrima = false, tipiPagamentoExtra = null, mostraArchivia = true, pagamentoSecondo = false } = {}
 ) {
     const p = idPrefix;
-    const tipiPagamento = [...(tipiPagamentoExtra ?? getTipiPagamentoExtra())];
-    if (servizio.tipo_pagamento && !tipiPagamento.includes(servizio.tipo_pagamento.trim())) {
-        tipiPagamento.push(servizio.tipo_pagamento.trim());
-    }
+    const tipiPagamentoOpts = getTipiPagamentoOptions(servizio.tipo_pagamento, tipiPagamentoExtra);
 
     const operatoriOpts = [{ value: '', label: '— Seleziona operatore —' }].concat(
         allOperatori.map(op => ({
@@ -731,7 +812,8 @@ export function costruisciFormServizio(
     const archiviaSi = ['true', 'si', 'sì', '1', 'yes'].includes(archiviaVal);
     const automezzoCorrente = trovaAutomezzoModifica(mezzoCorrente);
 
-    const { tratta: trattaDaNote, notePulite } = parseTrattaDaNote(servizio.note_fine_servizio);
+    const { tratta: trattaDaNote, notePulite: noteDopoTratta } = parseTrattaDaNote(servizio.note_fine_servizio);
+    const { tariffa: tariffaDaNote, notePulite } = parseTariffaDaNote(noteDopoTratta);
     const trattaSalvata = normalizzaPayloadTratta(servizio.tratta_fuori_asti)
         || trattaDaNote;
     const noteFineDisplay = notePulite;
@@ -792,8 +874,8 @@ export function costruisciFormServizio(
             <section class="ns-section">
                 <h2 class="ns-section-title">${num}. Dati servizio</h2>
                 <div class="ns-grid">
-                    ${creaSelectNs(`${p}-richiedente`, 'RICHIEDENTE', servizio.richiedente, ['', 'SOCIO', 'COMUNE', 'ALTRI'])}
-                    ${creaSelectNs(`${p}-tipo-servizio`, 'TIPO SERVIZIO', servizio.tipo_servizio, ['', 'STANDARD', 'SOLLEVATORE'])}
+                    ${creaSelectNs(`${p}-richiedente`, 'RICHIEDENTE', servizio.richiedente, getRichiedentiOptions(servizio.richiedente))}
+                    ${creaSelectTipoServizioNs(p, servizio.tipo_servizio)}
                     ${creaSelectNs(`${p}-carrozzina`, 'CARROZZINA', servizio.carrozzina, ['', 'AUSER', 'SOCIO'])}
                     ${creaSelectNs(`${p}-stato-servizio`, 'STATO DEL SERVIZIO', resolveStatoServizioSelezionato(servizio.stato_servizio), getStatiServizioOptions())}
                     ${creaInputNs(`${p}-motivazione`, 'MOTIVAZIONE DEL SERVIZIO', servizio.motivazione, 'span-4')}
@@ -826,17 +908,19 @@ export function costruisciFormServizio(
                         <button type="button" class="ns-btn-importo" data-serv-importo="${p}" data-importo="LIBERO">LIBERO</button>
                     </div>
                     <div class="ns-pagamento-azioni-destra">
+                        <button type="button" class="ns-btn-calcola-tariffa" id="${p}-btn-calcola-tariffa">CALCOLA TARIFFA</button>
                         <button type="button" class="ns-btn-tratta-fuori-asti" id="${p}-btn-tratta-fuori-asti">TRATTA FUORI ASTI</button>
                     </div>
                     <div class="ns-grid ns-grid-pagamento">
                         ${creaSelectNs(`${p}-stato-incasso`, 'STATO INCASSO', servizio.stato_incasso, ['DA INCASSARE', 'INCASSATO', 'GRATIS', 'ANNULLATO'], 'ns-field-stato-incasso')}
-                        ${creaSelectNs(`${p}-tipo-pagamento`, 'TIPO DI PAGAMENTO', servizio.tipo_pagamento, ['', ...tipiPagamento], 'ns-field-tipo-pagamento')}
+                        ${creaSelectNs(`${p}-tipo-pagamento`, 'TIPO DI PAGAMENTO', servizio.tipo_pagamento, tipiPagamentoOpts, 'ns-field-tipo-pagamento')}
                         ${creaInputNs(`${p}-pagamento`, 'DONAZIONE / PAGAMENTO', servizio.pagamento, 'ns-field-donazione')}
                         ${creaInputNs(`${p}-numero-ricevuta`, 'NUMERO RICEVUTA', servizio.numero_ricevuta || '', 'ns-field-numero-ricevuta')}
                         ${creaInputNs(`${p}-data-ricevuta`, 'DATA RICEVUTA', valorePerInputData(servizio.data_ricevuta), 'ns-field-data-ricevuta', { type: 'date' })}
                         ${creaInputNs(`${p}-data-bonifico`, 'DATA INCASSO', valorePerInputData(servizio.data_bonifico), 'ns-field-data-bonifico', { type: 'date' })}
                     </div>
                     ${htmlBloccoRiepilogoTratta(trattaSalvata, { hiddenId: `${p}-tratta-fuori-asti` })}
+                    ${htmlBloccoRiepilogoTariffa(tariffaDaNote, { hiddenId: `${p}-tariffa-calcolata` })}
                 </div>
             </section>`;
 
@@ -912,6 +996,8 @@ export function setupFormServizioListeners(idPrefix = 'mod') {
     trattaTargetPrefix = idPrefix;
     const hiddenTrattaId = `${idPrefix}-tratta-fuori-asti`;
 
+    setupPulsantiTipoServizioForm(idPrefix);
+
     document.querySelectorAll(`[data-serv-importo="${idPrefix}"]`).forEach(btn => {
         btn.addEventListener('click', () => {
             const tipo = btn.getAttribute('data-importo');
@@ -919,8 +1005,9 @@ export function setupFormServizioListeners(idPrefix = 'mod') {
             const statoIncasso = document.getElementById(`${idPrefix}-stato-incasso`);
             if (!campo) return;
 
-            // Qualsiasi bottone importo cambia la donazione → togli tratta
+            // Qualsiasi bottone importo cambia la donazione → togli tratta / tariffa
             avvisaSeTrattaRimossaModifica(rimuoviTrattaDalForm(hiddenTrattaId));
+            rimuoviRiepilogoTariffaDalForm(`${idPrefix}-tariffa-calcolata`);
 
             document.querySelectorAll(`[data-serv-importo="${idPrefix}"]`).forEach(b => b.classList.remove('ns-btn-importo-attivo'));
             btn.classList.add('ns-btn-importo-attivo');
@@ -959,6 +1046,7 @@ export function setupFormServizioListeners(idPrefix = 'mod') {
             if (campoPagamento.readOnly) return;
             if (ignoraCambioPagamentoPerTrattaMod) return;
             avvisaSeTrattaRimossaModifica(rimuoviTrattaDalForm(hiddenTrattaId));
+            rimuoviRiepilogoTariffaDalForm(`${idPrefix}-tariffa-calcolata`);
         };
         campoPagamento.addEventListener('input', onCambioDonazione);
         campoPagamento.addEventListener('change', onCambioDonazione);
@@ -979,6 +1067,32 @@ export function setupFormServizioListeners(idPrefix = 'mod') {
         apriFinestraSelezioneTratta();
     });
 
+    document.getElementById(`${idPrefix}-btn-calcola-tariffa`)?.addEventListener('click', async () => {
+        const hiddenTrattaIdBtn = `${idPrefix}-tratta-fuori-asti`;
+        const hiddenTariffaId = `${idPrefix}-tariffa-calcolata`;
+        const kmVal = document.getElementById(`${idPrefix}-km`)?.value || '';
+        await apriCalcolaTariffa({
+            getInvoke: getInvokeFn,
+            isTauri: isTauriEnv,
+            chilometriIniziali: kmVal,
+            onConferma: (totale, dettaglio) => {
+                avvisaSeTrattaRimossaModifica(rimuoviTrattaDalForm(hiddenTrattaIdBtn));
+                const campo = document.getElementById(`${idPrefix}-pagamento`);
+                const statoIncasso = document.getElementById(`${idPrefix}-stato-incasso`);
+                if (!campo) return;
+                document.querySelectorAll(`[data-serv-importo="${idPrefix}"]`).forEach((b) => {
+                    b.classList.remove('ns-btn-importo-attivo');
+                });
+                campo.value = formatEuroCalcolaTariffa(totale);
+                campo.readOnly = false;
+                if (statoIncasso && String(statoIncasso.value || '').toUpperCase() === 'GRATIS') {
+                    statoIncasso.value = 'DA INCASSARE';
+                }
+                applicaRiepilogoTariffaNelDom(dettaglio, { hiddenId: hiddenTariffaId });
+            }
+        });
+    });
+
     setupListenerTrattaPerFormServizio();
 }
 
@@ -997,6 +1111,7 @@ async function applicaTrattaSelezionataAlForm(idPrefix, tratta) {
     }
 
     applicaRiepilogoTrattaNelDom(conRuolo, { hiddenId: `${idPrefix}-tratta-fuori-asti` });
+    rimuoviRiepilogoTariffaDalForm(`${idPrefix}-tariffa-calcolata`);
 
     const campo = document.getElementById(`${idPrefix}-pagamento`);
     if (campo && conRuolo.totale != null && String(conRuolo.totale).trim() !== '') {
@@ -1027,6 +1142,105 @@ async function setupListenerTrattaPerFormServizio() {
         if (!prefix) return;
         applicaTrattaSelezionataAlForm(prefix, tratta);
     });
+}
+
+function aggiornaPulsantiTipoServizioForm(idPrefix) {
+    const select = document.getElementById(`${idPrefix}-tipo-servizio`);
+    const valore = String(select?.value || '').trim().toUpperCase();
+    document.querySelectorAll(`[data-serv-tipo="${idPrefix}"]`).forEach((btn) => {
+        const tipo = String(btn.getAttribute('data-tipo') || '').toUpperCase();
+        btn.classList.toggle('ns-btn-tipo-attivo', tipo !== '' && tipo === valore);
+    });
+}
+
+/**
+ * Modale: di chi sarà la carrozzina?
+ * @returns {Promise<'SOCIO'|'AUSER'|null>}
+ */
+function chiediCarrozzinaSocioOAuserModifica() {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById('mod-dialog-carrozzina');
+        const btnSocio = document.getElementById('mod-dialog-btn-carrozzina-socio');
+        const btnAuser = document.getElementById('mod-dialog-btn-carrozzina-auser');
+
+        if (!overlay || !btnSocio || !btnAuser) {
+            const scelta = window.prompt('DI CHI SARÀ LA CARROZZINA? (SOCIO / AUSER)', 'SOCIO');
+            const v = String(scelta || '').trim().toUpperCase();
+            resolve(v === 'SOCIO' || v === 'AUSER' ? v : null);
+            return;
+        }
+
+        overlay.hidden = false;
+        overlay.setAttribute('aria-hidden', 'false');
+
+        const chiudi = (risposta) => {
+            btnSocio.disabled = true;
+            btnAuser.disabled = true;
+            overlay.hidden = true;
+            overlay.setAttribute('aria-hidden', 'true');
+            window.setTimeout(() => {
+                btnSocio.disabled = false;
+                btnAuser.disabled = false;
+                resolve(risposta);
+            }, 150);
+        };
+
+        const onSocio = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            btnSocio.removeEventListener('click', onSocio);
+            btnAuser.removeEventListener('click', onAuser);
+            chiudi('SOCIO');
+        };
+
+        const onAuser = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            btnSocio.removeEventListener('click', onSocio);
+            btnAuser.removeEventListener('click', onAuser);
+            chiudi('AUSER');
+        };
+
+        btnSocio.addEventListener('click', onSocio);
+        btnAuser.addEventListener('click', onAuser);
+    });
+}
+
+async function onClickTipoServizioRapidoForm(idPrefix, tipo) {
+    const selectTipo = document.getElementById(`${idPrefix}-tipo-servizio`);
+    const selectCarr = document.getElementById(`${idPrefix}-carrozzina`);
+    if (!selectTipo || selectTipo.disabled) return;
+
+    const valore = String(tipo || '').trim().toUpperCase();
+    if (valore !== 'STANDARD' && valore !== 'SOLLEVATORE') return;
+
+    selectTipo.value = valore;
+    selectTipo.dispatchEvent(new Event('change', { bubbles: true }));
+    aggiornaPulsantiTipoServizioForm(idPrefix);
+
+    if (valore === 'STANDARD') {
+        if (selectCarr && !selectCarr.disabled) selectCarr.value = '';
+        return;
+    }
+
+    const scelta = await chiediCarrozzinaSocioOAuserModifica();
+    if (scelta && selectCarr && !selectCarr.disabled) {
+        selectCarr.value = scelta;
+        selectCarr.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+}
+
+function setupPulsantiTipoServizioForm(idPrefix) {
+    document.getElementById(`${idPrefix}-btn-tipo-standard`)?.addEventListener('click', () => {
+        onClickTipoServizioRapidoForm(idPrefix, 'STANDARD');
+    });
+    document.getElementById(`${idPrefix}-btn-tipo-sollevatore`)?.addEventListener('click', () => {
+        onClickTipoServizioRapidoForm(idPrefix, 'SOLLEVATORE');
+    });
+    document.getElementById(`${idPrefix}-tipo-servizio`)?.addEventListener('change', () => {
+        aggiornaPulsantiTipoServizioForm(idPrefix);
+    });
+    aggiornaPulsantiTipoServizioForm(idPrefix);
 }
 
 function setupFormModificaListeners() {
@@ -1072,7 +1286,10 @@ export function raccogliPayloadServizio(idPrefix = 'mod') {
         stato_servizio: get('stato-servizio'),
         note_prelievo: document.getElementById(`${idPrefix}-note-prelievo`)?.value || '',
         note_arrivo: document.getElementById(`${idPrefix}-note-arrivo`)?.value || '',
-        note_fine_servizio: mergeTrattaInNote(noteUtente, tratta),
+        note_fine_servizio: mergeTariffaInNote(
+            mergeTrattaInNote(noteUtente, tratta),
+            leggiTariffaDalDom(`${idPrefix}-tariffa-calcolata`)
+        ),
         archivia: get('archivia') === 'SI' ? 'SI' : 'NO',
         modificato_da: formatoAccountSessione() || null
     };
@@ -1089,11 +1306,19 @@ export async function caricaDatiModificaServizio() {
     try {
         await invoke('init_supabase_from_config').catch(() => {});
 
-        const [tesserati, automezzi, statiServizio] = await Promise.all([
+        const [tesserati, automezzi, statiServizio, richiedenti, tipiPagamento] = await Promise.all([
             invoke('get_all_tesserati'),
             invoke('get_all_automezzi'),
             invoke('get_all_stati_servizio').catch(err => {
                 console.warn('Errore caricamento stati servizio:', err);
+                return [];
+            }),
+            invoke('get_all_richiedenti').catch(err => {
+                console.warn('Errore caricamento richiedenti:', err);
+                return [];
+            }),
+            invoke('get_all_tipi_pagamento').catch(err => {
+                console.warn('Errore caricamento tipi pagamento:', err);
                 return [];
             })
         ]);
@@ -1106,8 +1331,14 @@ export async function caricaDatiModificaServizio() {
         allStatiServizio = Array.isArray(statiServizio)
             ? statiServizio.filter(s => String(s || '').trim())
             : [];
+        allRichiedenti = Array.isArray(richiedenti)
+            ? richiedenti.filter(r => String(r || '').trim())
+            : [];
+        allTipiPagamento = Array.isArray(tipiPagamento)
+            ? tipiPagamento.filter(t => String(t || '').trim())
+            : [];
 
-        console.log(`Modifica servizio: ${allOperatori.length} operatori, ${allAutomezzi.length} mezzi, ${allStatiServizio.length} stati`);
+        console.log(`Modifica servizio: ${allOperatori.length} operatori, ${allAutomezzi.length} mezzi, ${allStatiServizio.length} stati, ${allRichiedenti.length} richiedenti, ${allTipiPagamento.length} tipi pagamento`);
     } catch (error) {
         console.error('Errore caricamento dati modifica servizio:', error);
     }
@@ -1143,6 +1374,9 @@ function applicaModalitaSolaLettura(attiva) {
         el.hidden = true;
     });
     body.querySelectorAll('.ns-pagamento-azioni-destra').forEach(el => {
+        el.hidden = true;
+    });
+    body.querySelectorAll('.ns-tipo-servizio-azioni').forEach(el => {
         el.hidden = true;
     });
     body.querySelectorAll('input, select, textarea, button').forEach(el => {
@@ -1223,7 +1457,7 @@ export async function apriModalModifica(servizioId, options = {}) {
     if (isTauriEnv() && invoke) {
         try {
             await invoke('init_supabase_from_config').catch(() => {});
-            if (!allOperatori.length || !allAutomezzi.length) {
+            if (!allOperatori.length || !allAutomezzi.length || !allRichiedenti.length || !allTipiPagamento.length) {
                 await caricaDatiModificaServizio();
             }
             servizio = await invoke('get_servizio_completo', { servizioId: idNumerico });
