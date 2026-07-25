@@ -728,7 +728,8 @@ async function caricaAutomezzi() {
     allAutomezzi = (data || []).map(row => ({
         nr_automezzo: getFieldAny(row, ['Numero_Mezzo', 'NR_AUTOMEZZO', 'NumeroAutomezzo']),
         marca: getFieldAny(row, ['Marca', 'MARCA']),
-        modello: getFieldAny(row, ['Modello', 'MODELLO'])
+        modello: getFieldAny(row, ['Modello', 'MODELLO']),
+        targa: getFieldAny(row, ['Targa', 'TARGA'])
     }));
 }
 
@@ -750,6 +751,26 @@ function costruisciStringaMezzo(servizio) {
     if (automezzo.modello) parti.push(automezzo.modello.trim());
     if (nrAutomezzo) parti.push(`(${nrAutomezzo})`);
     return parti.join(' - ') || servizio.mezzo_usato || '';
+}
+
+/** Mezzo (marca/modello) e targa per un servizio */
+function mezzoETargaDaServizio(servizio) {
+    const nrAutomezzo = normalizzaNumero(servizio?.mezzo);
+    const automezzo = nrAutomezzo && allAutomezzi.length
+        ? allAutomezzi.find(a => normalizzaNumero(a.nr_automezzo) === nrAutomezzo)
+        : null;
+    let mezzo = '';
+    if (automezzo) {
+        const parti = [];
+        if (automezzo.marca) parti.push(String(automezzo.marca).trim());
+        if (automezzo.modello) parti.push(String(automezzo.modello).trim());
+        mezzo = parti.join(' ').trim();
+    }
+    if (!mezzo) {
+        mezzo = String(servizio?.mezzo_usato || '').trim();
+    }
+    const targa = String(automezzo?.targa || '').trim().toUpperCase();
+    return { mezzo, targa };
 }
 
 // ─── UI Calendario ───────────────────────────────────────────────────────────
@@ -898,14 +919,23 @@ function renderEventContent(arg) {
     }
 
     if (isVistaMobileCalendario() && arg.view?.type === 'dayGridDay') {
+        const { mezzo, targa } = mezzoETargaDaServizio(s);
+        const mezzoTarga = [mezzo, targa].filter(p => String(p).trim() !== '');
+        const mezzoHtml = mezzoTarga.length
+            ? `<span class="cal-event-mezzo">${mezzoTarga.map(p => escapeHtml(p)).join(' · ')}</span>`
+            : '';
+        const titleDay = [ora, socio, op, ...mezzoTarga]
+            .filter(p => String(p).trim() !== '')
+            .join(' · ') || '—';
         const righe = [
             ora ? `<span class="cal-event-ora">${escapeHtml(ora)}</span>` : '',
             socioHtml ? `<span class="cal-event-socio">${socioHtml}</span>` : '',
-            op ? `<span class="cal-event-op">${escapeHtml(op)}</span>` : ''
+            op ? `<span class="cal-event-op">${escapeHtml(op)}</span>` : '',
+            mezzoHtml
         ].filter(Boolean);
         const html = righe.length
-            ? `<div class="cal-event cal-event-mobile">${righe.join('')}</div>`
-            : '<div class="cal-event cal-event-mobile">—</div>';
+            ? `<div class="cal-event cal-event-mobile" title="${escapeHtml(titleDay)}">${righe.join('')}</div>`
+            : `<div class="cal-event cal-event-mobile" title="—">—</div>`;
         return { html };
     }
 

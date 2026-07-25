@@ -235,6 +235,12 @@ body {
         overflow: visible;
         text-overflow: unset;
     }
+
+    #calendario-mount .fc-dayGridDay-view .cal-icona-carrozzina {
+        width: 18px;
+        height: 18px;
+        vertical-align: -3px;
+    }
 }
 
 /* Eventi servizio nel calendario — colori per stato */

@@ -297,16 +297,54 @@ function servizioToEvent(servizio) {
     };
 }
 
+function htmlIconaCarrozzina(carrozzina) {
+    const v = String(carrozzina || '').trim().toUpperCase();
+    let file = '';
+    let label = '';
+    if (v === 'SOCIO') {
+        file = 'assets/carrozzina-bleu.png';
+        label = 'Carrozzina socio';
+    } else if (v === 'AUSER') {
+        file = 'assets/carrozzina-verde.png';
+        label = 'Carrozzina AUSER';
+    } else {
+        return '';
+    }
+    return `<img class="cal-icona-carrozzina" src="${file}" alt="${escapeHtml(label)}" title="${escapeHtml(label)}" width="16" height="16" decoding="async">`;
+}
+
+function htmlNomeTrasportatoConCarrozzina(socio, carrozzina) {
+    const nome = String(socio || '').trim();
+    if (!nome) return '';
+    const icona = htmlIconaCarrozzina(carrozzina);
+    if (!icona) return escapeHtml(nome);
+    return `<span class="cal-event-socio-wrap">${escapeHtml(nome)}${icona}</span>`;
+}
+
 function renderEventContent(arg) {
     const s = arg.event.extendedProps.servizio || {};
-    const parti = [
-        s.ora_inizio || '',
-        s.socio_trasportato || '',
-        s.operatore || ''
-    ].filter(p => p.trim() !== '');
-    const riga = parti.length ? parti.map(p => escapeHtml(p)).join(' · ') : '—';
+    const vista = arg.view?.type || '';
+    const ora = s.ora_inizio || '';
+    const socio = s.socio_trasportato || '';
+    const op = s.operatore || '';
+    const socioHtml = htmlNomeTrasportatoConCarrozzina(socio, s.carrozzina);
+
+    // Mese / settimana: ora · trasportato (+ icona), senza operatore
+    // Giorno: ora · trasportato (+ icona) · operatore (tutto come prima + icone)
+    const parti = [];
+    if (ora.trim()) parti.push(escapeHtml(ora));
+    if (socioHtml) parti.push(socioHtml);
+    if (vista === 'dayGridDay' && op.trim()) {
+        parti.push(escapeHtml(op));
+    }
+
+    const titleParti = [ora, socio];
+    if (vista === 'dayGridDay') titleParti.push(op);
+    const titleText = titleParti.filter(p => String(p).trim() !== '').join(' · ') || '—';
+    const riga = parti.length ? parti.join(' · ') : '—';
+
     return {
-        html: `<div class="cal-event" title="${riga}">${riga}</div>`
+        html: `<div class="cal-event" title="${escapeHtml(titleText)}">${riga}</div>`
     };
 }
 

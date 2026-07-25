@@ -516,6 +516,15 @@
     .web-calendario-app .cal-event-mobile .cal-event-op {
         font-size: 12px;
         opacity: 0.9;
+        white-space: normal;
+        line-height: 1.35;
+    }
+
+    .web-calendario-app .cal-event-mobile .cal-event-mezzo {
+        font-size: 11px;
+        opacity: 0.85;
+        white-space: normal;
+        line-height: 1.35;
     }
 }
 
