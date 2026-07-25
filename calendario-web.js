@@ -881,10 +881,10 @@ function htmlIconaCarrozzina(carrozzina) {
     let file = '';
     let label = '';
     if (v === 'SOCIO') {
-        file = 'assets/carrozzina-bleu.png';
+        file = 'assets/carrozzina-bleu.png?v=2';
         label = 'Carrozzina socio';
     } else if (v === 'AUSER') {
-        file = 'assets/carrozzina-verde.png';
+        file = 'assets/carrozzina-verde.png?v=2';
         label = 'Carrozzina AUSER';
     } else {
         return '';
