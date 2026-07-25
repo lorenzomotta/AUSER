@@ -302,12 +302,16 @@ body {
 
 .cal-icona-carrozzina {
     display: inline-block;
-    width: 13px;
-    height: 13px;
+    width: 16px;
+    height: 16px;
     margin-left: 3px;
-    vertical-align: -2px;
+    padding: 1px;
+    vertical-align: -3px;
     object-fit: contain;
     flex-shrink: 0;
+    background: #fff;
+    border-radius: 2px;
+    box-sizing: content-box;
 }
 
 /* Modale dettaglio */

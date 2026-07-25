@@ -868,7 +868,7 @@ function htmlIconaCarrozzina(carrozzina) {
     } else {
         return '';
     }
-    return `<img class="cal-icona-carrozzina" src="${file}" alt="${escapeHtml(label)}" title="${escapeHtml(label)}" width="13" height="13" decoding="async">`;
+    return `<img class="cal-icona-carrozzina" src="${file}" alt="${escapeHtml(label)}" title="${escapeHtml(label)}" width="16" height="16" decoding="async">`;
 }
 
 function htmlNomeTrasportatoConCarrozzina(socio, carrozzina) {
