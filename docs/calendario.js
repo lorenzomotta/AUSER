@@ -313,33 +313,49 @@ function htmlIconaCarrozzina(carrozzina) {
     return `<img class="cal-icona-carrozzina" src="${file}" alt="${escapeHtml(label)}" title="${escapeHtml(label)}" width="16" height="16" decoding="async">`;
 }
 
-function htmlNomeTrasportatoConCarrozzina(socio, carrozzina) {
-    const nome = String(socio || '').trim();
-    if (!nome) return '';
-    const icona = htmlIconaCarrozzina(carrozzina);
-    if (!icona) return escapeHtml(nome);
-    return `<span class="cal-event-socio-wrap">${escapeHtml(nome)}${icona}</span>`;
+/** Nome + icona opzionale (es. carrozzina) */
+function htmlTestoConIcona(testo, iconaHtml) {
+    const nome = String(testo || '').trim();
+    if (!nome && !iconaHtml) return '';
+    if (!nome) return iconaHtml || '';
+    if (!iconaHtml) return escapeHtml(nome);
+    return `<span class="cal-event-socio-wrap">${escapeHtml(nome)}${iconaHtml}</span>`;
 }
 
 function renderEventContent(arg) {
     const s = arg.event.extendedProps.servizio || {};
     const vista = arg.view?.type || '';
+    const isGiorno = vista === 'dayGridDay';
     const ora = s.ora_inizio || '';
     const socio = s.socio_trasportato || '';
     const op = s.operatore || '';
-    const socioHtml = htmlNomeTrasportatoConCarrozzina(socio, s.carrozzina);
+    const tipoCarr = String(s.carrozzina || '').trim().toUpperCase();
+    const icona = htmlIconaCarrozzina(s.carrozzina);
 
-    // Mese / settimana: ora · trasportato (+ icona), senza operatore
-    // Giorno: ora · trasportato (+ icona) · operatore (tutto come prima + icone)
+    // Mese/settimana: icona sempre sul trasportato
+    // Giorno: SOCIO → trasportato, AUSER → operatore
+    let iconaTrasportato = icona;
+    let iconaOperatore = '';
+    if (isGiorno) {
+        if (tipoCarr === 'AUSER') {
+            iconaTrasportato = '';
+            iconaOperatore = icona;
+        } else if (tipoCarr === 'SOCIO') {
+            iconaTrasportato = icona;
+            iconaOperatore = '';
+        }
+    }
+
+    const socioHtml = htmlTestoConIcona(socio, iconaTrasportato);
+    const opHtml = isGiorno ? htmlTestoConIcona(op, iconaOperatore) : '';
+
     const parti = [];
     if (ora.trim()) parti.push(escapeHtml(ora));
     if (socioHtml) parti.push(socioHtml);
-    if (vista === 'dayGridDay' && op.trim()) {
-        parti.push(escapeHtml(op));
-    }
+    if (opHtml) parti.push(opHtml);
 
     const titleParti = [ora, socio];
-    if (vista === 'dayGridDay') titleParti.push(op);
+    if (isGiorno) titleParti.push(op);
     const titleText = titleParti.filter(p => String(p).trim() !== '').join(' · ') || '—';
     const riga = parti.length ? parti.join(' · ') : '—';
 

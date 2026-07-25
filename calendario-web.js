@@ -892,20 +892,41 @@ function htmlIconaCarrozzina(carrozzina) {
     return `<img class="cal-icona-carrozzina" src="${file}" alt="${escapeHtml(label)}" title="${escapeHtml(label)}" width="16" height="16" decoding="async">`;
 }
 
-function htmlNomeTrasportatoConCarrozzina(socio, carrozzina) {
-    const nome = String(socio || '').trim();
-    if (!nome) return '';
-    const icona = htmlIconaCarrozzina(carrozzina);
-    if (!icona) return escapeHtml(nome);
-    return `<span class="cal-event-socio-wrap">${escapeHtml(nome)}${icona}</span>`;
+/** Nome + icona opzionale (es. carrozzina) */
+function htmlTestoConIcona(testo, iconaHtml) {
+    const nome = String(testo || '').trim();
+    if (!nome && !iconaHtml) return '';
+    if (!nome) return iconaHtml || '';
+    if (!iconaHtml) return escapeHtml(nome);
+    return `<span class="cal-event-socio-wrap">${escapeHtml(nome)}${iconaHtml}</span>`;
 }
 
 function renderEventContent(arg) {
     const s = arg.event.extendedProps.servizio || {};
+    const vista = arg.view?.type || '';
+    const isGiorno = vista === 'dayGridDay';
     const ora = s.ora_inizio || '';
     const socio = s.socio_trasportato || '';
     const op = s.operatore || '';
-    const socioHtml = htmlNomeTrasportatoConCarrozzina(socio, s.carrozzina);
+    const tipoCarr = String(s.carrozzina || '').trim().toUpperCase();
+    const icona = htmlIconaCarrozzina(s.carrozzina);
+
+    // Mese/settimana/lista: icona sul trasportato
+    // Vista giorno: SOCIO → trasportato, AUSER → operatore
+    let iconaTrasportato = icona;
+    let iconaOperatore = '';
+    if (isGiorno) {
+        if (tipoCarr === 'AUSER') {
+            iconaTrasportato = '';
+            iconaOperatore = icona;
+        } else if (tipoCarr === 'SOCIO') {
+            iconaTrasportato = icona;
+            iconaOperatore = '';
+        }
+    }
+
+    const socioHtml = htmlTestoConIcona(socio, iconaTrasportato);
+    const opHtml = htmlTestoConIcona(op, iconaOperatore);
     const titleText = [ora, socio, op].filter(p => String(p).trim() !== '').join(' · ') || '—';
     const titleAttr = escapeHtml(titleText);
 
@@ -918,7 +939,7 @@ function renderEventContent(arg) {
         return { html: `<div class="cal-event cal-event-week-row" title="${titleAttr}">${riga}</div>` };
     }
 
-    if (isVistaMobileCalendario() && arg.view?.type === 'dayGridDay') {
+    if (isVistaMobileCalendario() && isGiorno) {
         const { mezzo, targa } = mezzoETargaDaServizio(s);
         const mezzoTarga = [mezzo, targa].filter(p => String(p).trim() !== '');
         const mezzoHtml = mezzoTarga.length
@@ -930,7 +951,7 @@ function renderEventContent(arg) {
         const righe = [
             ora ? `<span class="cal-event-ora">${escapeHtml(ora)}</span>` : '',
             socioHtml ? `<span class="cal-event-socio">${socioHtml}</span>` : '',
-            op ? `<span class="cal-event-op">${escapeHtml(op)}</span>` : '',
+            opHtml ? `<span class="cal-event-op">${opHtml}</span>` : '',
             mezzoHtml
         ].filter(Boolean);
         const html = righe.length
@@ -942,7 +963,10 @@ function renderEventContent(arg) {
     const parti = [];
     if (ora.trim()) parti.push(escapeHtml(ora));
     if (socioHtml) parti.push(socioHtml);
-    if (op.trim()) parti.push(escapeHtml(op));
+    if (op.trim()) {
+        // Fuori dalla vista giorno l'icona resta sul trasportato; operatore solo testo
+        parti.push(isGiorno ? opHtml : escapeHtml(op));
+    }
     const riga = parti.length ? parti.join(' · ') : '—';
     return { html: `<div class="cal-event" title="${titleAttr}">${riga}</div>` };
 }
