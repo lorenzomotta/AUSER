@@ -474,7 +474,7 @@ function createCardEntry(tessera) {
         <div class="card-description">
             <input type="text" value="${descrizione}" data-field="descrizione" data-idsocio="${idDisplay}" readonly>
         </div>
-        <button type="button" class="btn btn-nuovo" data-action="nuova-tessera" data-idsocio="${idDisplay}">NUOVO</button>
+        <span class="card-label-nuovo">NUOVO</span>
         <button type="button" class="btn btn-arrow" data-action="apri-anagrafica" data-idsocio="${idDisplay}" data-nominativo="${nominativoAttr}" title="Apri anagrafica">→</button>
     `;
 
@@ -654,11 +654,6 @@ function setupTessereDaFareClickHandlers() {
             e.preventDefault();
             await apriAnagraficaSocioDaHome(idsocio, nominativo);
             return;
-        }
-
-        if (action === 'nuova-tessera') {
-            e.preventDefault();
-            await window.nuovaTessera(idsocio);
         }
     });
 }
