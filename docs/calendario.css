@@ -304,6 +304,8 @@ body {
 .cal-event-op {
     color: #1565c0;
     font-size: calc(1em + 1pt);
+    font-weight: 700;
+    font-style: italic;
 }
 
 .cal-event-socio-wrap {
