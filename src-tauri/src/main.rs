@@ -883,6 +883,10 @@ struct ServizioCompleto {
     note_arrivo: String,
     note_fine_servizio: String,
     archivia: String,
+    #[serde(default)]
+    creato_da: String,
+    #[serde(default)]
+    modificato_da: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1786,6 +1790,19 @@ fn supabase_row_to_servizio_completo(
             &["NoteFineServizio", "NOTAFINESERVIZIO", "NOTE_FINE_SERVIZIO"],
         ),
         archivia: get_bool_field(row, &["Archiviazione", "ARCHIVIAZIONE", "archiviazione"]),
+        creato_da: get_field_any(
+            row,
+            &["CreatoDa", "creato_da", "Creato_Da", "CREATODA"],
+        ),
+        modificato_da: get_field_any(
+            row,
+            &[
+                "ModificatoDa",
+                "modificato_da",
+                "Modificato_Da",
+                "MODIFICATODA",
+            ],
+        ),
     })
 }
 
@@ -3810,6 +3827,295 @@ fn dotazione_gia_presente(list: &[String], value: &str) -> bool {
         .any(|item| item.trim().eq_ignore_ascii_case(v))
 }
 
+/// Voce di una tabella lookup (id + testo) per la gestione Impostazioni
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LookupItemRecord {
+    id: String,
+    valore: String,
+}
+
+fn lookup_kind_meta(kind: &str) -> Result<(&'static str, &'static [&'static str], &'static str), String> {
+    match kind.trim().to_lowercase().as_str() {
+        "richiedenti" => Ok((
+            "richiedenti",
+            &[
+                "Richiedente",
+                "RICHIEDENTE",
+                "Richiedenti",
+                "RICHIEDENTI",
+                "Descrizione",
+                "DESCRIZIONE",
+                "Nome",
+                "NOME",
+            ],
+            "Richiedente",
+        )),
+        "tipo_socio" | "tiposocio" => Ok((
+            "tipo_socio",
+            &[
+                "TipologiaSocio",
+                "TIPOLOGIASOCIO",
+                "TipoSocio",
+                "TIPOSOCIO",
+                "Tipologia",
+                "TIPOLOGIA",
+                "Descrizione",
+                "Nome",
+            ],
+            "TipologiaSocio",
+        )),
+        "tipo_pagamenti" | "tipopagamenti" | "tipodi_pagamento" => Ok((
+            "tipo_pagamenti",
+            &[
+                "ModoPagamento",
+                "MODOPAGAMENTO",
+                "Modo_Pagamento",
+                "MODO_PAGAMENTO",
+                "TipoPagamento",
+                "TIPOPAGAMENTO",
+                "Descrizione",
+                "DESCRIZIONE",
+                "Nome",
+                "NOME",
+            ],
+            "ModoPagamento",
+        )),
+        "motivazioni_trasporto" | "motivazioni" => Ok((
+            "motivazioni_trasporto",
+            &[
+                "Motivazione",
+                "MOTIVAZIONE",
+                "Motivazioni",
+                "MOTIVAZIONI",
+                "Descrizione",
+                "DESCRIZIONE",
+                "Nome",
+                "NOME",
+            ],
+            "Motivazione",
+        )),
+        other => Err(format!(
+            "Tipo lookup non supportato: '{}'. Usa richiedenti, tipo_socio, tipo_pagamenti, motivazioni_trasporto",
+            other
+        )),
+    }
+}
+
+fn row_id_any(row: &serde_json::Value) -> String {
+    for name in ["id", "Id", "ID"] {
+        if let Some(v) = row.get(name) {
+            let s = json_to_string(v).trim().to_string();
+            if !s.is_empty() {
+                return s;
+            }
+        }
+    }
+    if let Some(obj) = row.as_object() {
+        for (key, val) in obj {
+            if key.eq_ignore_ascii_case("id") {
+                let s = json_to_string(val).trim().to_string();
+                if !s.is_empty() {
+                    return s;
+                }
+            }
+        }
+    }
+    String::new()
+}
+
+fn resolve_lookup_text_column(
+    row: Option<&serde_json::Value>,
+    candidates: &[&str],
+    default_column: &str,
+) -> String {
+    if let Some(row) = row {
+        for name in candidates {
+            if row.get(*name).is_some() {
+                return (*name).to_string();
+            }
+        }
+        if let Some(obj) = row.as_object() {
+            for name in candidates {
+                let lower = name.to_lowercase();
+                for (key, _) in obj {
+                    if key.to_lowercase() == lower {
+                        return key.clone();
+                    }
+                }
+            }
+        }
+    }
+    default_column.to_string()
+}
+
+fn lookup_item_from_row(
+    row: &serde_json::Value,
+    candidates: &[&str],
+) -> Option<LookupItemRecord> {
+    let id = row_id_any(row);
+    if id.is_empty() {
+        return None;
+    }
+    let valore = get_field_any(row, candidates).trim().to_string();
+    Some(LookupItemRecord { id, valore })
+}
+
+async fn fetch_lookup_rows(
+    client: &SupabaseClient,
+    table_type: &str,
+) -> Result<Vec<serde_json::Value>, String> {
+    match table_type {
+        "richiedenti" => client.fetch_richiedenti(None).await,
+        "tipo_socio" => client.fetch_tipologie_socio(None).await,
+        "tipo_pagamenti" => client.fetch_tipi_pagamento(None).await,
+        "motivazioni_trasporto" => client.fetch_motivazioni_trasporto(None).await,
+        other => Err(format!("Tabella lookup sconosciuta: {}", other)),
+    }
+    .map_err(|e| format_supabase_error(&e))
+}
+
+#[tauri::command]
+async fn get_lookup_items(kind: String) -> Result<Vec<LookupItemRecord>, String> {
+    let (table_type, candidates, _) = lookup_kind_meta(&kind)?;
+    println!(
+        "=== get_lookup_items kind='{}' table='{}' ===",
+        kind, table_type
+    );
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    let rows = fetch_lookup_rows(client, table_type).await?;
+    let mut items: Vec<LookupItemRecord> = rows
+        .iter()
+        .filter_map(|row| lookup_item_from_row(row, candidates))
+        .collect();
+
+    items.sort_by(|a, b| a.valore.to_lowercase().cmp(&b.valore.to_lowercase()));
+    println!("✓ Caricati {} elementi lookup {}", items.len(), table_type);
+    Ok(items)
+}
+
+#[tauri::command]
+async fn add_lookup_item(kind: String, valore: String) -> Result<(), String> {
+    let value = valore.trim();
+    if value.is_empty() {
+        return Err("Il valore non può essere vuoto".to_string());
+    }
+
+    let (table_type, candidates, default_column) = lookup_kind_meta(&kind)?;
+    println!(
+        "=== add_lookup_item kind='{}' valore='{}' ===",
+        kind, value
+    );
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    let rows = fetch_lookup_rows(client, table_type).await?;
+    let existing: Vec<String> = rows
+        .iter()
+        .filter_map(|row| {
+            let v = get_field_any(row, candidates).trim().to_string();
+            if v.is_empty() {
+                None
+            } else {
+                Some(v)
+            }
+        })
+        .collect();
+
+    if dotazione_gia_presente(&existing, value) {
+        return Err(format!("Il valore '{}' esiste già", value));
+    }
+
+    let column = resolve_lookup_text_column(rows.first(), candidates, default_column);
+    client
+        .insert_lookup_text(table_type, &column, value)
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+
+    println!("✓ Inserito lookup {} {}='{}'", table_type, column, value);
+    Ok(())
+}
+
+#[tauri::command]
+async fn update_lookup_item(kind: String, id: String, valore: String) -> Result<(), String> {
+    let id = id.trim().to_string();
+    let value = valore.trim();
+    if id.is_empty() {
+        return Err("Id mancante".to_string());
+    }
+    if value.is_empty() {
+        return Err("Il valore non può essere vuoto".to_string());
+    }
+
+    let (table_type, candidates, default_column) = lookup_kind_meta(&kind)?;
+    println!(
+        "=== update_lookup_item kind='{}' id='{}' valore='{}' ===",
+        kind, id, value
+    );
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    let rows = fetch_lookup_rows(client, table_type).await?;
+    let row = rows
+        .iter()
+        .find(|r| row_id_any(r) == id)
+        .ok_or_else(|| format!("Riga id={} non trovata in {}", id, table_type))?;
+
+    let column = resolve_lookup_text_column(Some(row), candidates, default_column);
+    let mut body = serde_json::Map::new();
+    body.insert(column.clone(), serde_json::json!(value));
+
+    client
+        .patch_lookup_by_id(table_type, &id, &body)
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+
+    println!("✓ Aggiornato lookup {} id={} {}='{}'", table_type, id, column, value);
+    Ok(())
+}
+
+#[tauri::command]
+async fn delete_lookup_item(kind: String, id: String) -> Result<(), String> {
+    let id = id.trim().to_string();
+    if id.is_empty() {
+        return Err("Id mancante".to_string());
+    }
+
+    let (table_type, _, _) = lookup_kind_meta(&kind)?;
+    println!("=== delete_lookup_item kind='{}' id='{}' ===", kind, id);
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    client
+        .delete_lookup_by_id(table_type, &id)
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+
+    println!("✓ Eliminato lookup {} id={}", table_type, id);
+    Ok(())
+}
+
 fn dotazioni_da_righe(rows: &[serde_json::Value]) -> Vec<String> {
     let mut dotazioni: Vec<String> = rows
         .iter()
@@ -4415,6 +4721,10 @@ struct UpdateServizioPayload {
     note_arrivo: Option<String>,
     note_fine_servizio: Option<String>,
     archivia: Option<String>,
+    /// Account che ha creato il servizio, es. "mario@auser.it (mario.rossi)"
+    creato_da: Option<String>,
+    /// Account che ha modificato per ultimo il servizio
+    modificato_da: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -4673,6 +4983,93 @@ fn servizio_completo_to_update_payload(sc: &ServizioCompleto) -> UpdateServizioP
         note_arrivo: Some(sc.note_arrivo.clone()),
         note_fine_servizio: Some(sc.note_fine_servizio.clone()),
         archivia: Some(sc.archivia.clone()),
+        creato_da: None,
+        modificato_da: None,
+    }
+}
+
+/// Scrive CreatoDa / ModificatoDa e (se presenti) le colonne data created / modificated
+fn apply_servizio_audit_fields(
+    body: &mut serde_json::Map<String, serde_json::Value>,
+    template_row: Option<&serde_json::Value>,
+    creato_da: Option<&str>,
+    modificato_da: Option<&str>,
+    set_created_ts: bool,
+    set_modificated_ts: bool,
+) {
+    if let Some(v) = creato_da.map(str::trim).filter(|s| !s.is_empty()) {
+        put_servizio_field(
+            body,
+            template_row,
+            &["CreatoDa", "creato_da", "Creato_Da", "CREATODA"],
+            "CreatoDa",
+            serde_json::json!(v),
+        );
+    }
+    if let Some(v) = modificato_da.map(str::trim).filter(|s| !s.is_empty()) {
+        put_servizio_field(
+            body,
+            template_row,
+            &["ModificatoDa", "modificato_da", "Modificato_Da", "MODIFICATODA"],
+            "ModificatoDa",
+            serde_json::json!(v),
+        );
+    }
+
+    let now = Local::now().to_rfc3339();
+    if set_created_ts {
+        put_servizio_field(
+            body,
+            template_row,
+            &["created", "Created", "CREATED", "created_at", "Created_At"],
+            "created",
+            serde_json::json!(now),
+        );
+    }
+    if set_modificated_ts {
+        put_servizio_field(
+            body,
+            template_row,
+            &[
+                "modificated",
+                "Modificated",
+                "MODIFICATED",
+                "modified",
+                "Modified",
+                "updated_at",
+                "Updated_At",
+            ],
+            "modificated",
+            serde_json::json!(now),
+        );
+    }
+}
+
+fn strip_servizio_audit_fields(body: &mut serde_json::Map<String, serde_json::Value>) {
+    const KEYS: &[&str] = &[
+        "CreatoDa",
+        "creato_da",
+        "Creato_Da",
+        "CREATODA",
+        "ModificatoDa",
+        "modificato_da",
+        "Modificato_Da",
+        "MODIFICATODA",
+        "created",
+        "Created",
+        "CREATED",
+        "created_at",
+        "Created_At",
+        "modificated",
+        "Modificated",
+        "MODIFICATED",
+        "modified",
+        "Modified",
+        "updated_at",
+        "Updated_At",
+    ];
+    for k in KEYS {
+        body.remove(*k);
     }
 }
 
@@ -4978,7 +5375,17 @@ async fn update_servizio_completo(payload: UpdateServizioPayload) -> Result<(), 
     ensure_supabase_client().await?;
 
     let template_row = fetch_servizio_row_template(payload.id).await.ok();
-    let body = build_servizio_supabase_body(&payload, template_row.as_ref()).await;
+    let mut body = build_servizio_supabase_body(&payload, template_row.as_ref()).await;
+    // In update non si tocca CreatoDa / created: solo chi ha modificato e quando
+    strip_servizio_audit_fields(&mut body);
+    apply_servizio_audit_fields(
+        &mut body,
+        template_row.as_ref(),
+        None,
+        payload.modificato_da.as_deref(),
+        false,
+        true,
+    );
 
     let guard = get_supabase_client().lock().await;
     let client = guard
@@ -5023,6 +5430,17 @@ async fn create_servizio(payload: UpdateServizioPayload) -> Result<u32, String> 
     body.remove("IDSERVIZIO");
     body.remove("Id_Servizio");
     body.remove("id_servizio");
+
+    let account = payload.creato_da.as_deref();
+    // In creazione: solo CreatoDa (+ created). ModificatoDa resta vuoto finché non si salva una modifica.
+    apply_servizio_audit_fields(
+        &mut body,
+        template_row.as_ref(),
+        account,
+        None,
+        true,
+        false,
+    );
 
     if body.is_empty() {
         return Err("Nessun dato da salvare per il nuovo servizio".to_string());
@@ -5104,6 +5522,7 @@ async fn delete_servizio(servizio_id: u32) -> Result<(), String> {
 async fn duplicate_servizio(
     servizio_id: u32,
     opzioni: DuplicateServizioOptions,
+    creato_da: Option<String>,
 ) -> Result<u32, String> {
     println!(
         "=== duplicate_servizio chiamato per ID: {} (Supabase) opzioni: {:?} ===",
@@ -5124,6 +5543,17 @@ async fn duplicate_servizio(
     body.remove("IDSERVIZIO");
     body.remove("Id_Servizio");
     body.remove("id_servizio");
+    // La copia è un nuovo servizio: solo CreatoDa di chi duplica; ModificatoDa resta vuoto
+    strip_servizio_audit_fields(&mut body);
+    let account = creato_da.as_deref();
+    apply_servizio_audit_fields(
+        &mut body,
+        Some(&template_row),
+        account,
+        None,
+        true,
+        false,
+    );
     if body.is_empty() {
         return Err("Nessun dato da copiare per la duplicazione".to_string());
     }
@@ -5387,6 +5817,10 @@ fn main() {
             get_all_tipologie_socio,
             get_all_richiedenti,
             get_all_tipi_pagamento,
+            get_lookup_items,
+            add_lookup_item,
+            update_lookup_item,
+            delete_lookup_item,
             get_all_impostazioni,
             update_impostazione,
             get_supabase_auth_config,

@@ -5,7 +5,8 @@ import {
     ensureDatiFormServizioCaricati,
     costruisciFormServizio,
     setupFormServizioListeners,
-    raccogliPayloadServizio
+    raccogliPayloadServizio,
+    aggiornaEtichetteAudit
 } from './modifica-servizio.js';
 
 let getInvokeFn = () => null;
@@ -19,7 +20,11 @@ const MODALE_COMPLETA_MARKUP = `
 <div id="modal-completa" class="modal-modifica-overlay modal-completa-overlay" style="display: none;" aria-hidden="true">
     <div class="modal-modifica-content" role="dialog" aria-labelledby="modal-completa-title">
         <header class="ns-header modal-modifica-header modal-completa-header">
-            <h1 class="ns-title" id="modal-completa-title">COMPLETA SERVIZIO</h1>
+            <div class="modal-modifica-title-row" aria-live="polite">
+                <span class="mod-audit-creato" id="comp-audit-creato">Creato da —</span>
+                <h1 class="ns-title" id="modal-completa-title">COMPLETA SERVIZIO</h1>
+                <span class="mod-audit-modificato" id="comp-audit-modificato">Modificato da —</span>
+            </div>
             <div class="ns-header-right">
                 <button type="button" class="btn btn-annulla" id="btn-annulla-completa">ANNULLA</button>
                 <button type="button" class="btn btn-salva" id="btn-salva-completa">SALVA</button>
@@ -30,7 +35,38 @@ const MODALE_COMPLETA_MARKUP = `
 </div>`;
 
 function injectModaleCompletaMarkup() {
-    if (document.getElementById('modal-completa')) return;
+    if (document.getElementById('modal-completa')) {
+        const header = document.querySelector('#modal-completa .modal-modifica-header');
+        if (!header) return;
+        header.querySelectorAll('.modal-modifica-audit').forEach((el) => el.remove());
+        let titleRow = header.querySelector('.modal-modifica-title-row');
+        const title = header.querySelector('.ns-title, h1');
+        if (!titleRow && title) {
+            titleRow = document.createElement('div');
+            titleRow.className = 'modal-modifica-title-row';
+            titleRow.setAttribute('aria-live', 'polite');
+            title.parentNode.insertBefore(titleRow, title);
+            titleRow.appendChild(title);
+        }
+        if (titleRow && !document.getElementById('comp-audit-creato')) {
+            const creato = document.createElement('span');
+            creato.className = 'mod-audit-creato';
+            creato.id = 'comp-audit-creato';
+            creato.textContent = 'Creato da —';
+            titleRow.insertBefore(creato, titleRow.firstChild);
+            const mod = document.createElement('span');
+            mod.className = 'mod-audit-modificato';
+            mod.id = 'comp-audit-modificato';
+            mod.textContent = 'Modificato da —';
+            titleRow.appendChild(mod);
+        }
+        const top = header.querySelector('.modal-modifica-header-top');
+        if (top) {
+            while (top.firstChild) header.insertBefore(top.firstChild, top);
+            top.remove();
+        }
+        return;
+    }
     document.body.insertAdjacentHTML('beforeend', MODALE_COMPLETA_MARKUP);
 }
 
@@ -105,6 +141,7 @@ export async function apriModalCompleta(servizioId) {
 
     servizioInCompletamento = servizio;
     if (title) title.textContent = `COMPLETA SERVIZIO ${servizio.id || ''}`;
+    aggiornaEtichetteAudit('comp', servizio);
     body.innerHTML = costruisciFormServizio(servizio, {
         idPrefix: 'comp',
         chiusuraPrima: true,

@@ -12,6 +12,7 @@ import {
     messaggioAvvisoDopoRimozioneTratta
 } from './tratta-riepilogo.js';
 import { setupNuovoSocioTrasportato } from './nuovoservizio-nuovo-socio.js';
+import { formatoAccountSessione } from './auth-session.js';
 
 let invoke;
 
@@ -1322,6 +1323,13 @@ function onPagamentoGratis() {
 let pagamentoRapidoInCorso = false;
 /** Evita di cancellare la tratta mentre la stiamo applicando al campo donazione */
 let ignoraCambioPagamentoPerTratta = false;
+/**
+ * Se valorizzato ('partenza' | 'arrivo'), dopo la scelta tratta non chiede Partenza/Arrivo
+ * e usa quel ruolo. Usato dal pulsante in sezione Prelievo / Destinazione.
+ */
+let trattaRuoloFissoDopoSelezione = null;
+/** Evita doppia applicazione (Tauri emit + localStorage arrivano entrambi) */
+let applicaTrattaInCorso = false;
 
 function attivaCampoDonazionePagamento() {
     const campo = document.getElementById('ns-pagamento');
@@ -1377,6 +1385,17 @@ function setupPagamentoQuickButtons() {
     document.getElementById('btn-pagamento-15')?.addEventListener('click', onPagamento15);
     document.getElementById('btn-pagamento-libero')?.addEventListener('click', onPagamentoLibero);
     document.getElementById('btn-tratta-fuori-asti')?.addEventListener('click', () => {
+        trattaRuoloFissoDopoSelezione = null;
+        apriFinestraSelezioneTratta();
+    });
+    document.getElementById('btn-tratta-fuori-asti-prelievo')?.addEventListener('click', () => {
+        // Da sezione Prelievo: è sempre PARTENZA; dopo si chiedono solo le domande di pagamento
+        trattaRuoloFissoDopoSelezione = 'partenza';
+        apriFinestraSelezioneTratta();
+    });
+    document.getElementById('btn-tratta-fuori-asti-destinazione')?.addEventListener('click', () => {
+        // Da sezione Destinazione: è sempre ARRIVO; dopo si chiedono solo le domande di pagamento
+        trattaRuoloFissoDopoSelezione = 'arrivo';
         apriFinestraSelezioneTratta();
     });
 
@@ -1397,26 +1416,47 @@ function setupPagamentoQuickButtons() {
 
 async function applicaTotaleTrattaFuoriAsti(payload) {
     if (!payload) return;
+    // emit Tauri + localStorage possono notificare due volte la stessa scelta
+    if (applicaTrattaInCorso) return;
+    applicaTrattaInCorso = true;
+
     const totaleNum = parseEuroItaliano(payload.totale);
+    const ruoloFisso = trattaRuoloFissoDopoSelezione;
+    trattaRuoloFissoDopoSelezione = null;
 
     ignoraCambioPagamentoPerTratta = true;
     try {
         impostaPagamentoEuro(totaleNum);
-        attivaCampoDonazionePagamento();
 
-        const dove = await chiediPartenzaOArrivo();
+        let dove = ruoloFisso;
+        if (dove !== 'partenza' && dove !== 'arrivo') {
+            dove = await chiediPartenzaOArrivo();
+        }
+
         const conRuolo = { ...payload, ruolo: dove };
         applicaRiepilogoTrattaNelDom(conRuolo, { hiddenId: 'ns-tratta-fuori-asti' });
         if (dove === 'partenza' || dove === 'arrivo') {
             compilaCampiLocalitaDaTratta(conRuolo, dove, 'ns');
         }
+
+        // Dal pulsante in Prelievo/Destinazione: chiedi solo il pagamento
+        if (ruoloFisso === 'partenza' || ruoloFisso === 'arrivo') {
+            const haPagato = await chiediSiNo('HA PAGATO?');
+            setValore('ns-stato-incasso', haPagato ? 'INCASSATO' : 'DA INCASSARE');
+
+            const pagaInContanti = await chiediSiNo('PAGA IN CONTANTI?');
+            impostaSelectValore('ns-tipo-pagamento', pagaInContanti ? 'CONTANTI' : 'BONIFICO');
+        } else {
+            attivaCampoDonazionePagamento();
+        }
     } catch (err) {
-        console.warn('Scelta partenza/arrivo tratta:', err);
+        console.warn('Applicazione tratta fuori Asti:', err);
         applicaRiepilogoTrattaNelDom(payload, { hiddenId: 'ns-tratta-fuori-asti' });
     } finally {
         window.setTimeout(() => {
             ignoraCambioPagamentoPerTratta = false;
-        }, 300);
+            applicaTrattaInCorso = false;
+        }, 800);
     }
 }
 
@@ -1584,7 +1624,8 @@ async function salvaNuovoServizio() {
         note_prelievo: dati.note_prelievo || null,
         note_arrivo: dati.note_arrivo || null,
         note_fine_servizio: dati.note_fine_servizio || null,
-        archivia: dati.archivia || 'NO'
+        archivia: dati.archivia || 'NO',
+        creato_da: formatoAccountSessione() || null
     };
 
     const btnSalva = document.getElementById('btn-salva');

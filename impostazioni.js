@@ -1,9 +1,15 @@
-// Popup Impostazioni — lettura/modifica Impostazioni_supa (solo admin)
+// Popup Impostazioni — schede: Impostazioni + tabelle lookup (solo admin)
 import { richiediSessione, isAdmin } from './auth-session.js';
+import { createLookupManager } from './impostazioni-lookup.js';
 
 let invoke;
 /** @type {Array<{id: string, impostazione: string, valore: string}>} */
 let impostazioniCaricate = [];
+/** @type {'impostazioni'|'richiedenti'|'tipo_socio'|'motivazioni_trasporto'|'tipo_pagamenti'} */
+let tabAttiva = 'impostazioni';
+
+const INTRO_IMPOSTAZIONI =
+    'Modifica i valori della tabella Impostazioni, poi premi SALVA.';
 
 async function initTauri() {
     try {
@@ -14,6 +20,11 @@ async function initTauri() {
         console.error('Errore API Tauri:', error);
         return false;
     }
+}
+
+async function getInvoke() {
+    if (!invoke) await initTauri();
+    return invoke;
 }
 
 function isTauri() {
@@ -42,6 +53,8 @@ function setStatus(message, isError = false) {
     el.classList.toggle('error', !!isError);
     el.hidden = !message;
 }
+
+const lookup = createLookupManager({ getInvoke, setStatus });
 
 function renderCampi(lista) {
     const container = document.getElementById('imp-lista');
@@ -93,11 +106,11 @@ async function caricaImpostazioni() {
     setStatus('');
 
     try {
-        if (!invoke) await initTauri();
-        if (!invoke) throw new Error('Apri questa pagina dall\'app AUSER');
+        const inv = await getInvoke();
+        if (!inv) throw new Error('Apri questa pagina dall\'app AUSER');
 
-        await invoke('init_supabase_from_config').catch(() => {});
-        const rows = await invoke('get_all_impostazioni');
+        await inv('init_supabase_from_config').catch(() => {});
+        const rows = await inv('get_all_impostazioni');
         impostazioniCaricate = Array.isArray(rows) ? rows : [];
         if (loading) loading.hidden = true;
         renderCampi(impostazioniCaricate);
@@ -151,13 +164,13 @@ async function salvaImpostazioni() {
     setStatus('');
 
     try {
-        if (!invoke) await initTauri();
-        if (!invoke) throw new Error('Apri questa pagina dall\'app AUSER');
+        const inv = await getInvoke();
+        if (!inv) throw new Error('Apri questa pagina dall\'app AUSER');
 
-        await invoke('init_supabase_from_config').catch(() => {});
+        await inv('init_supabase_from_config').catch(() => {});
 
         for (const m of modifiche) {
-            await invoke('update_impostazione', { id: m.id, valore: m.valore });
+            await inv('update_impostazione', { id: m.id, valore: m.valore });
             if (impostazioniCaricate[m.index]) {
                 impostazioniCaricate[m.index].valore = m.valore;
             }
@@ -173,6 +186,52 @@ async function salvaImpostazioni() {
             btn.disabled = false;
             btn.textContent = 'SALVA';
         }
+    }
+}
+
+function aggiornaHeaderPerTab() {
+    const isImp = tabAttiva === 'impostazioni';
+    const btnSalva = document.getElementById('btn-salva');
+    const btnAggiungi = document.getElementById('btn-aggiungi');
+    const intro = document.getElementById('imp-intro');
+
+    if (btnSalva) btnSalva.hidden = !isImp;
+    if (btnAggiungi) btnAggiungi.hidden = isImp;
+
+    if (intro) {
+        if (isImp) {
+            intro.textContent = INTRO_IMPOSTAZIONI;
+        } else {
+            intro.textContent = lookup.LOOKUP_META[tabAttiva]?.intro || '';
+        }
+    }
+}
+
+async function selezionaTab(tab) {
+    tabAttiva = tab;
+
+    document.querySelectorAll('.imp-tab').forEach((btn) => {
+        const active = btn.getAttribute('data-tab') === tab;
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+
+    const panelImp = document.getElementById('panel-impostazioni');
+    const panelLk = document.getElementById('panel-lookup');
+    const isImp = tab === 'impostazioni';
+
+    if (panelImp) panelImp.hidden = !isImp;
+    if (panelLk) panelLk.hidden = isImp;
+
+    aggiornaHeaderPerTab();
+    setStatus('');
+
+    if (isImp) {
+        if (!impostazioniCaricate.length) {
+            await caricaImpostazioni();
+        }
+    } else {
+        await lookup.carica(tab);
     }
 }
 
@@ -219,6 +278,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-chiudi')?.addEventListener('click', chiudiFinestra);
     document.getElementById('btn-salva')?.addEventListener('click', salvaImpostazioni);
 
+    document.querySelectorAll('.imp-tab').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const tab = btn.getAttribute('data-tab');
+            if (tab) selezionaTab(tab);
+        });
+    });
+
     document.getElementById('imp-lista')?.addEventListener('click', (e) => {
         const btn = e.target.closest('.imp-btn-mostra');
         if (!btn) return;
@@ -229,5 +295,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         btn.textContent = mostra ? 'NASCONDI' : 'MOSTRA';
     });
 
+    lookup.bindEvents();
+    aggiornaHeaderPerTab();
     await caricaImpostazioni();
 });

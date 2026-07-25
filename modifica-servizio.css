@@ -29,11 +29,12 @@
     width: 100%;
     max-width: none;
     height: 100%;
-    max-height: none;
+    max-height: 100%;
     display: flex;
     flex-direction: column;
     box-shadow: none;
     overflow: hidden;
+    min-height: 0;
 }
 
 .modal-modifica-header.ns-header {
@@ -43,17 +44,61 @@
     background: #d8d6d3;
     border-radius: 0;
     flex-shrink: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    z-index: 5;
+    position: relative;
+}
+
+.modal-modifica-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .modal-modifica-header .ns-title {
     font-size: 1.35rem;
+    margin: 0;
+    flex: 0 1 auto;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.mod-audit-creato,
+.mod-audit-modificato {
+    font-size: 15px;
+    font-weight: 600;
+    color: #546e7a;
+    line-height: 1.25;
+    max-width: 28%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1 1 0;
+}
+
+.mod-audit-creato {
+    text-align: left;
+}
+
+.mod-audit-modificato {
+    text-align: right;
 }
 
 .modal-modifica-body {
     padding: 12px 16px 20px;
+    overflow-x: hidden;
     overflow-y: auto;
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
     background: #d8d6d3;
+    -webkit-overflow-scrolling: touch;
 }
 
 .modal-modifica-body .modifica-servizio-form {
@@ -273,9 +318,23 @@
         align-items: stretch;
     }
 
-    .modal-modifica-header .ns-title {
+    .modal-modifica-title-row {
         order: -1;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .modal-modifica-header .ns-title {
+        order: 0;
+        width: 100%;
         text-align: center;
-        margin-bottom: 8px;
+        margin-bottom: 2px;
+    }
+
+    .mod-audit-creato,
+    .mod-audit-modificato {
+        max-width: 100%;
+        flex: 1 1 45%;
+        white-space: normal;
     }
 }

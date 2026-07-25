@@ -4,8 +4,11 @@
     justify-content: space-between;
 }
 
-.modal-completa-header .ns-title {
+.modal-completa-header .modal-modifica-title-row {
     flex: 1;
+}
+
+.modal-completa-header .ns-title {
     text-align: center;
 }
 

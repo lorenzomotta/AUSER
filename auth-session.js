@@ -25,6 +25,34 @@ export function cancellaSessione() {
     localStorage.removeItem(SESSION_KEY);
 }
 
+/**
+ * Testo da salvare in CreatoDa / ModificatoDa: solo username (es. "mario.rossi").
+ * @param {object|null} [sessione]
+ * @returns {string}
+ */
+export function formatoAccountSessione(sessione = leggiSessione()) {
+    if (!sessione) return '';
+    const username = String(sessione.username || '').trim();
+    if (username) return username;
+    const email = String(sessione.email || '').trim();
+    if (email.includes('@')) return email.split('@')[0];
+    return email;
+}
+
+/**
+ * Da un valore salvato (anche vecchio "email (username)") ricava solo lo username da mostrare.
+ * @param {string} valore
+ * @returns {string}
+ */
+export function soloUsernameAccount(valore) {
+    const s = String(valore || '').trim();
+    if (!s) return '';
+    const traParentesi = s.match(/\(([^)]+)\)\s*$/);
+    if (traParentesi?.[1]) return traParentesi[1].trim();
+    if (s.includes('@')) return s.split('@')[0];
+    return s;
+}
+
 export function isAdmin(sessione = leggiSessione()) {
     return !!(sessione && sessione.is_admin === true);
 }

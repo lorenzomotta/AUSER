@@ -418,6 +418,32 @@ export function buildPayloadUpdateServizio(servizio, dati, mergeNoteFineFn) {
         : noteVisibili;
     if (colNote) payload[colNote] = noteMerged;
 
+    const account = String(dati.modificato_da || '').trim();
+    if (account) {
+        setCampo(
+            payload,
+            row,
+            ['ModificatoDa', 'modificato_da', 'Modificato_Da', 'MODIFICATODA'],
+            'ModificatoDa',
+            account
+        );
+        setCampo(
+            payload,
+            row,
+            [
+                'modificated',
+                'Modificated',
+                'MODIFICATED',
+                'modified',
+                'Modified',
+                'updated_at',
+                'Updated_At'
+            ],
+            'modificated',
+            new Date().toISOString()
+        );
+    }
+
     // Metadati utili per verifica post-salvataggio
     payload.__meta = {
         colNotePrelievo,

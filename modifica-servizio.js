@@ -14,6 +14,7 @@ import {
     rimuoviTrattaDalForm,
     messaggioAvvisoDopoRimozioneTratta
 } from './tratta-riepilogo.js';
+import { formatoAccountSessione, soloUsernameAccount } from './auth-session.js';
 
 let getInvokeFn = () => null;
 let isTauriEnv = () => false;
@@ -48,7 +49,11 @@ const MODALE_MODIFICA_MARKUP = `
                 <button type="button" class="btn btn-duplica-modifica" id="btn-duplica-modifica">DUPLICA</button>
                 <button type="button" class="btn btn-modifica-pagamento" id="btn-modifica-pagamento" hidden>MODIFICA PAGAMENTO</button>
             </div>
-            <h1 class="ns-title" id="modal-modifica-title">MODIFICA SERVIZIO</h1>
+            <div class="modal-modifica-title-row" aria-live="polite">
+                <span class="mod-audit-creato" id="mod-audit-creato">Creato da —</span>
+                <h1 class="ns-title" id="modal-modifica-title">MODIFICA SERVIZIO</h1>
+                <span class="mod-audit-modificato" id="mod-audit-modificato">Modificato da —</span>
+            </div>
             <div class="ns-header-right">
                 <button type="button" class="btn btn-annulla" id="btn-annulla-modifica">ANNULLA</button>
                 <button type="button" class="btn btn-salva" id="btn-salva-modifica">SALVA</button>
@@ -111,7 +116,8 @@ const MODALE_MODIFICA_MARKUP = `
 function injectModaleModificaMarkup() {
     if (!document.getElementById('modal-modifica')) {
         document.body.insertAdjacentHTML('beforeend', MODALE_MODIFICA_MARKUP);
-        return;
+    } else {
+        ensureAuditBarInHeader('modal-modifica', 'mod');
     }
     // Se la modale c'era già (vecchia sessione), aggiungi solo il dialog mezzo se manca
     if (!document.getElementById('mod-dialog-mezzo-occupato')) {
@@ -140,6 +146,68 @@ function injectModaleModificaMarkup() {
     </div>
 </div>`;
         document.body.insertAdjacentHTML('beforeend', pezzo);
+    }
+}
+
+/**
+ * Assicura Creato da / Modificato da sulla riga del titolo (modale già in pagina).
+ * @param {string} modalId
+ * @param {'mod'|'comp'} prefix
+ */
+function ensureAuditBarInHeader(modalId, prefix) {
+    const header = document.querySelector(`#${modalId} .modal-modifica-header`);
+    if (!header) return;
+
+    // Rimuovi vecchia barra audit sotto il titolo, se presente
+    header.querySelectorAll('.modal-modifica-audit').forEach((el) => el.remove());
+
+    let titleRow = header.querySelector('.modal-modifica-title-row');
+    const title = header.querySelector('.ns-title, h1');
+    if (!titleRow && title) {
+        titleRow = document.createElement('div');
+        titleRow.className = 'modal-modifica-title-row';
+        titleRow.setAttribute('aria-live', 'polite');
+        title.parentNode.insertBefore(titleRow, title);
+        titleRow.appendChild(title);
+    }
+    if (!titleRow) return;
+
+    if (!document.getElementById(`${prefix}-audit-creato`)) {
+        const creato = document.createElement('span');
+        creato.className = 'mod-audit-creato';
+        creato.id = `${prefix}-audit-creato`;
+        creato.textContent = 'Creato da —';
+        titleRow.insertBefore(creato, titleRow.firstChild);
+    }
+    if (!document.getElementById(`${prefix}-audit-modificato`)) {
+        const mod = document.createElement('span');
+        mod.className = 'mod-audit-modificato';
+        mod.id = `${prefix}-audit-modificato`;
+        mod.textContent = 'Modificato da —';
+        titleRow.appendChild(mod);
+    }
+
+    // Se i pulsanti erano dentro header-top, ripristina layout piatto
+    const top = header.querySelector('.modal-modifica-header-top');
+    if (top) {
+        while (top.firstChild) header.insertBefore(top.firstChild, top);
+        top.remove();
+    }
+}
+
+/** Aggiorna le etichette Creato da / Modificato da nell'header (solo username). */
+export function aggiornaEtichetteAudit(prefix, servizio) {
+    const creatoEl = document.getElementById(`${prefix}-audit-creato`);
+    const modEl = document.getElementById(`${prefix}-audit-modificato`);
+    const creato = soloUsernameAccount(servizio?.creato_da);
+    const modificato = soloUsernameAccount(servizio?.modificato_da);
+    if (creatoEl) {
+        creatoEl.textContent = creato ? `Creato da "${creato}"` : 'Creato da —';
+        creatoEl.title = creato || '';
+    }
+    if (modEl) {
+        modEl.textContent = modificato ? `Modificato da "${modificato}"` : 'Modificato da —';
+        modEl.title = modificato || '';
     }
 }
 
@@ -1005,7 +1073,8 @@ export function raccogliPayloadServizio(idPrefix = 'mod') {
         note_prelievo: document.getElementById(`${idPrefix}-note-prelievo`)?.value || '',
         note_arrivo: document.getElementById(`${idPrefix}-note-arrivo`)?.value || '',
         note_fine_servizio: mergeTrattaInNote(noteUtente, tratta),
-        archivia: get('archivia') === 'SI' ? 'SI' : 'NO'
+        archivia: get('archivia') === 'SI' ? 'SI' : 'NO',
+        modificato_da: formatoAccountSessione() || null
     };
 }
 
@@ -1178,6 +1247,7 @@ export async function apriModalModifica(servizioId, options = {}) {
             ? `SERVIZIO ${servizio.id || ''}`
             : `MODIFICA SERVIZIO ${servizio.id || ''}`;
     }
+    aggiornaEtichetteAudit('mod', servizio);
     body.innerHTML = costruisciFormModifica(servizio);
     setupFormModificaListeners();
     applicaModalitaSolaLettura(solaLettura);
@@ -1254,7 +1324,11 @@ async function duplicaServizioModifica() {
         const invoke = getInvokeFn();
         if (isTauriEnv() && invoke) {
             await invoke('init_supabase_from_config').catch(() => {});
-            const nuovoId = await invoke('duplicate_servizio', { servizioId: id, opzioni });
+            const nuovoId = await invoke('duplicate_servizio', {
+                servizioId: id,
+                opzioni,
+                creatoDa: formatoAccountSessione() || null
+            });
             const nuovoServizio = await invoke('get_servizio_completo', { servizioId: nuovoId });
             await onSaveSuccess(nuovoServizio);
             chiudiModalModifica();

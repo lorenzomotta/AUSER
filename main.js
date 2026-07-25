@@ -797,8 +797,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     await apriFinestraPopup('impostazioni', {
                         url: 'IMPOSTAZIONI.html',
                         title: 'Impostazioni',
-                        width: 680,
-                        height: 620,
+                        width: 780,
+                        height: 700,
                         resizable: true,
                         maximized: false,
                         decorations: true,
@@ -810,7 +810,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     alert('Impossibile aprire le Impostazioni.');
                 }
             } else {
-                window.open('IMPOSTAZIONI.html', '_blank', 'width=680,height=620');
+                window.open('IMPOSTAZIONI.html', '_blank', 'width=780,height=700');
             }
         });
     }

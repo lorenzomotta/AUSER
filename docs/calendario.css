@@ -295,6 +295,21 @@ body {
     cursor: pointer;
 }
 
+.cal-event-socio-wrap {
+    display: inline;
+    white-space: nowrap;
+}
+
+.cal-icona-carrozzina {
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    margin-left: 3px;
+    vertical-align: -2px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
 /* Modale dettaglio */
 .modal-servizio-overlay {
     position: fixed;

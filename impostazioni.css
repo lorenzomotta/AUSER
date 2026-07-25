@@ -15,7 +15,7 @@ html, body {
     display: flex;
     flex-direction: column;
     min-height: 100%;
-    max-width: 720px;
+    max-width: 780px;
     margin: 0 auto;
     padding: 16px 18px 24px;
 }
@@ -25,7 +25,8 @@ html, body {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
 }
 
 .imp-title {
@@ -49,6 +50,7 @@ html, body {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
 }
 
 .imp-btn-salva {
@@ -65,6 +67,15 @@ html, body {
     cursor: wait;
 }
 
+.imp-btn-aggiungi {
+    background: #1565c0;
+    color: #fff;
+}
+
+.imp-btn-aggiungi:hover:not(:disabled) {
+    background: #0d47a1;
+}
+
 .imp-btn-chiudi {
     background: #546e7a;
     color: #fff;
@@ -72,6 +83,61 @@ html, body {
 
 .imp-btn-chiudi:hover {
     background: #37474f;
+}
+
+.imp-btn-modifica {
+    background: #ffc107;
+    color: #111;
+    padding: 5px 10px;
+    font-size: 12px;
+}
+
+.imp-btn-modifica:hover {
+    background: #ffb300;
+}
+
+.imp-btn-elimina {
+    background: #c62828;
+    color: #fff;
+    padding: 5px 10px;
+    font-size: 12px;
+}
+
+.imp-btn-elimina:hover {
+    background: #b71c1c;
+}
+
+.imp-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #cfd8dc;
+    padding-bottom: 0;
+}
+
+.imp-tab {
+    border: none;
+    background: transparent;
+    color: #546e7a;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 4px 4px 0 0;
+    margin-bottom: -2px;
+    border-bottom: 2px solid transparent;
+}
+
+.imp-tab:hover {
+    color: #1565c0;
+    background: rgba(21, 101, 192, 0.06);
+}
+
+.imp-tab.is-active {
+    color: #1565c0;
+    border-bottom-color: #1565c0;
+    background: #fff;
 }
 
 .imp-intro {
@@ -96,7 +162,14 @@ html, body {
     border-color: #ef9a9a;
 }
 
-.imp-status[hidden] {
+.imp-status[hidden],
+.imp-panel[hidden],
+.imp-loading[hidden],
+.imp-errore[hidden],
+.imp-vuoto[hidden],
+.imp-lista[hidden],
+.imp-lookup-lista[hidden],
+.imp-modal[hidden] {
     display: none !important;
 }
 
@@ -183,8 +256,105 @@ html, body {
     background: #bdbdbd;
 }
 
+.imp-lookup-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.imp-lookup-riga {
+    background: #fff;
+    border: 1px solid #b0bec5;
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px 10px;
+    align-items: center;
+}
+
+.imp-lookup-valore {
+    font-size: 14px;
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.imp-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 50;
+}
+
+.imp-modal-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 18px 16px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.imp-modal-card h2 {
+    margin: 0 0 14px;
+    font-size: 18px;
+    color: #1565c0;
+}
+
+.imp-field {
+    margin-bottom: 12px;
+}
+
+.imp-field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 3px;
+    color: #455a64;
+}
+
+.imp-field input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #90a4ae;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.imp-field input:focus {
+    outline: none;
+    border-color: #1565c0;
+    box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.2);
+}
+
+.imp-modal-azioni {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.imp-modal-azioni-conferma {
+    justify-content: center;
+}
+
+.imp-conferma-testo {
+    margin: 0 0 16px;
+    font-size: 14px;
+    color: #455a64;
+    line-height: 1.4;
+}
+
 @media (max-width: 560px) {
     .imp-campo {
+        grid-template-columns: 1fr;
+    }
+
+    .imp-lookup-riga {
         grid-template-columns: 1fr;
     }
 }

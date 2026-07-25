@@ -25,7 +25,7 @@ import {
     buildPayloadUpdateServizio,
     payloadSenzaMeta,
     OPZIONI_DEFAULT
-} from './calendario-web-edit.js?v=24';
+} from './calendario-web-edit.js?v=25';
 
 let supabaseClient = null;
 let publicConfig = null;
@@ -37,6 +37,8 @@ const serviziPerRangeCache = new Map();
 const serviziById = new Map();
 let vistaCorrente = 'dayGridMonth';
 let permessiCorrenti = null;
+/** @type {object|null} utente Auth Supabase corrente */
+let utenteAuthCorrente = null;
 
 /** Rimette il blocco tratta nascosto dopo la modifica delle note utente */
 function mergeNoteFineConTratta(noteUtente, noteOriginali) {
@@ -427,6 +429,36 @@ function etichettaUtente(user, perm) {
     return user?.email || '';
 }
 
+/** Solo username (es. "mario.rossi") per CreatoDa / ModificatoDa */
+function formatoAccountCorrente() {
+    const username = String(permessiCorrenti?.username || '').trim();
+    if (username) return username;
+    const email = String(utenteAuthCorrente?.email || '').trim();
+    if (email.includes('@')) return email.split('@')[0];
+    return email;
+}
+
+function applicaAuditModificaSuPayload(payload, servizio) {
+    const account = formatoAccountCorrente();
+    if (!account || !payload) return;
+    const row = servizio?._raw || {};
+    const keys = Object.keys(row);
+    const findCol = (candidates, fallback) => {
+        if (keys.length) {
+            for (const c of candidates) {
+                const found = keys.find((k) => k.toLowerCase() === c.toLowerCase());
+                if (found) return found;
+            }
+        }
+        return fallback;
+    };
+    payload[findCol(['ModificatoDa', 'modificato_da', 'Modificato_Da'], 'ModificatoDa')] = account;
+    payload[findCol(
+        ['modificated', 'Modificated', 'modified', 'Modified', 'updated_at'],
+        'modificated'
+    )] = new Date().toISOString();
+}
+
 async function caricaPermessiUtente(user) {
     const { data: perm, error } = await supabaseClient
         .from(tabella('user_permissions'))
@@ -476,6 +508,7 @@ async function gestisciLogout() {
     nominativiMap = {};
     allOperatori = [];
     permessiCorrenti = null;
+    utenteAuthCorrente = null;
     mostraSchermataLogin();
     mostraErroreLogin('');
 }
@@ -822,22 +855,52 @@ function applicaIntestazioniGiornoListaMobile() {
     });
 }
 
+function htmlIconaCarrozzina(carrozzina) {
+    const v = String(carrozzina || '').trim().toUpperCase();
+    let file = '';
+    let label = '';
+    if (v === 'SOCIO') {
+        file = 'assets/carrozzina-bleu.png';
+        label = 'Carrozzina socio';
+    } else if (v === 'AUSER') {
+        file = 'assets/carrozzina-verde.png';
+        label = 'Carrozzina AUSER';
+    } else {
+        return '';
+    }
+    return `<img class="cal-icona-carrozzina" src="${file}" alt="${escapeHtml(label)}" title="${escapeHtml(label)}" width="13" height="13" decoding="async">`;
+}
+
+function htmlNomeTrasportatoConCarrozzina(socio, carrozzina) {
+    const nome = String(socio || '').trim();
+    if (!nome) return '';
+    const icona = htmlIconaCarrozzina(carrozzina);
+    if (!icona) return escapeHtml(nome);
+    return `<span class="cal-event-socio-wrap">${escapeHtml(nome)}${icona}</span>`;
+}
+
 function renderEventContent(arg) {
     const s = arg.event.extendedProps.servizio || {};
     const ora = s.ora_inizio || '';
     const socio = s.socio_trasportato || '';
     const op = s.operatore || '';
+    const socioHtml = htmlNomeTrasportatoConCarrozzina(socio, s.carrozzina);
+    const titleText = [ora, socio, op].filter(p => String(p).trim() !== '').join(' · ') || '—';
+    const titleAttr = escapeHtml(titleText);
 
     if (isVistaMobileCalendario() && isVistaListaMobile(arg.view?.type)) {
-        const parti = [ora, socio, op].filter(p => p.trim() !== '');
-        const riga = parti.length ? parti.map(p => escapeHtml(p)).join(' · ') : '—';
-        return { html: `<div class="cal-event cal-event-week-row" title="${riga}">${riga}</div>` };
+        const parti = [];
+        if (ora.trim()) parti.push(escapeHtml(ora));
+        if (socioHtml) parti.push(socioHtml);
+        if (op.trim()) parti.push(escapeHtml(op));
+        const riga = parti.length ? parti.join(' · ') : '—';
+        return { html: `<div class="cal-event cal-event-week-row" title="${titleAttr}">${riga}</div>` };
     }
 
     if (isVistaMobileCalendario() && arg.view?.type === 'dayGridDay') {
         const righe = [
             ora ? `<span class="cal-event-ora">${escapeHtml(ora)}</span>` : '',
-            socio ? `<span class="cal-event-socio">${escapeHtml(socio)}</span>` : '',
+            socioHtml ? `<span class="cal-event-socio">${socioHtml}</span>` : '',
             op ? `<span class="cal-event-op">${escapeHtml(op)}</span>` : ''
         ].filter(Boolean);
         const html = righe.length
@@ -846,9 +909,12 @@ function renderEventContent(arg) {
         return { html };
     }
 
-    const parti = [ora, socio, op].filter(p => p.trim() !== '');
-    const riga = parti.length ? parti.map(p => escapeHtml(p)).join(' · ') : '—';
-    return { html: `<div class="cal-event" title="${riga}">${riga}</div>` };
+    const parti = [];
+    if (ora.trim()) parti.push(escapeHtml(ora));
+    if (socioHtml) parti.push(socioHtml);
+    if (op.trim()) parti.push(escapeHtml(op));
+    const riga = parti.length ? parti.join(' · ') : '—';
+    return { html: `<div class="cal-event" title="${titleAttr}">${riga}</div>` };
 }
 
 function aggiornaContatore(num) {
@@ -1013,6 +1079,7 @@ function buildPayloadFineServizio(servizio, km, kmUscita, kmRientro, tempoRaw, n
         if (found) colStato = found;
     }
     payload[colStato] = 'COMPLETATO';
+    applicaAuditModificaSuPayload(payload, servizio);
 
     return payload;
 }
@@ -1300,7 +1367,7 @@ async function salvaModificheServizioAdmin() {
     try {
         const payload = buildPayloadUpdateServizio(
             servizioCorrente,
-            dati,
+            { ...dati, modificato_da: formatoAccountCorrente() },
             mergeNoteFineConTratta
         );
         const noteAttese = String(dati.note_prelievo ?? '');
@@ -1600,6 +1667,7 @@ function setupEventListenersCalendario() {
 }
 
 async function avviaCalendario(user, perm) {
+    utenteAuthCorrente = user || null;
     permessiCorrenti = perm || null;
     console.log('Calendario permessi:', permessiCorrenti, 'admin=', isUtenteAdmin(permessiCorrenti));
     mostraCalendario(etichettaUtente(user, perm));

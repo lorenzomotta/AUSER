@@ -728,6 +728,14 @@ impl SupabaseClient {
         self.fetch_table("tipo_pagamenti", filter, None, None).await
     }
 
+    pub async fn fetch_motivazioni_trasporto(
+        &self,
+        filter: Option<&str>,
+    ) -> Result<Vec<Value>, String> {
+        self.fetch_table("motivazioni_trasporto", filter, None, None)
+            .await
+    }
+
     pub async fn fetch_stati_del_servizio(&self, filter: Option<&str>) -> Result<Vec<Value>, String> {
         self.fetch_table("stato_del_servizio", filter, None, Some("id.asc"))
             .await
@@ -753,13 +761,153 @@ impl SupabaseClient {
             table_name, column_key, tipologia
         );
 
-        self.post_tipologia_row(&url, &body).await
+        self.post_lookup_row(&url, &body, "tipologia").await
     }
 
-    async fn post_tipologia_row(
+    /// Inserisce una riga testo in una tabella lookup (richiedenti, tipo_socio, …)
+    pub async fn insert_lookup_text(
+        &self,
+        table_type: &str,
+        column_key: &str,
+        value: &str,
+    ) -> Result<(), String> {
+        let table_name = self
+            .config
+            .tables
+            .table_name(table_type)
+            .ok_or_else(|| format!("Tabella lookup sconosciuta: {}", table_type))?;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/rest/v1/{}", base, table_name);
+
+        let mut body = serde_json::Map::new();
+        body.insert(column_key.to_string(), serde_json::json!(value));
+
+        println!(
+            "📡 Supabase POST [lookup {} → {}] {}='{}'",
+            table_type, table_name, column_key, value
+        );
+
+        self.post_lookup_row(&url, &body, table_type).await
+    }
+
+    /// Aggiorna una riga lookup per id
+    pub async fn patch_lookup_by_id(
+        &self,
+        table_type: &str,
+        id: &str,
+        body: &serde_json::Map<String, Value>,
+    ) -> Result<(), String> {
+        if body.is_empty() {
+            return Ok(());
+        }
+
+        let id = id.trim();
+        if id.is_empty() {
+            return Err("Id riga lookup mancante".to_string());
+        }
+
+        let table_name = self
+            .config
+            .tables
+            .table_name(table_type)
+            .ok_or_else(|| format!("Tabella lookup sconosciuta: {}", table_type))?;
+        let base = self.config.url.trim_end_matches('/');
+        let mut last_error: Option<String> = None;
+
+        for id_col in ["id", "Id", "ID"] {
+            let url = format!("{}/rest/v1/{}?{}=eq.{}", base, table_name, id_col, id);
+
+            println!(
+                "📡 Supabase PATCH [lookup {} → {}] {}={} body={:?}",
+                table_type, table_name, id_col, id, body
+            );
+
+            let request = self
+                .http
+                .patch(&url)
+                .header("Content-Type", "application/json")
+                .header("Prefer", "return=minimal")
+                .json(body);
+
+            let response = self
+                .apply_auth_headers(request)
+                .send()
+                .await
+                .map_err(|e| {
+                    format!(
+                        "Errore connessione Supabase PATCH {}: {}",
+                        table_type, e
+                    )
+                })?;
+
+            if response.status().is_success() {
+                return Ok(());
+            }
+
+            let status = response.status();
+            let err_body = response.text().await.unwrap_or_default();
+            last_error = Some(format!("HTTP {}: {}", status, err_body));
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            format!("Impossibile aggiornare {} id={}", table_type, id)
+        }))
+    }
+
+    /// Elimina una riga lookup per id
+    pub async fn delete_lookup_by_id(&self, table_type: &str, id: &str) -> Result<(), String> {
+        let id = id.trim();
+        if id.is_empty() {
+            return Err("Id riga lookup mancante".to_string());
+        }
+
+        let table_name = self
+            .config
+            .tables
+            .table_name(table_type)
+            .ok_or_else(|| format!("Tabella lookup sconosciuta: {}", table_type))?;
+        let base = self.config.url.trim_end_matches('/');
+        let mut last_error: Option<String> = None;
+
+        for id_col in ["id", "Id", "ID"] {
+            let url = format!("{}/rest/v1/{}?{}=eq.{}", base, table_name, id_col, id);
+
+            println!(
+                "📡 Supabase DELETE [lookup {} → {}] {}={}",
+                table_type, table_name, id_col, id
+            );
+
+            let request = self.http.delete(&url);
+            let response = self
+                .apply_auth_headers(request)
+                .send()
+                .await
+                .map_err(|e| {
+                    format!(
+                        "Errore connessione Supabase DELETE {}: {}",
+                        table_type, e
+                    )
+                })?;
+
+            if response.status().is_success() {
+                return Ok(());
+            }
+
+            let status = response.status();
+            let err_body = response.text().await.unwrap_or_default();
+            last_error = Some(format!("HTTP {}: {}", status, err_body));
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            format!("Impossibile eliminare {} id={}", table_type, id)
+        }))
+    }
+
+    async fn post_lookup_row(
         &self,
         url: &str,
         body: &serde_json::Map<String, Value>,
+        label: &str,
     ) -> Result<(), String> {
         let request = self
             .http
@@ -772,7 +920,7 @@ impl SupabaseClient {
             .apply_auth_headers(request)
             .send()
             .await
-            .map_err(|e| format!("Errore connessione Supabase POST tipologia: {}", e))?;
+            .map_err(|e| format!("Errore connessione Supabase POST {}: {}", label, e))?;
 
         if response.status().is_success() {
             return Ok(());
@@ -781,8 +929,8 @@ impl SupabaseClient {
         let status = response.status();
         let err_body = response.text().await.unwrap_or_default();
         Err(format!(
-            "Errore Supabase POST tipologia HTTP {}: {}",
-            status, err_body
+            "Errore Supabase POST {} HTTP {}: {}",
+            label, status, err_body
         ))
     }
 

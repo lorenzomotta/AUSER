@@ -16,6 +16,7 @@
             </div>
         </header>
 
+        <div class="ns-scroll">
         <div id="ns-loading" class="ns-loading">Caricamento dati...</div>
 
         <div id="ns-errori" class="ns-errori-box" style="display: none;" role="alert">
@@ -108,10 +109,13 @@
             <!-- Prelievo -->
             <section class="ns-section">
                 <div class="ns-section-header">
-                    <h2 class="ns-section-title">2. Dati prelievo <span class="ns-section-title-hint">(se la tratta è fuori Asti, i campi COMUNE e LUOGO verranno compilati automaticamente in seguito)</span></h2>
-                    <button type="button" class="btn btn-prelievo-da-casa" id="btn-prelievo-da-casa">
-                        PRELIEVO DA CASA TRASPORTATO
-                    </button>
+                    <h2 class="ns-section-title">2. Dati prelievo</h2>
+                    <div class="ns-section-header-actions">
+                        <button type="button" class="ns-btn-tratta-fuori-asti" id="btn-tratta-fuori-asti-prelievo">TRATTA FUORI ASTI</button>
+                        <button type="button" class="btn btn-prelievo-da-casa" id="btn-prelievo-da-casa">
+                            PRELIEVO DA CASA TRASPORTATO
+                        </button>
+                    </div>
                 </div>
                 <div class="ns-grid ns-grid-prelievo">
                     <div class="ns-field ns-field-data-prelievo">
@@ -148,10 +152,13 @@
             <!-- Destinazione -->
             <section class="ns-section">
                 <div class="ns-section-header">
-                    <h2 class="ns-section-title">3. Dati destinazione <span class="ns-section-title-hint">(se la tratta è fuori Asti, i campi Comune e luogo verranno compilati automaticamente)</span></h2>
-                    <button type="button" class="btn btn-prelievo-da-casa" id="btn-destinazione-casa-trasportato">
-                        DESTINAZIONE CASA TRASPORTATO
-                    </button>
+                    <h2 class="ns-section-title">3. Dati destinazione</h2>
+                    <div class="ns-section-header-actions">
+                        <button type="button" class="ns-btn-tratta-fuori-asti" id="btn-tratta-fuori-asti-destinazione">TRATTA FUORI ASTI</button>
+                        <button type="button" class="btn btn-prelievo-da-casa" id="btn-destinazione-casa-trasportato">
+                            DESTINAZIONE CASA TRASPORTATO
+                        </button>
+                    </div>
                 </div>
                 <div class="ns-grid ns-grid-destinazione">
                     <div class="ns-field ns-field-data-destinazione">
@@ -327,6 +334,7 @@
                 </div>
             </section>
         </form>
+        </div>
     </div>
 
     <div id="ns-dialog-avviso" class="ns-dialog-overlay" hidden aria-hidden="true">

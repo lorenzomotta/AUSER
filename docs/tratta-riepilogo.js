@@ -264,6 +264,17 @@ export async function onTrattaFuoriAstiSelezionata(callback) {
     const notifica = (payload) => {
         const t = normalizzaPayloadTratta(payload);
         if (!t) return;
+        // Dedup: stesso id/totale entro 1s (emit + localStorage/postMessage)
+        const firma = `${t.id}|${t.totale}|${t.comune}|${t.localita}`;
+        const ora = Date.now();
+        if (
+            notifica._ultimaFirma === firma &&
+            ora - (notifica._ultimoTs || 0) < 1000
+        ) {
+            return;
+        }
+        notifica._ultimaFirma = firma;
+        notifica._ultimoTs = ora;
         callbackSelezioneTratta.forEach((fn) => {
             try { fn(t); } catch (err) { console.warn('Callback tratta:', err); }
         });
