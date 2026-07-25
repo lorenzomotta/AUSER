@@ -934,7 +934,7 @@ function renderEventContent(arg) {
         const parti = [];
         if (ora.trim()) parti.push(escapeHtml(ora));
         if (socioHtml) parti.push(socioHtml);
-        if (op.trim()) parti.push(escapeHtml(op));
+        if (op.trim()) parti.push(`<span class="cal-event-op">${escapeHtml(op)}</span>`);
         const riga = parti.length ? parti.join(' · ') : '—';
         return { html: `<div class="cal-event cal-event-week-row" title="${titleAttr}">${riga}</div>` };
     }
@@ -965,7 +965,8 @@ function renderEventContent(arg) {
     if (socioHtml) parti.push(socioHtml);
     if (op.trim()) {
         // Fuori dalla vista giorno l'icona resta sul trasportato; operatore solo testo
-        parti.push(isGiorno ? opHtml : escapeHtml(op));
+        const opTesto = isGiorno ? opHtml : escapeHtml(op);
+        parti.push(`<span class="cal-event-op">${opTesto}</span>`);
     }
     const riga = parti.length ? parti.join(' · ') : '—';
     return { html: `<div class="cal-event" title="${titleAttr}">${riga}</div>` };

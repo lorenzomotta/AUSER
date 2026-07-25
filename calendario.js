@@ -347,7 +347,8 @@ function renderEventContent(arg) {
     }
 
     const socioHtml = htmlTestoConIcona(socio, iconaTrasportato);
-    const opHtml = isGiorno ? htmlTestoConIcona(op, iconaOperatore) : '';
+    const opInner = isGiorno ? htmlTestoConIcona(op, iconaOperatore) : '';
+    const opHtml = opInner ? `<span class="cal-event-op">${opInner}</span>` : '';
 
     const parti = [];
     if (ora.trim()) parti.push(escapeHtml(ora));

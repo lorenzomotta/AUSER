@@ -514,8 +514,8 @@
     }
 
     .web-calendario-app .cal-event-mobile .cal-event-op {
-        font-size: 12px;
-        opacity: 0.9;
+        color: #1565c0;
+        font-size: 13px;
         white-space: normal;
         line-height: 1.35;
     }

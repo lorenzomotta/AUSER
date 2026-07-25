@@ -301,6 +301,11 @@ body {
     cursor: pointer;
 }
 
+.cal-event-op {
+    color: #1565c0;
+    font-size: calc(1em + 1pt);
+}
+
 .cal-event-socio-wrap {
     display: inline;
     white-space: nowrap;
