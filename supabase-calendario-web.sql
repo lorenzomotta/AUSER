@@ -60,6 +60,15 @@ FOR SELECT
 TO authenticated
 USING (true);
 
+-- 5b) Telefoni soci (solo lettura, autenticati) — telefono nel modale servizio
+ALTER TABLE public."Telefoni_supa" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "operatori_leggono_telefoni" ON public."Telefoni_supa";
+CREATE POLICY "operatori_leggono_telefoni"
+ON public."Telefoni_supa"
+FOR SELECT
+TO authenticated
+USING (true);
+
 -- 6) Esempio: collega un utente Auth ai permessi calendario
 -- Sostituisci UUID e username con i tuoi valori reali.
 --

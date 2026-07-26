@@ -25,7 +25,7 @@ import {
     buildPayloadUpdateServizio,
     payloadSenzaMeta,
     OPZIONI_DEFAULT
-} from './calendario-web-edit.js?v=25';
+} from './calendario-web-edit.js?v=26';
 
 let supabaseClient = null;
 let publicConfig = null;
@@ -1206,6 +1206,53 @@ function creaNotaDettaglio(label, value) {
     </div>`;
 }
 
+function formatTelefonoConRiferimento(t) {
+    const num = String(t?.Telefono ?? t?.telefono ?? '').trim();
+    if (!num) return '';
+    const rif = String(t?.Riferimento ?? t?.riferimento ?? '').trim();
+    return rif ? `${num} (${rif})` : num;
+}
+
+function isTelefonoPrincipaleRow(t) {
+    const p = t?.Principale ?? t?.principale;
+    return p === true || p === 'true' || p === 'TRUE' || p === 1 || p === '1';
+}
+
+/** Telefono principale + altri da Telefoni_supa (via IdSocio) */
+async function caricaTelefoniSocio(idsocio) {
+    const id = String(idsocio || '').trim();
+    if (!id || !supabaseClient) return { principale: '', altri: '' };
+
+    try {
+        const table = tabella('telefoni') || 'Telefoni_supa';
+        const idNum = parseInt(id, 10);
+        const filtro = Number.isNaN(idNum) ? id : idNum;
+        const { data, error } = await supabaseClient
+            .from(table)
+            .select('*')
+            .eq('IdSocio', filtro)
+            .order('OrdineUtilizzo', { ascending: true, nullsFirst: false });
+
+        if (error) throw error;
+        const telefoni = Array.isArray(data) ? data : [];
+
+        const principaleItem = telefoni.find((t) => isTelefonoPrincipaleRow(t) && formatTelefonoConRiferimento(t))
+            || telefoni.find((t) => formatTelefonoConRiferimento(t));
+
+        const principale = principaleItem ? formatTelefonoConRiferimento(principaleItem) : '';
+        const altri = telefoni
+            .filter((t) => t !== principaleItem && formatTelefonoConRiferimento(t))
+            .map(formatTelefonoConRiferimento)
+            .filter(Boolean)
+            .join(' · ');
+
+        return { principale, altri };
+    } catch (err) {
+        console.warn('Telefoni socio non disponibili:', err);
+        return { principale: '', altri: '' };
+    }
+}
+
 function getOpzioniModificaAdmin() {
     const mezzi = (allAutomezzi || [])
         .filter((a) => a.nr_automezzo)
@@ -1250,7 +1297,7 @@ function apriModalServizio(servizio) {
     modal.setAttribute('aria-hidden', 'false');
 }
 
-function renderModalServizio(servizio) {
+async function renderModalServizio(servizio) {
     const body = document.getElementById('modal-servizio-body');
     const title = document.getElementById('modal-servizio-title');
     if (!body) return;
@@ -1260,8 +1307,10 @@ function renderModalServizio(servizio) {
     if (title) title.textContent = `SERVIZIO ${servizio.id || ''} — ${servizio.socio_trasportato || ''}`;
     aggiornaPulsantiFooterModale();
 
+    const telefoni = await caricaTelefoniSocio(servizio.idsocio);
+
     if (isUtenteAdmin(permessiCorrenti)) {
-        body.innerHTML = htmlDettaglioServizioEditabile(servizio, getOpzioniModificaAdmin())
+        body.innerHTML = htmlDettaglioServizioEditabile(servizio, getOpzioniModificaAdmin(), telefoni)
             + htmlRigaTrattaSePresente(servizio);
         valorizzaNoteFineEditabili(body, testoNoteFineVisibile(servizio.note_fine_servizio));
         return;
@@ -1293,6 +1342,10 @@ function renderModalServizio(servizio) {
                 ${creaCampoDettaglio('LUOGO DESTINAZIONE', servizio.luogo_destinazione, 'field-large')}
                 ${creaCampoDettaglio('STATO INCASSO', servizio.stato_incasso)}
                 ${creaCampoDettaglio('TIPO PAGAMENTO', servizio.tipo_pagamento)}
+            </div>
+            <div class="dettaglio-row dettaglio-row-telefoni">
+                ${creaCampoDettaglio('TELEFONO PRINCIPALE', telefoni.principale, 'field-tel-principale')}
+                ${creaCampoDettaglio('ALTRI TELEFONI', telefoni.altri, 'field-altri-telefoni')}
             </div>
             <div class="dettaglio-row">
                 ${creaNotaDettaglio('NOTE ARRIVO', servizio.note_arrivo)}

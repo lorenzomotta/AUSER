@@ -457,6 +457,17 @@ body {
     min-width: 110px;
 }
 
+.dettaglio-field.field-tel-principale {
+    flex: 0 1 180px;
+    min-width: 140px;
+    max-width: 220px;
+}
+
+.dettaglio-field.field-altri-telefoni {
+    flex: 2 1 280px;
+    min-width: 200px;
+}
+
 .dettaglio-field.field-note {
     flex: 1 1 100%;
 }
@@ -571,7 +582,9 @@ body {
     .dettaglio-field.field-large,
     .dettaglio-field.field-trasportato,
     .dettaglio-field.field-tipo-servizio,
-    .dettaglio-field.field-carrozzina {
+    .dettaglio-field.field-carrozzina,
+    .dettaglio-field.field-tel-principale,
+    .dettaglio-field.field-altri-telefoni {
         flex: 1 1 100%;
         min-width: 100%;
         max-width: none;

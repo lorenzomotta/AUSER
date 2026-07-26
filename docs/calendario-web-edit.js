@@ -169,8 +169,11 @@ export function creaNotaModale(label, name, value, readonly = false) {
 
 /**
  * HTML corpo modale in modalità modifica admin.
+ * @param {object} servizio
+ * @param {object} opzioni
+ * @param {{ principale?: string, altri?: string }} [telefoni]
  */
-export function htmlDettaglioServizioEditabile(servizio, opzioni = {}) {
+export function htmlDettaglioServizioEditabile(servizio, opzioni = {}, telefoni = {}) {
     const s = servizio || {};
     const mezzoVal = String(s.mezzo || '').trim();
     const opId = String(s.operatore_id || '').trim();
@@ -202,6 +205,10 @@ export function htmlDettaglioServizioEditabile(servizio, opzioni = {}) {
                 ${creaCampoModale({ label: 'LUOGO DESTINAZIONE', name: 'luogo_destinazione', value: s.luogo_destinazione, classe: 'field-large' })}
                 ${creaCampoModale({ label: 'STATO INCASSO', name: 'stato_incasso', value: s.stato_incasso, options: opzioni.statiIncasso || [], emptyLabel: null })}
                 ${creaCampoModale({ label: 'TIPO PAGAMENTO', name: 'tipo_pagamento', value: s.tipo_pagamento, options: opzioni.tipiPagamento || [] })}
+            </div>
+            <div class="dettaglio-row dettaglio-row-telefoni">
+                ${creaCampoModale({ label: 'TELEFONO PRINCIPALE', name: 'telefono_principale', value: (telefoni && telefoni.principale) || '', classe: 'field-tel-principale', readonly: true })}
+                ${creaCampoModale({ label: 'ALTRI TELEFONI', name: 'altri_telefoni', value: (telefoni && telefoni.altri) || '', classe: 'field-altri-telefoni', readonly: true })}
             </div>
             <div class="dettaglio-row">
                 ${creaNotaModale('NOTE ARRIVO', 'note_arrivo', s.note_arrivo)}

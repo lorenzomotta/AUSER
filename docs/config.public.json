@@ -6,7 +6,8 @@
       "servizi": "Servizi_supa",
       "automezzi": "Automezzi_Supa",
       "user_permissions": "user_permissions",
-      "tesserati": "tesserati_supa"
+      "tesserati": "tesserati_supa",
+      "telefoni": "Telefoni_supa"
     }
   }
 }
