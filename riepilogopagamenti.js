@@ -187,6 +187,7 @@ async function caricaLookupFiltri() {
 
 function leggiFiltri() {
     return {
+        nominativo: document.getElementById('f-nominativo')?.value || '',
         stato: document.getElementById('f-stato')?.value || '',
         richiedente: document.getElementById('f-richiedente')?.value || '',
         tipoPagam: document.getElementById('f-tipo-pagam')?.value || '',
@@ -217,6 +218,7 @@ function filtraServizi() {
             const anno = annoDaDataItaliana(s.data_prelievo);
             if (String(anno) !== String(annoSel)) return false;
         }
+        if (f.nominativo && !contiene(s.socio_trasportato, f.nominativo)) return false;
         if (f.stato && statoNorm(s) !== normalizza(f.stato)) return false;
         if (f.richiedente && normalizza(s.richiedente) !== normalizza(f.richiedente)) return false;
         if (f.tipoPagam && normalizza(s.tipo_pagamento) !== normalizza(f.tipoPagam)) return false;
@@ -359,7 +361,7 @@ function applicaFiltriERender() {
 }
 
 function resetFiltri() {
-    ['f-stato', 'f-richiedente', 'f-tipo-pagam', 'f-data-da', 'f-data-a'].forEach((id) => {
+    ['f-nominativo', 'f-stato', 'f-richiedente', 'f-tipo-pagam', 'f-data-da', 'f-data-a'].forEach((id) => {
         const el = document.getElementById(id);
         if (!el) return;
         el.value = '';
@@ -421,6 +423,7 @@ function descrizioneFiltriAttivi() {
     parts.push(annoSel === 'tutti' ? 'Tutti gli anni' : `Anno ${annoSel}`);
 
     const f = {
+        nominativo: document.getElementById('f-nominativo')?.value || '',
         stato: document.getElementById('f-stato')?.value || '',
         richiedente: document.getElementById('f-richiedente')?.value || '',
         tipoPagam: document.getElementById('f-tipo-pagam')?.value || '',
@@ -428,6 +431,7 @@ function descrizioneFiltriAttivi() {
         dataA: document.getElementById('f-data-a')?.value || ''
     };
 
+    if (f.nominativo) parts.push(`Nominativo: ${f.nominativo}`);
     if (f.stato) parts.push(`Stato: ${f.stato}`);
     if (f.richiedente) parts.push(`Richiedente: ${f.richiedente}`);
     if (f.tipoPagam) parts.push(`Tipo pagam.: ${f.tipoPagam}`);
@@ -515,6 +519,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-applica-filtri')?.addEventListener('click', applicaFiltriERender);
     document.getElementById('btn-reset-filtri')?.addEventListener('click', resetFiltri);
     document.getElementById('rp-anno')?.addEventListener('change', applicaFiltriERender);
+
+    // Nominativo: filtra mentre digiti
+    document.getElementById('f-nominativo')?.addEventListener('input', applicaFiltriERender);
 
     // Invio negli input = applica
     document.getElementById('rp-ricerca')?.addEventListener('keydown', (e) => {

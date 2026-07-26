@@ -124,17 +124,21 @@ body {
 
 .report-grid {
     display: grid;
-    grid-template-columns: 72px 1.4fr 100px 72px 1fr 1.4fr;
+    grid-template-columns: 60px 1fr 108px 100px 72px 0.95fr 1.2fr;
     gap: 8px 10px;
     align-items: end;
 }
 
-/* TRASPORTATO = larghezza IDSERV + OPERATORE */
+/* TRASPORTATO = IDSERV + OPERATORE + TELEFONO */
 .report-field.col-span-2 {
     grid-column: span 2;
 }
 
-/* DATA + ORA = colonne 3 e 4 */
+.report-field.col-span-3 {
+    grid-column: span 3;
+}
+
+/* DATA + ORA = colonne data/ora */
 .report-field.col-data-ora {
     grid-column: span 2;
 }
@@ -176,6 +180,10 @@ body {
 .report-field .field-value.operatore {
     text-transform: uppercase;
     font-weight: 600;
+}
+
+.report-field .field-value.telefono {
+    font-variant-numeric: tabular-nums;
 }
 
 .report-field-duo {
@@ -236,17 +244,21 @@ body {
         break-inside: avoid;
     }
 
-    /* Stessa griglia 6 colonne dello schermo — forzata in stampa */
+    /* Stessa griglia 7 colonne dello schermo — forzata in stampa */
     .report-grid {
         display: grid !important;
-        grid-template-columns: 52pt 1.35fr 72pt 52pt 0.95fr 1.35fr !important;
-        gap: 3pt 6pt !important;
+        grid-template-columns: 44pt 1fr 78pt 72pt 52pt 0.9fr 1.15fr !important;
+        gap: 3pt 5pt !important;
         align-items: end;
         width: 100%;
     }
 
     .report-field.col-span-2 {
         grid-column: span 2 !important;
+    }
+
+    .report-field.col-span-3 {
+        grid-column: span 3 !important;
     }
 
     .report-field.col-data-ora {
@@ -285,6 +297,10 @@ body {
         font-weight: 600;
     }
 
+    .report-field .field-value.telefono {
+        font-variant-numeric: tabular-nums;
+    }
+
     .report-field-duo {
         display: grid !important;
         grid-template-columns: 72pt 52pt !important;
@@ -299,6 +315,7 @@ body {
     }
 
     .report-field.col-span-2,
+    .report-field.col-span-3,
     .report-field.col-data-ora {
         grid-column: span 2;
     }

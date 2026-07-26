@@ -57,10 +57,19 @@ html, body {
 }
 
 .login-subtitle {
-    margin: 0 0 20px;
+    margin: 0 0 6px;
     text-align: center;
     font-size: 14px;
     color: #607d8b;
+}
+
+.login-version {
+    margin: 0 0 18px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #546e7a;
+    letter-spacing: 0.04em;
 }
 
 .login-form {

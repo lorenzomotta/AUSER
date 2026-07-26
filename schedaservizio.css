@@ -170,14 +170,22 @@ html, body {
 
 .ss-contatti {
     display: grid;
-    grid-template-columns: 1.6fr 0.9fr;
+    grid-template-columns: 1.05fr 0.75fr 1.2fr;
     gap: 8px;
     margin-bottom: 8px;
 }
 
 #ss-trasportato {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
+}
+
+#ss-altri-telefoni {
+    font-size: 12px;
+    font-weight: 600;
+    white-space: normal;
+    line-height: 1.35;
+    align-items: flex-start;
 }
 
 .ss-mezzo-block {

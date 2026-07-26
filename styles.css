@@ -287,6 +287,12 @@ body {
     margin: 0 5px;
 }
 
+.app-version {
+    font-weight: 700;
+    color: #555;
+    letter-spacing: 0.03em;
+}
+
 .main-title {
     font-size: 32px;
     font-weight: bold;

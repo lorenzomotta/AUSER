@@ -93,7 +93,7 @@ async function openAnagraficaSocio(idsocio, nominativo) {
             url,
             title,
             width: 1100,
-            height: 540,
+            height: 680,
             resizable: true,
             maximized: false,
             decorations: true,

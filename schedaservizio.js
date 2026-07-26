@@ -109,13 +109,44 @@ function targaDaMezzo(servizio, automezzi) {
     return (auto?.targa || '').trim();
 }
 
-async function caricaTelefonoTrasportato(idsocio) {
-    if (!idsocio || !invoke) return '';
+async function caricaTelefoniTrasportato(idsocio) {
+    if (!idsocio || !invoke) {
+        return { principale: '', altri: '' };
+    }
     try {
         const completa = await invoke('get_socio_anagrafica', { idsocio: String(idsocio) });
-        return completa?.anagrafica?.telefono || '';
+        const telefoni = Array.isArray(completa?.telefoni) ? completa.telefoni : [];
+
+        const formatUno = (t) => {
+            const num = String(t?.telefono || '').trim();
+            if (!num) return '';
+            const rif = String(t?.riferimento || '').trim();
+            return rif ? `${num} (${rif})` : num;
+        };
+
+        const principaleItem = telefoni.find((t) => t.principale && String(t.telefono || '').trim())
+            || telefoni.find((t) => String(t.telefono || '').trim());
+
+        const principale = principaleItem
+            ? formatUno(principaleItem)
+            : String(completa?.anagrafica?.telefono || '').trim();
+
+        const altri = telefoni
+            .filter((t) => {
+                const num = String(t.telefono || '').trim();
+                if (!num) return false;
+                // Escludi il telefono già mostrato come principale
+                if (principaleItem && t === principaleItem) return false;
+                if (principaleItem && t.principale) return false;
+                return true;
+            })
+            .map(formatUno)
+            .filter(Boolean)
+            .join(' · ');
+
+        return { principale, altri };
     } catch (_) {
-        return '';
+        return { principale: '', altri: '' };
     }
 }
 
@@ -136,6 +167,7 @@ function popolaScheda(servizio, extra) {
 
     setText('ss-trasportato', servizio.socio_trasportato || '');
     setText('ss-telefono', extra.telefonoTrasportato || '');
+    setText('ss-altri-telefoni', extra.altriTelefoniTrasportato || '');
 
     setText('ss-operatore-nome', servizio.operatore || '');
     setText('ss-operatore-tel', extra.telefonoOperatore || '');
@@ -217,11 +249,12 @@ async function caricaScheda() {
             tesserati = await invoke('get_all_tesserati');
         } catch (_) { /* ignore */ }
 
-        const telefonoTrasportato = await caricaTelefonoTrasportato(servizio.idsocio);
+        const telefoniTrasportato = await caricaTelefoniTrasportato(servizio.idsocio);
         const telefonoOperatore = await caricaTelefonoOperatore(servizio.operatore, tesserati);
 
         popolaScheda(servizio, {
-            telefonoTrasportato,
+            telefonoTrasportato: telefoniTrasportato.principale,
+            altriTelefoniTrasportato: telefoniTrasportato.altri,
             telefonoOperatore,
             automezzoTesto: formatAutomezzo(servizio, automezzi),
             targa: targaDaMezzo(servizio, automezzi),

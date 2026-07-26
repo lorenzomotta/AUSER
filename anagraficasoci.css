@@ -367,8 +367,110 @@ body {
 }
 
 .row-residenza .field-tel {
-    flex: 1 1 120px;
-    min-width: min(100%, 100px);
+    flex: 1 1 160px;
+    min-width: min(100%, 140px);
+}
+
+/* Contatti (telefoni + email) */
+.section-contatti .contatti-block {
+    margin-top: 4px;
+}
+
+.contatti-block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 4px 0 2px;
+}
+
+.contatti-subtitle {
+    font-size: 11px;
+    font-weight: bold;
+    color: #1565c0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0;
+}
+
+.btn-nuovo-contatto {
+    background-color: #1565c0;
+    color: #fff;
+    font-size: 11px;
+    padding: 2px 8px;
+    min-height: 22px;
+}
+
+.btn-nuovo-contatto:hover {
+    background-color: #0d47a1;
+}
+
+.contatti-table-wrap {
+    overflow-x: auto;
+    max-height: 110px;
+    overflow-y: auto;
+}
+
+.contatti-table {
+    min-width: 480px;
+}
+
+.contatti-table .col-princ {
+    text-align: center;
+    width: 52px;
+}
+
+.contatti-table .col-azioni {
+    white-space: nowrap;
+    width: 1%;
+    text-align: right;
+}
+
+.contatti-table tr.contatto-principale td {
+    font-weight: 600;
+    background: #eef6ee;
+}
+
+.contatti-check {
+    color: #2e7d32;
+    font-weight: bold;
+}
+
+.btn-modifica-contatto,
+.btn-elimina-contatto {
+    font-size: 11px;
+    padding: 1px 6px;
+    margin-left: 4px;
+    border-radius: 3px;
+    border: 1px solid #aaa;
+    background: #fff;
+    cursor: pointer;
+}
+
+.btn-modifica-contatto:hover {
+    background: #e3f2fd;
+    border-color: #1565c0;
+}
+
+.btn-elimina-contatto {
+    color: #c62828;
+    border-color: #ef9a9a;
+}
+
+.btn-elimina-contatto:hover {
+    background: #ffebee;
+}
+
+.contatto-editor {
+    margin-top: 6px;
+    padding: 6px 8px;
+    background: #fff;
+    border: 1px dashed #90caf9;
+    border-radius: 4px;
+}
+
+.flag-principale-edit {
+    margin-top: 16px;
 }
 
 /* Nota — riga intera */

@@ -19,6 +19,7 @@ import {
     applicaVisibilitaSidebar,
     puoVedereSidebar
 } from './sidebar-permessi.js';
+import { applicaTitoloFinestra, mostraVersioneInElemento } from './app-version.js';
 
 // Import Tauri API
 let invoke, appWindow;
@@ -516,7 +517,7 @@ async function apriAnagraficaSocioDaHome(idsocio, nominativo) {
             url,
             title,
             width: 1100,
-            height: 540,
+            height: 680,
             resizable: true,
             maximized: false,
             decorations: true,
@@ -710,6 +711,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Login obbligatorio
     const sessione = richiediSessione();
     if (!sessione) return;
+
+    await applicaTitoloFinestra('AUSER Asti - Accesso');
+    await mostraVersioneInElemento('app-version');
 
     const admin = isAdmin(sessione);
     const btnImpostazioni = document.getElementById('btn-impostazioni');

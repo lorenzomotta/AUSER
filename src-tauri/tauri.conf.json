@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "AUSER Gestione Operativa",
-    "version": "1.0.5"
+    "version": "1.0.6"
   },
   "tauri": {
     "allowlist": {
@@ -35,7 +35,8 @@
         "minimize": true,
         "unmaximize": true,
         "create": true,
-        "setFocus": true
+        "setFocus": true,
+        "setTitle": true
       },
       "http": {
         "all": true,
@@ -97,7 +98,7 @@
         "fullscreen": false,
         "maximized": true,
         "resizable": true,
-        "title": "AUSER Asti - Accesso",
+        "title": "AUSER Asti - Accesso v1.0.6",
         "width": 1400,
         "height": 900,
         "minWidth": 1200,

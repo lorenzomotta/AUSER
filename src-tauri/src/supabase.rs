@@ -15,6 +15,7 @@ pub struct SupabaseTablesConfig {
     pub richiedenti: String,
     pub stato_del_servizio: String,
     pub telefoni: String,
+    pub email: String,
     pub tipo_pagamenti: String,
     pub tipo_socio: String,
     pub tipologia_socio: String,
@@ -37,6 +38,7 @@ impl SupabaseTablesConfig {
             "richiedenti" => Some(&self.richiedenti),
             "stato_del_servizio" => Some(&self.stato_del_servizio),
             "telefoni" => Some(&self.telefoni),
+            "email" => Some(&self.email),
             "tipo_pagamenti" => Some(&self.tipo_pagamenti),
             "tipo_socio" => Some(&self.tipo_socio),
             "tipologia_socio" => Some(&self.tipologia_socio),
@@ -1224,6 +1226,280 @@ impl SupabaseClient {
             .await
     }
 
+    /// Telefoni del socio (più numeri per IdSocio).
+    pub async fn fetch_telefoni(
+        &self,
+        filter: Option<&str>,
+    ) -> Result<Vec<Value>, String> {
+        self.fetch_table(
+            "telefoni",
+            filter,
+            None,
+            Some("OrdineUtilizzo.asc.nullslast,Telefono.asc.nullslast"),
+        )
+        .await
+    }
+
+    /// Email del socio (più indirizzi per IdSocio).
+    pub async fn fetch_email_socio(
+        &self,
+        filter: Option<&str>,
+    ) -> Result<Vec<Value>, String> {
+        self.fetch_table(
+            "email",
+            filter,
+            None,
+            Some("OrdineUtilizzo.asc.nullslast,Email.asc.nullslast"),
+        )
+        .await
+    }
+
+    /// Inserisce o aggiorna una riga telefono socio.
+    pub async fn upsert_socio_telefono(
+        &self,
+        body: &serde_json::Map<String, Value>,
+        row_id: Option<&str>,
+    ) -> Result<Value, String> {
+        self.upsert_named_table("telefoni", body, row_id).await
+    }
+
+    /// Inserisce o aggiorna una riga email socio.
+    pub async fn upsert_socio_email(
+        &self,
+        body: &serde_json::Map<String, Value>,
+        row_id: Option<&str>,
+    ) -> Result<Value, String> {
+        self.upsert_named_table("email", body, row_id).await
+    }
+
+    async fn upsert_named_table(
+        &self,
+        table_type: &str,
+        body: &serde_json::Map<String, Value>,
+        row_id: Option<&str>,
+    ) -> Result<Value, String> {
+        let table_name = self
+            .config
+            .tables
+            .table_name(table_type)
+            .ok_or_else(|| format!("Tabella sconosciuta: {}", table_type))?;
+        let base = self.config.url.trim_end_matches('/');
+
+        let response = if let Some(id) = row_id.map(str::trim).filter(|s| !s.is_empty()) {
+            let url = format!("{}/rest/v1/{}?id=eq.{}", base, table_name, id);
+            println!(
+                "📡 Supabase PATCH [{} → {}] id={}",
+                table_type, table_name, id
+            );
+
+            let request = self
+                .http
+                .patch(&url)
+                .header("Content-Type", "application/json")
+                .header("Prefer", "return=representation")
+                .json(body);
+
+            self.apply_auth_headers(request)
+                .send()
+                .await
+                .map_err(|e| format!("Errore connessione Supabase PATCH {}: {}", table_type, e))?
+        } else {
+            let url = format!("{}/rest/v1/{}", base, table_name);
+            println!("📡 Supabase POST [{} → {}]", table_type, table_name);
+
+            let request = self
+                .http
+                .post(&url)
+                .header("Content-Type", "application/json")
+                .header("Prefer", "return=representation")
+                .json(body);
+
+            self.apply_auth_headers(request)
+                .send()
+                .await
+                .map_err(|e| format!("Errore connessione Supabase POST {}: {}", table_type, e))?
+        };
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let err_body = response.text().await.unwrap_or_default();
+            return Err(format!(
+                "Errore Supabase salvataggio {} HTTP {}: {}",
+                table_type, status, err_body
+            ));
+        }
+
+        let rows: Vec<Value> = response
+            .json()
+            .await
+            .map_err(|e| format!("Errore parsing risposta salvataggio {}: {}", table_type, e))?;
+
+        rows.into_iter()
+            .next()
+            .ok_or_else(|| format!("Nessuna riga restituita dopo salvataggio {}", table_type))
+    }
+
+    /// Elimina telefono per id (o IdSocio+Telefono come fallback).
+    pub async fn delete_socio_telefono(
+        &self,
+        row_id: Option<&str>,
+        idsocio: &str,
+        telefono: &str,
+    ) -> Result<(), String> {
+        self.delete_named_contato("telefoni", row_id, idsocio, "Telefono", telefono)
+            .await
+    }
+
+    /// Elimina email per id (o IdSocio+Email come fallback).
+    pub async fn delete_socio_email(
+        &self,
+        row_id: Option<&str>,
+        idsocio: &str,
+        email: &str,
+    ) -> Result<(), String> {
+        self.delete_named_contato("email", row_id, idsocio, "Email", email)
+            .await
+    }
+
+    async fn delete_named_contato(
+        &self,
+        table_type: &str,
+        row_id: Option<&str>,
+        idsocio: &str,
+        value_col: &str,
+        value: &str,
+    ) -> Result<(), String> {
+        let table_name = self
+            .config
+            .tables
+            .table_name(table_type)
+            .ok_or_else(|| format!("Tabella sconosciuta: {}", table_type))?;
+        let base = self.config.url.trim_end_matches('/');
+
+        let url = if let Some(id) = row_id.map(str::trim).filter(|s| !s.is_empty()) {
+            format!("{}/rest/v1/{}?id=eq.{}", base, table_name, id)
+        } else {
+            let idsocio = idsocio.trim();
+            let value = value.trim();
+            if idsocio.is_empty() || value.is_empty() {
+                return Err(format!(
+                    "Per eliminare {} servono id riga oppure IdSocio + {}",
+                    table_type, value_col
+                ));
+            }
+                format!(
+                "{}/rest/v1/{}?IdSocio=eq.{}&{}=eq.{}",
+                base,
+                table_name,
+                encode_query_value(idsocio),
+                value_col,
+                encode_query_value(value)
+            )
+        };
+
+        println!("📡 Supabase DELETE [{} → {}] {}", table_type, table_name, url);
+
+        let request = self.http.delete(&url);
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Supabase DELETE {}: {}", table_type, e))?;
+
+        if response.status().is_success() {
+            return Ok(());
+        }
+
+        let status = response.status();
+        let err_body = response.text().await.unwrap_or_default();
+        Err(format!(
+            "Errore Supabase DELETE {} HTTP {}: {}",
+            table_type, status, err_body
+        ))
+    }
+
+    /// Toglie la spunta Principale da tutti i telefoni del socio (opz. eccetto un id).
+    pub async fn clear_principale_telefoni(
+        &self,
+        idsocio: &str,
+        except_id: Option<&str>,
+    ) -> Result<(), String> {
+        self.clear_principale_contatti("telefoni", idsocio, except_id)
+            .await
+    }
+
+    /// Toglie la spunta Principale da tutte le email del socio (opz. eccetto un id).
+    pub async fn clear_principale_email(
+        &self,
+        idsocio: &str,
+        except_id: Option<&str>,
+    ) -> Result<(), String> {
+        self.clear_principale_contatti("email", idsocio, except_id)
+            .await
+    }
+
+    async fn clear_principale_contatti(
+        &self,
+        table_type: &str,
+        idsocio: &str,
+        except_id: Option<&str>,
+    ) -> Result<(), String> {
+        let idsocio = idsocio.trim();
+        if idsocio.is_empty() {
+            return Ok(());
+        }
+
+        let table_name = self
+            .config
+            .tables
+            .table_name(table_type)
+            .ok_or_else(|| format!("Tabella sconosciuta: {}", table_type))?;
+        let base = self.config.url.trim_end_matches('/');
+
+        let mut url = format!(
+            "{}/rest/v1/{}?IdSocio=eq.{}&Principale=eq.true",
+            base, table_name, idsocio
+        );
+        if let Some(id) = except_id.map(str::trim).filter(|s| !s.is_empty()) {
+            url.push_str(&format!("&id=neq.{}", id));
+        }
+
+        let body = serde_json::json!({ "Principale": false });
+        println!(
+            "📡 Supabase PATCH clear Principale [{} → {}] IdSocio={}",
+            table_type, table_name, idsocio
+        );
+
+        let request = self
+            .http
+            .patch(&url)
+            .header("Content-Type", "application/json")
+            .header("Prefer", "return=minimal")
+            .json(&body);
+
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| {
+                format!(
+                    "Errore connessione Supabase clear Principale {}: {}",
+                    table_type, e
+                )
+            })?;
+
+        if response.status().is_success() {
+            return Ok(());
+        }
+
+        let status = response.status();
+        let err_body = response.text().await.unwrap_or_default();
+        Err(format!(
+            "Errore clear Principale {} HTTP {}: {}",
+            table_type, status, err_body
+        ))
+    }
+
     /// Aggiorna un tesserato per IdSocio (PATCH PostgREST)
     pub async fn patch_tesserato(
         &self,
@@ -1574,6 +1850,20 @@ impl SupabaseClient {
         );
         self.patch_tesserato(idsocio, &patch).await
     }
+}
+
+/// Codifica un valore per filtri query PostgREST.
+fn encode_query_value(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.as_bytes() {
+        match *b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*b as char);
+            }
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
 }
 
 /// Colonna testo nella tabella TipoSocio_supa (es. TipologiaSocio)

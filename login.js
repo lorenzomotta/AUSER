@@ -3,6 +3,7 @@ import {
     vaiAllaHome
 } from './auth-session.js';
 import { controllaAggiornamenti } from './app-updater.js';
+import { applicaTitoloFinestra, mostraVersioneInElemento } from './app-version.js';
 
 let invoke;
 
@@ -74,6 +75,8 @@ async function gestisciLogin(event) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     await initTauri();
+    await applicaTitoloFinestra('AUSER Asti - Accesso');
+    await mostraVersioneInElemento('app-version');
 
     // Sempre mostra il form di accesso: niente salto automatico alla home
     // (evita sessioni vecchie/invalide che aprono la home senza dati).

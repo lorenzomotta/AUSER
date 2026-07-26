@@ -419,7 +419,48 @@ function creaNotaDettaglio(label, value) {
     </div>`;
 }
 
-function apriModalServizio(servizio) {
+function formatTelefonoConRiferimento(t) {
+    const num = String(t?.telefono || '').trim();
+    if (!num) return '';
+    const rif = String(t?.riferimento || '').trim();
+    return rif ? `${num} (${rif})` : num;
+}
+
+/** Telefono principale + altri (non principali) da Telefoni_supa via IdSocio */
+async function caricaTelefoniSocio(idsocio) {
+    if (!idsocio || !invoke) {
+        return { principale: '', altri: '' };
+    }
+    try {
+        await invoke('init_supabase_from_config').catch(() => {});
+        const completa = await invoke('get_socio_anagrafica', { idsocio: String(idsocio) });
+        const telefoni = Array.isArray(completa?.telefoni) ? completa.telefoni : [];
+
+        const principaleItem = telefoni.find((t) => t.principale && String(t.telefono || '').trim())
+            || telefoni.find((t) => String(t.telefono || '').trim());
+
+        const principale = principaleItem
+            ? formatTelefonoConRiferimento(principaleItem)
+            : String(completa?.anagrafica?.telefono || '').trim();
+
+        const altri = telefoni
+            .filter((t) => {
+                if (!String(t.telefono || '').trim()) return false;
+                if (principaleItem && t === principaleItem) return false;
+                return true;
+            })
+            .map(formatTelefonoConRiferimento)
+            .filter(Boolean)
+            .join(' · ');
+
+        return { principale, altri };
+    } catch (error) {
+        console.warn('Telefoni socio non disponibili:', error);
+        return { principale: '', altri: '' };
+    }
+}
+
+async function apriModalServizio(servizio) {
     const modal = document.getElementById('modal-servizio');
     const body = document.getElementById('modal-servizio-body');
     const title = document.getElementById('modal-servizio-title');
@@ -429,6 +470,8 @@ function apriModalServizio(servizio) {
     if (title) {
         title.textContent = `SERVIZIO ${servizio.id || ''} — ${servizio.socio_trasportato || ''}`;
     }
+
+    const telefoni = await caricaTelefoniSocio(servizio.idsocio);
 
     body.innerHTML = `
         <div class="dettaglio-section">
@@ -456,6 +499,10 @@ function apriModalServizio(servizio) {
                 ${creaCampoDettaglio('LUOGO DESTINAZIONE', servizio.luogo_destinazione, 'field-large')}
                 ${creaCampoDettaglio('STATO INCASSO', servizio.stato_incasso)}
                 ${creaCampoDettaglio('TIPO PAGAMENTO', servizio.tipo_pagamento)}
+            </div>
+            <div class="dettaglio-row dettaglio-row-telefoni">
+                ${creaCampoDettaglio('TELEFONO PRINCIPALE', telefoni.principale, 'field-tel-principale')}
+                ${creaCampoDettaglio('ALTRI TELEFONI', telefoni.altri, 'field-altri-telefoni')}
             </div>
             <div class="dettaglio-row">
                 ${creaNotaDettaglio('NOTE ARRIVO', servizio.note_arrivo)}

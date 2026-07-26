@@ -3,6 +3,12 @@ let invoke, appWindow;
 
 let currentIdsocio = '';
 let tesseramentiList = [];
+let telefoniList = [];
+let emailList = [];
+let editingTelefonoIndex = -1;
+let isNewTelefono = false;
+let editingEmailIndex = -1;
+let isNewEmail = false;
 let editingTesseramentoIndex = -1;
 let isNewTesseramento = false;
 let isAnagraficaEditMode = false;
@@ -461,6 +467,12 @@ function setAnagraficaEditMode(editing) {
                 el.disabled = false;
                 return;
             }
+            // Telefono principale: sempre in sola lettura (derivato da Telefoni_supa)
+            if (el.id === 'field-telefono' && !isRicercaMode) {
+                el.readOnly = true;
+                el.disabled = false;
+                return;
+            }
             // In ricerca anche ID socio è editabile (filtro)
             if (el.id === 'field-idsocio' && !isRicercaMode) {
                 el.readOnly = true;
@@ -508,12 +520,20 @@ function setAnagraficaEditMode(editing) {
     const btnNuovo = document.getElementById('btn-nuovo-tesseramento');
     if (btnNuovo) btnNuovo.hidden = !editing || isRicercaMode;
 
+    const btnNuovoTel = document.getElementById('btn-nuovo-telefono');
+    const btnNuovoEm = document.getElementById('btn-nuovo-email');
+    if (btnNuovoTel) btnNuovoTel.hidden = !editing || isRicercaMode;
+    if (btnNuovoEm) btnNuovoEm.hidden = !editing || isRicercaMode;
+
     if (!editing) {
         hideTesseramentoEditor();
+        hideTelefonoEditor();
+        hideEmailEditor();
     }
 
     if (!isRicercaMode) {
         renderStoricoTesseramenti();
+        renderContatti();
     }
     setupTipologiaSocioField(editing);
 
@@ -568,7 +588,10 @@ function populateAnagrafica(data) {
     document.getElementById('field-residenza-cap').value = data.residenza_cap || '';
     document.getElementById('field-residenza-comune').value = data.residenza_comune || '';
     document.getElementById('field-residenza-provincia').value = (data.residenza_provincia || '').toUpperCase();
-    document.getElementById('field-telefono').value = data.telefono || '';
+    document.getElementById('field-telefono').value = formatTelefonoPrincipaleDisplay(
+        data.telefono || '',
+        telefoniList
+    );
     document.getElementById('field-tipologiasocio').value = data.tipologiasocio || '';
     document.getElementById('field-operatore').checked = isTruthyFlag(data.operatore);
     document.getElementById('field-attivo').checked = isTruthyFlag(data.attivo);
@@ -583,7 +606,28 @@ function populateAnagrafica(data) {
     }
 }
 
+/** Mostra "numero (riferimento)" se c'è un telefono principale in lista. */
+function formatTelefonoPrincipaleDisplay(fallback, lista) {
+    const list = Array.isArray(lista) ? lista : [];
+    const principale = list.find((t) => t.principale && (t.telefono || '').trim());
+    const chosen = principale || list.find((t) => (t.telefono || '').trim());
+    if (!chosen) return fallback || '';
+    const num = (chosen.telefono || '').trim();
+    const rif = (chosen.riferimento || '').trim();
+    return rif ? `${num} (${rif})` : num;
+}
+
 function collectAnagraficaPayload() {
+    // In salvataggio: numero "pulito" del telefono principale (senza riferimento tra parentesi)
+    let telefonoSalvataggio = document.getElementById('field-telefono').value.trim();
+    const principale = telefoniList.find((t) => t.principale && (t.telefono || '').trim());
+    if (principale) {
+        telefonoSalvataggio = (principale.telefono || '').trim();
+    } else {
+        const match = telefonoSalvataggio.match(/^(.*?)\s*\([^)]*\)\s*$/);
+        if (match) telefonoSalvataggio = match[1].trim();
+    }
+
     return {
         id: parseInt(document.getElementById('field-row-id').value, 10) || 0,
         idsocio: document.getElementById('field-idsocio').value.trim(),
@@ -597,7 +641,7 @@ function collectAnagraficaPayload() {
         residenza_cap: document.getElementById('field-residenza-cap').value.trim(),
         residenza_comune: document.getElementById('field-residenza-comune').value.trim(),
         residenza_provincia: document.getElementById('field-residenza-provincia').value.trim().toUpperCase(),
-        telefono: document.getElementById('field-telefono').value.trim(),
+        telefono: telefonoSalvataggio,
         tipologiasocio: document.getElementById('field-tipologiasocio').value.trim(),
         operatore: document.getElementById('field-operatore').checked,
         attivo: document.getElementById('field-attivo').checked,
@@ -605,6 +649,468 @@ function collectAnagraficaPayload() {
         disponibilita: formatDisponibilita(),
         notaaggiuntiva: document.getElementById('field-nota').value.trim()
     };
+}
+
+function renderContatti() {
+    renderTelefoniTable();
+    renderEmailTable();
+}
+
+function sortContattiByPrincipale(list) {
+    return [...list].sort((a, b) => {
+        const pa = a.principale ? 1 : 0;
+        const pb = b.principale ? 1 : 0;
+        if (pb !== pa) return pb - pa;
+        const oa = parseFloat(a.ordine_utilizzo) || 9999;
+        const ob = parseFloat(b.ordine_utilizzo) || 9999;
+        return oa - ob;
+    });
+}
+
+function refreshTelefonoPrincipaleField() {
+    const el = document.getElementById('field-telefono');
+    if (!el) return;
+    el.value = formatTelefonoPrincipaleDisplay('', telefoniList);
+}
+
+function renderTelefoniTable() {
+    const tbody = document.getElementById('telefoni-tbody');
+    const table = document.getElementById('telefoni-table');
+    const vuoto = document.getElementById('telefoni-vuoto');
+    if (!tbody || !table || !vuoto) return;
+
+    tbody.innerHTML = '';
+
+    if (!telefoniList.length) {
+        vuoto.style.display = 'block';
+        table.style.display = 'none';
+        vuoto.textContent = isAnagraficaEditMode && !isRicercaMode
+            ? 'Nessun telefono. Clicca + TELEFONO per aggiungerne uno.'
+            : 'Nessun telefono registrato.';
+        return;
+    }
+
+    vuoto.style.display = 'none';
+    table.style.display = 'table';
+
+    sortContattiByPrincipale(telefoniList).forEach((tel) => {
+        const realIndex = telefoniList.indexOf(tel);
+        const tr = document.createElement('tr');
+        if (tel.principale) tr.classList.add('contatto-principale');
+        const azioni = isAnagraficaEditMode && !isRicercaMode
+            ? `<td class="col-azioni">
+                    <button type="button" class="btn-modifica-contatto" data-tel-index="${realIndex}">Modifica</button>
+                    <button type="button" class="btn-elimina-contatto" data-tel-index="${realIndex}">Elimina</button>
+               </td>`
+            : '<td class="col-azioni"></td>';
+        tr.innerHTML = `
+            <td>${escapeHtml(tel.telefono || '')}</td>
+            <td>${escapeHtml(tel.riferimento || '')}</td>
+            <td class="col-princ">${tel.principale ? '<span class="contatti-check" title="Principale">✓</span>' : ''}</td>
+            <td>${escapeHtml(tel.note || '')}</td>
+            ${azioni}
+        `;
+        tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('.btn-modifica-contatto').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            openTelefonoEditor(parseInt(btn.dataset.telIndex, 10), false);
+        });
+    });
+    tbody.querySelectorAll('.btn-elimina-contatto').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            deleteTelefonoAt(parseInt(btn.dataset.telIndex, 10));
+        });
+    });
+}
+
+function renderEmailTable() {
+    const tbody = document.getElementById('email-tbody');
+    const table = document.getElementById('email-table');
+    const vuoto = document.getElementById('email-vuoto');
+    if (!tbody || !table || !vuoto) return;
+
+    tbody.innerHTML = '';
+
+    if (!emailList.length) {
+        vuoto.style.display = 'block';
+        table.style.display = 'none';
+        vuoto.textContent = isAnagraficaEditMode && !isRicercaMode
+            ? 'Nessuna email. Clicca + EMAIL per aggiungerne una.'
+            : 'Nessuna email registrata.';
+        return;
+    }
+
+    vuoto.style.display = 'none';
+    table.style.display = 'table';
+
+    sortContattiByPrincipale(emailList).forEach((em) => {
+        const realIndex = emailList.indexOf(em);
+        const tr = document.createElement('tr');
+        if (em.principale) tr.classList.add('contatto-principale');
+        const azioni = isAnagraficaEditMode && !isRicercaMode
+            ? `<td class="col-azioni">
+                    <button type="button" class="btn-modifica-contatto" data-em-index="${realIndex}">Modifica</button>
+                    <button type="button" class="btn-elimina-contatto" data-em-index="${realIndex}">Elimina</button>
+               </td>`
+            : '<td class="col-azioni"></td>';
+        tr.innerHTML = `
+            <td>${escapeHtml(em.email || '')}</td>
+            <td>${escapeHtml(em.riferimento || '')}</td>
+            <td class="col-princ">${em.principale ? '<span class="contatti-check" title="Principale">✓</span>' : ''}</td>
+            <td>${escapeHtml(em.note || '')}</td>
+            ${azioni}
+        `;
+        tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('.btn-modifica-contatto').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            openEmailEditor(parseInt(btn.dataset.emIndex, 10), false);
+        });
+    });
+    tbody.querySelectorAll('.btn-elimina-contatto').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            deleteEmailAt(parseInt(btn.dataset.emIndex, 10));
+        });
+    });
+}
+
+function hideTelefonoEditor() {
+    const editor = document.getElementById('telefono-editor');
+    if (editor) editor.hidden = true;
+    editingTelefonoIndex = -1;
+    isNewTelefono = false;
+}
+
+function hideEmailEditor() {
+    const editor = document.getElementById('email-editor');
+    if (editor) editor.hidden = true;
+    editingEmailIndex = -1;
+    isNewEmail = false;
+}
+
+function openTelefonoEditor(index, isNew) {
+    if (!isAnagraficaEditMode || isRicercaMode) return;
+    hideEmailEditor();
+
+    isNewTelefono = isNew;
+    editingTelefonoIndex = isNew ? -1 : index;
+
+    const editor = document.getElementById('telefono-editor');
+    const title = document.getElementById('telefono-editor-title');
+    if (!editor) return;
+
+    const tel = isNew
+        ? {
+            id: '',
+            idsocio: currentIdsocio,
+            telefono: '',
+            riferimento: '',
+            principale: telefoniList.length === 0,
+            ordine_utilizzo: String(telefoniList.length + 1),
+            note: ''
+        }
+        : telefoniList[index];
+
+    if (!tel) return;
+
+    document.getElementById('tel-id').value = tel.id || '';
+    document.getElementById('tel-numero').value = tel.telefono || '';
+    document.getElementById('tel-riferimento').value = tel.riferimento || '';
+    document.getElementById('tel-ordine').value = tel.ordine_utilizzo || '';
+    document.getElementById('tel-principale').checked = !!tel.principale;
+    document.getElementById('tel-note').value = tel.note || '';
+
+    if (title) title.textContent = isNew ? 'Nuovo telefono' : 'Modifica telefono';
+    editor.hidden = false;
+    document.getElementById('tel-numero')?.focus();
+}
+
+function openEmailEditor(index, isNew) {
+    if (!isAnagraficaEditMode || isRicercaMode) return;
+    hideTelefonoEditor();
+
+    isNewEmail = isNew;
+    editingEmailIndex = isNew ? -1 : index;
+
+    const editor = document.getElementById('email-editor');
+    const title = document.getElementById('email-editor-title');
+    if (!editor) return;
+
+    const em = isNew
+        ? {
+            id: '',
+            idsocio: currentIdsocio,
+            email: '',
+            riferimento: '',
+            principale: emailList.length === 0,
+            ordine_utilizzo: String(emailList.length + 1),
+            note: ''
+        }
+        : emailList[index];
+
+    if (!em) return;
+
+    document.getElementById('em-id').value = em.id || '';
+    document.getElementById('em-indirizzo').value = em.email || '';
+    document.getElementById('em-riferimento').value = em.riferimento || '';
+    document.getElementById('em-ordine').value = em.ordine_utilizzo || '';
+    document.getElementById('em-principale').checked = !!em.principale;
+    document.getElementById('em-note').value = em.note || '';
+
+    if (title) title.textContent = isNew ? 'Nuova email' : 'Modifica email';
+    editor.hidden = false;
+    document.getElementById('em-indirizzo')?.focus();
+}
+
+function collectTelefonoPayload() {
+    const id = document.getElementById('tel-id').value.trim();
+    return {
+        id: id || null,
+        idsocio: currentIdsocio,
+        telefono: document.getElementById('tel-numero').value.trim(),
+        riferimento: document.getElementById('tel-riferimento').value.trim(),
+        principale: document.getElementById('tel-principale').checked,
+        ordine_utilizzo: document.getElementById('tel-ordine').value.trim(),
+        note: document.getElementById('tel-note').value.trim()
+    };
+}
+
+function collectEmailPayload() {
+    const id = document.getElementById('em-id').value.trim();
+    return {
+        id: id || null,
+        idsocio: currentIdsocio,
+        email: document.getElementById('em-indirizzo').value.trim(),
+        riferimento: document.getElementById('em-riferimento').value.trim(),
+        principale: document.getElementById('em-principale').checked,
+        ordine_utilizzo: document.getElementById('em-ordine').value.trim(),
+        note: document.getElementById('em-note').value.trim()
+    };
+}
+
+function applyPrincipaleExclusive(list, saved, isNew, editingIndex) {
+    if (!saved.principale) return;
+    list.forEach((item, i) => {
+        if (isNew || i !== editingIndex) item.principale = false;
+    });
+}
+
+async function saveTelefono(e) {
+    if (e) e.preventDefault();
+    if (!isAnagraficaEditMode) return;
+
+    const payload = collectTelefonoPayload();
+    if (!payload.telefono) {
+        setSaveStatus('Il numero di telefono è obbligatorio', true);
+        return;
+    }
+
+    const btn = document.getElementById('btn-salva-telefono');
+    if (btn) btn.disabled = true;
+
+    try {
+        if (isNuovoSocioMode) {
+            const localTel = { ...payload, idsocio: currentIdsocio };
+            applyPrincipaleExclusive(telefoniList, localTel, isNewTelefono, editingTelefonoIndex);
+            if (isNewTelefono) {
+                telefoniList.push(localTel);
+            } else if (editingTelefonoIndex >= 0) {
+                telefoniList[editingTelefonoIndex] = localTel;
+            }
+            renderTelefoniTable();
+            refreshTelefonoPrincipaleField();
+            hideTelefonoEditor();
+            setSaveStatus('Telefono aggiunto');
+            return;
+        }
+
+        if (!invoke) {
+            setSaveStatus('Database non disponibile', true);
+            return;
+        }
+
+        await initSupabase();
+        const saved = await invoke('save_socio_telefono', { telefono: payload });
+        applyPrincipaleExclusive(telefoniList, saved, isNewTelefono, editingTelefonoIndex);
+        if (isNewTelefono) {
+            telefoniList.push(saved);
+        } else if (editingTelefonoIndex >= 0) {
+            telefoniList[editingTelefonoIndex] = saved;
+        } else {
+            // fallback: aggiorna per id
+            const idx = telefoniList.findIndex((t) => t.id && saved.id && String(t.id) === String(saved.id));
+            if (idx >= 0) telefoniList[idx] = saved;
+            else telefoniList.push(saved);
+        }
+        renderTelefoniTable();
+        refreshTelefonoPrincipaleField();
+        hideTelefonoEditor();
+        setSaveStatus('Telefono salvato');
+        await notifySocioAnagraficaSaved({
+            ...collectAnagraficaPayload(),
+            telefono: document.getElementById('field-telefono')?.value || ''
+        });
+    } catch (error) {
+        console.error('Errore salvataggio telefono:', error);
+        setSaveStatus(`Errore telefono: ${error}`, true);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function saveEmail(e) {
+    if (e) e.preventDefault();
+    if (!isAnagraficaEditMode) return;
+
+    const payload = collectEmailPayload();
+    if (!payload.email) {
+        setSaveStatus('L\'indirizzo email è obbligatorio', true);
+        return;
+    }
+
+    const btn = document.getElementById('btn-salva-email');
+    if (btn) btn.disabled = true;
+
+    try {
+        if (isNuovoSocioMode) {
+            const localEm = { ...payload, idsocio: currentIdsocio };
+            applyPrincipaleExclusive(emailList, localEm, isNewEmail, editingEmailIndex);
+            if (isNewEmail) {
+                emailList.push(localEm);
+            } else if (editingEmailIndex >= 0) {
+                emailList[editingEmailIndex] = localEm;
+            }
+            renderEmailTable();
+            hideEmailEditor();
+            setSaveStatus('Email aggiunta');
+            return;
+        }
+
+        if (!invoke) {
+            setSaveStatus('Database non disponibile', true);
+            return;
+        }
+
+        await initSupabase();
+        const saved = await invoke('save_socio_email', { email: payload });
+        applyPrincipaleExclusive(emailList, saved, isNewEmail, editingEmailIndex);
+        if (isNewEmail) {
+            emailList.push(saved);
+        } else if (editingEmailIndex >= 0) {
+            emailList[editingEmailIndex] = saved;
+        } else {
+            const idx = emailList.findIndex((t) => t.id && saved.id && String(t.id) === String(saved.id));
+            if (idx >= 0) emailList[idx] = saved;
+            else emailList.push(saved);
+        }
+        renderEmailTable();
+        hideEmailEditor();
+        setSaveStatus('Email salvata');
+    } catch (error) {
+        console.error('Errore salvataggio email:', error);
+        setSaveStatus(`Errore email: ${error}`, true);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function deleteTelefonoAt(index) {
+    if (!isAnagraficaEditMode || isRicercaMode) return;
+    const tel = telefoniList[index];
+    if (!tel) return;
+
+    const label = tel.telefono || 'questo telefono';
+    if (!window.confirm(`Eliminare il telefono "${label}"?`)) return;
+    if (!window.confirm('Confermi definitivamente l\'eliminazione di questo telefono?')) return;
+
+    try {
+        if (isNuovoSocioMode) {
+            telefoniList.splice(index, 1);
+            renderTelefoniTable();
+            refreshTelefonoPrincipaleField();
+            hideTelefonoEditor();
+            setSaveStatus('Telefono eliminato');
+            return;
+        }
+
+        if (!invoke) {
+            setSaveStatus('Database non disponibile', true);
+            return;
+        }
+
+        await initSupabase();
+        await invoke('delete_socio_telefono', {
+            telefono: {
+                id: tel.id || null,
+                idsocio: currentIdsocio,
+                telefono: tel.telefono || '',
+                riferimento: tel.riferimento || '',
+                principale: !!tel.principale,
+                ordine_utilizzo: tel.ordine_utilizzo || '',
+                note: tel.note || ''
+            }
+        });
+        telefoniList.splice(index, 1);
+        renderTelefoniTable();
+        refreshTelefonoPrincipaleField();
+        hideTelefonoEditor();
+        setSaveStatus('Telefono eliminato');
+        await notifySocioAnagraficaSaved({
+            ...collectAnagraficaPayload(),
+            telefono: document.getElementById('field-telefono')?.value || ''
+        });
+    } catch (error) {
+        console.error('Errore eliminazione telefono:', error);
+        setSaveStatus(`Errore eliminazione telefono: ${error}`, true);
+    }
+}
+
+async function deleteEmailAt(index) {
+    if (!isAnagraficaEditMode || isRicercaMode) return;
+    const em = emailList[index];
+    if (!em) return;
+
+    const label = em.email || 'questa email';
+    if (!window.confirm(`Eliminare l'email "${label}"?`)) return;
+    if (!window.confirm('Confermi definitivamente l\'eliminazione di questa email?')) return;
+
+    try {
+        if (isNuovoSocioMode) {
+            emailList.splice(index, 1);
+            renderEmailTable();
+            hideEmailEditor();
+            setSaveStatus('Email eliminata');
+            return;
+        }
+
+        if (!invoke) {
+            setSaveStatus('Database non disponibile', true);
+            return;
+        }
+
+        await initSupabase();
+        await invoke('delete_socio_email', {
+            email: {
+                id: em.id || null,
+                idsocio: currentIdsocio,
+                email: em.email || '',
+                riferimento: em.riferimento || '',
+                principale: !!em.principale,
+                ordine_utilizzo: em.ordine_utilizzo || '',
+                note: em.note || ''
+            }
+        });
+        emailList.splice(index, 1);
+        renderEmailTable();
+        hideEmailEditor();
+        setSaveStatus('Email eliminata');
+    } catch (error) {
+        console.error('Errore eliminazione email:', error);
+        setSaveStatus(`Errore eliminazione email: ${error}`, true);
+    }
 }
 
 function renderStoricoTesseramenti() {
@@ -787,7 +1293,10 @@ async function loadNuovoSocio() {
         currentIdsocio = nextId;
         populateAnagrafica(createNuovoSocioTemplate(nextId));
         tesseramentiList = [];
+        telefoniList = [];
+        emailList = [];
         renderStoricoTesseramenti();
+        renderContatti();
 
         const subtitle = document.getElementById('socio-subtitle');
         if (subtitle) subtitle.textContent = `Nuovo socio — ID ${nextId}`;
@@ -797,6 +1306,8 @@ async function loadNuovoSocio() {
 
         if (loading) loading.style.display = 'none';
         if (sectionAnag) sectionAnag.style.display = 'block';
+        const sectionContatti = document.getElementById('section-contatti');
+        if (sectionContatti) sectionContatti.style.display = 'block';
         if (sectionTess) sectionTess.style.display = 'block';
 
         setAnagraficaEditMode(true);
@@ -843,10 +1354,15 @@ async function loadSocioData() {
         const result = await invoke('get_socio_anagrafica', { idsocio: currentIdsocio });
         populateAnagrafica(result.anagrafica);
         tesseramentiList = result.tesseramenti || [];
+        telefoniList = result.telefoni || [];
+        emailList = result.email || [];
         renderStoricoTesseramenti();
+        renderContatti();
 
         if (loading) loading.style.display = 'none';
         if (sectionAnag) sectionAnag.style.display = 'block';
+        const sectionContatti = document.getElementById('section-contatti');
+        if (sectionContatti) sectionContatti.style.display = 'block';
         if (sectionTess) sectionTess.style.display = 'block';
         setAnagraficaEditMode(false);
     } catch (error) {
@@ -1195,6 +1711,8 @@ async function loadRicercaMode() {
 
     if (loading) loading.style.display = 'none';
     if (sectionAnag) sectionAnag.style.display = 'block';
+    const sectionContatti = document.getElementById('section-contatti');
+    if (sectionContatti) sectionContatti.style.display = 'none';
     if (sectionTess) sectionTess.style.display = 'none';
 
     // Hint sotto l'header
@@ -1239,6 +1757,8 @@ async function saveAnagrafica() {
 
         if (isNuovoSocioMode) {
             const pendingTesseramenti = [...tesseramentiList];
+            const pendingTelefoni = [...telefoniList];
+            const pendingEmail = [...emailList];
             const saved = await invoke('create_socio_anagrafica', { anagrafica: payload });
             isNuovoSocioMode = false;
             currentIdsocio = saved.idsocio || payload.idsocio;
@@ -1258,6 +1778,34 @@ async function saveAnagrafica() {
             renderStoricoTesseramenti();
             hideTesseramentoEditor();
 
+            const savedTelefoni = [];
+            for (const tel of pendingTelefoni) {
+                const telPayload = {
+                    ...tel,
+                    id: null,
+                    idsocio: currentIdsocio
+                };
+                const savedTel = await invoke('save_socio_telefono', { telefono: telPayload });
+                savedTelefoni.push(savedTel);
+            }
+            telefoniList = savedTelefoni;
+
+            const savedEmails = [];
+            for (const em of pendingEmail) {
+                const emPayload = {
+                    ...em,
+                    id: null,
+                    idsocio: currentIdsocio
+                };
+                const savedEm = await invoke('save_socio_email', { email: emPayload });
+                savedEmails.push(savedEm);
+            }
+            emailList = savedEmails;
+            renderContatti();
+            refreshTelefonoPrincipaleField();
+            hideTelefonoEditor();
+            hideEmailEditor();
+
             const titleEl = document.querySelector('.page-title');
             if (titleEl) titleEl.textContent = 'ANAGRAFICA SOCIO';
 
@@ -1266,11 +1814,18 @@ async function saveAnagrafica() {
                 subtitle.textContent = `ID ${currentIdsocio} · ${saved.nominativo || payload.nominativo}`;
             }
 
-            const statusMsg = savedTesseramenti.length
-                ? `Nuovo socio creato con ${savedTesseramenti.length} tesseramento/i`
+            const extras = [];
+            if (savedTesseramenti.length) extras.push(`${savedTesseramenti.length} tesseramento/i`);
+            if (savedTelefoni.length) extras.push(`${savedTelefoni.length} telefono/i`);
+            if (savedEmails.length) extras.push(`${savedEmails.length} email`);
+            const statusMsg = extras.length
+                ? `Nuovo socio creato con ${extras.join(', ')}`
                 : 'Nuovo socio creato';
             setSaveStatus(statusMsg);
-            await notifySocioAnagraficaSaved(saved);
+            await notifySocioAnagraficaSaved({
+                ...saved,
+                telefono: document.getElementById('field-telefono')?.value || saved.telefono || ''
+            });
             anagraficaEditSnapshot = null;
             setAnagraficaEditMode(false);
         } else {
@@ -1294,7 +1849,11 @@ async function notifySocioAnagraficaSaved(payload) {
     if (!isTauri()) return;
     try {
         const { emit } = await import('@tauri-apps/api/event');
-        await emit('socio-anagrafica-saved', payload);
+        // In elenco soci mostriamo il testo formattato (numero + riferimento)
+        const telefonoDisplay = document.getElementById('field-telefono')?.value?.trim()
+            || payload.telefono
+            || '';
+        await emit('socio-anagrafica-saved', { ...payload, telefono: telefonoDisplay });
     } catch (err) {
         console.warn('Notifica aggiornamento elenco soci:', err);
     }
@@ -1386,6 +1945,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     document.getElementById('btn-annulla-tess')?.addEventListener('click', hideTesseramentoEditor);
+
+    document.getElementById('form-telefono')?.addEventListener('submit', saveTelefono);
+    document.getElementById('form-email')?.addEventListener('submit', saveEmail);
+    document.getElementById('btn-nuovo-telefono')?.addEventListener('click', () => {
+        if (!isAnagraficaEditMode || isRicercaMode) return;
+        openTelefonoEditor(-1, true);
+    });
+    document.getElementById('btn-nuovo-email')?.addEventListener('click', () => {
+        if (!isAnagraficaEditMode || isRicercaMode) return;
+        openEmailEditor(-1, true);
+    });
+    document.getElementById('btn-annulla-telefono')?.addEventListener('click', hideTelefonoEditor);
+    document.getElementById('btn-annulla-email')?.addEventListener('click', hideEmailEditor);
 
     document.getElementById('btn-chiudi')?.addEventListener('click', async () => {
         if (isNuovoSocioMode && isAnagraficaEditMode) {

@@ -20,6 +20,8 @@ function isTauri() {
 
 let dataSelezionata = new Date();
 const serviziAnnoCache = {};
+/** Mappa nominativo operatore (UPPER) → telefono principale (da Telefoni_supa via IdSocio) */
+let telefonoOperatoreByNome = null;
 
 function pad2(n) {
     return String(n).padStart(2, '0');
@@ -84,6 +86,35 @@ async function fetchServiziAnno(anno) {
     }
 }
 
+async function fetchTelefonoOperatoreMap() {
+    if (telefonoOperatoreByNome) return telefonoOperatoreByNome;
+    const map = {};
+    if (!isTauri() || !invoke) {
+        telefonoOperatoreByNome = map;
+        return map;
+    }
+    try {
+        await invoke('init_supabase_from_config').catch(() => {});
+        // get_all_tesserati include già il telefono principale da Telefoni_supa
+        const tesserati = await invoke('get_all_tesserati');
+        (Array.isArray(tesserati) ? tesserati : []).forEach((t) => {
+            const nome = String(t.nominativo || '').trim().toUpperCase();
+            const tel = String(t.telefono || '').trim();
+            if (nome && tel) map[nome] = tel;
+        });
+    } catch (error) {
+        console.warn('Rubrica telefoni operatori non disponibile:', error);
+    }
+    telefonoOperatoreByNome = map;
+    return map;
+}
+
+function telefonoDiOperatore(nomeOperatore) {
+    const nome = String(nomeOperatore || '').trim().toUpperCase();
+    if (!nome || !telefonoOperatoreByNome) return '';
+    return telefonoOperatoreByNome[nome] || '';
+}
+
 function filtraServiziPerData(servizi, dataItaliana) {
     return servizi
         .filter(s => (s.data_prelievo || '').trim() === dataItaliana)
@@ -108,7 +139,9 @@ function splitDataOraDestinazione(servizio) {
 
 function creaCampo(label, valore, classi = '') {
     const tokens = classi.split(/\s+/).filter(Boolean);
-    const valueClass = tokens.filter(c => c !== 'col-span-2').join(' ');
+    const valueClass = tokens
+        .filter(c => c !== 'col-span-2' && c !== 'col-span-3')
+        .join(' ');
     return `<div class="report-field ${classi}">
         <label>${escapeHtml(label)}</label>
         <div class="field-value ${valueClass}">${escapeHtml(valore)}</div>
@@ -127,14 +160,16 @@ function creaCampoDuo(label, val1, val2, extraClass = '') {
 
 function creaBloccoServizio(servizio) {
     const dest = splitDataOraDestinazione(servizio);
+    const telefonoOp = telefonoDiOperatore(servizio.operatore);
     return `<article class="servizio-report">
         <div class="report-grid">
             ${creaCampo('IDSERV.', servizio.id)}
             ${creaCampo('OPERATORE', servizio.operatore, 'operatore')}
+            ${creaCampo('TELEFONO', telefonoOp, 'telefono')}
             ${creaCampoDuo('DATA E ORA SOTTO CASA', servizio.data_prelievo || '', servizio.ora_inizio || '')}
             ${creaCampo('COMUNE PRELIEVO', servizio.comune_prelievo)}
             ${creaCampo('LOCALITA PRELIEVO', servizio.luogo_prelievo)}
-            ${creaCampo('TRASPORTATO', servizio.socio_trasportato, 'trasportato col-span-2')}
+            ${creaCampo('TRASPORTATO', servizio.socio_trasportato, 'trasportato col-span-3')}
             ${creaCampoDuo('DATA E ORA A DESTINAZIONE', dest.data, dest.ora)}
             ${creaCampo('COMUNE A DESTINAZIONE', servizio.comune_destinazione)}
             ${creaCampo('Località arrivo', servizio.luogo_destinazione)}
@@ -161,7 +196,10 @@ async function caricaReport() {
     const anno = dataSelezionata.getFullYear();
 
     try {
-        const tuttiAnno = await fetchServiziAnno(anno);
+        const [tuttiAnno] = await Promise.all([
+            fetchServiziAnno(anno),
+            fetchTelefonoOperatoreMap()
+        ]);
         const servizi = filtraServiziPerData(tuttiAnno, dataItaliana);
 
         if (servizi.length === 0) {

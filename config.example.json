@@ -21,6 +21,7 @@
       "richiedenti": "Richiedenti_supa",
       "stato_del_servizio": "StatoDelServizio_supa",
       "telefoni": "Telefoni_supa",
+      "email": "Email_supa",
       "tipo_pagamenti": "TipoPagamenti_supa",
       "tipo_socio": "TipoSocio_supa",
       "tratte": "Tratte_supa",

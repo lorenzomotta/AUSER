@@ -104,8 +104,8 @@
                                 <input type="text" id="field-residenza-provincia" class="form-control" maxlength="2">
                             </div>
                             <div class="form-group field-tel">
-                                <label for="field-telefono">TELEFONO</label>
-                                <input type="text" id="field-telefono" class="form-control">
+                                <label for="field-telefono">TELEFONO PRINCIPALE</label>
+                                <input type="text" id="field-telefono" class="form-control" readonly title="Derivato dal telefono con spunta Principale in Telefoni_supa">
                             </div>
                         </div>
 
@@ -118,6 +118,126 @@
                         </div>
                     </div>
                 </form>
+            </section>
+
+            <section class="anagrafica-section section-contatti" id="section-contatti" style="display: none;">
+                <div class="section-bar">
+                    <h2 class="section-title">Contatti</h2>
+                </div>
+
+                <div class="contatti-block">
+                    <div class="contatti-block-header">
+                        <h3 class="contatti-subtitle">Telefoni</h3>
+                        <button type="button" class="btn btn-nuovo-contatto" id="btn-nuovo-telefono" hidden>+ TELEFONO</button>
+                    </div>
+                    <p class="storico-vuoto" id="telefoni-vuoto">Nessun telefono registrato.</p>
+                    <div class="contatti-table-wrap">
+                        <table class="storico-table contatti-table" id="telefoni-table" style="display: none;">
+                            <thead>
+                                <tr>
+                                    <th>Telefono</th>
+                                    <th>Riferimento</th>
+                                    <th>Princ.</th>
+                                    <th>Note</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="telefoni-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="contatto-editor" id="telefono-editor" hidden>
+                        <h3 class="editor-title" id="telefono-editor-title">Modifica telefono</h3>
+                        <form id="form-telefono" class="tesseramento-form" autocomplete="off">
+                            <input type="hidden" id="tel-id" value="">
+                            <div class="form-grid compact">
+                                <div class="form-group col-span-2">
+                                    <label for="tel-numero">TELEFONO</label>
+                                    <input type="text" id="tel-numero" class="form-control" required>
+                                </div>
+                                <div class="form-group col-span-2">
+                                    <label for="tel-riferimento">RIFERIMENTO</label>
+                                    <input type="text" id="tel-riferimento" class="form-control" placeholder="es. Cellulare, Casa">
+                                </div>
+                                <div class="form-group col-narrow">
+                                    <label for="tel-ordine">ORDINE</label>
+                                    <input type="number" id="tel-ordine" class="form-control" min="0" step="1">
+                                </div>
+                                <div class="form-group col-span-2">
+                                    <label class="flag-item flag-principale-edit">
+                                        <input type="checkbox" id="tel-principale">
+                                        <span>Principale</span>
+                                    </label>
+                                </div>
+                                <div class="form-group col-span-4">
+                                    <label for="tel-note">NOTE</label>
+                                    <input type="text" id="tel-note" class="form-control">
+                                </div>
+                                <div class="form-group col-span-2 editor-actions-cell">
+                                    <button type="button" class="btn btn-annulla-tess" id="btn-annulla-telefono">Annulla</button>
+                                    <button type="submit" class="btn btn-salva-tess" id="btn-salva-telefono">SALVA</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="contatti-block">
+                    <div class="contatti-block-header">
+                        <h3 class="contatti-subtitle">Email</h3>
+                        <button type="button" class="btn btn-nuovo-contatto" id="btn-nuovo-email" hidden>+ EMAIL</button>
+                    </div>
+                    <p class="storico-vuoto" id="email-vuoto">Nessuna email registrata.</p>
+                    <div class="contatti-table-wrap">
+                        <table class="storico-table contatti-table" id="email-table" style="display: none;">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Riferimento</th>
+                                    <th>Princ.</th>
+                                    <th>Note</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="email-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="contatto-editor" id="email-editor" hidden>
+                        <h3 class="editor-title" id="email-editor-title">Modifica email</h3>
+                        <form id="form-email" class="tesseramento-form" autocomplete="off">
+                            <input type="hidden" id="em-id" value="">
+                            <div class="form-grid compact">
+                                <div class="form-group col-span-3">
+                                    <label for="em-indirizzo">EMAIL</label>
+                                    <input type="email" id="em-indirizzo" class="form-control" required>
+                                </div>
+                                <div class="form-group col-span-2">
+                                    <label for="em-riferimento">RIFERIMENTO</label>
+                                    <input type="text" id="em-riferimento" class="form-control" placeholder="es. Personale, Lavoro">
+                                </div>
+                                <div class="form-group col-narrow">
+                                    <label for="em-ordine">ORDINE</label>
+                                    <input type="number" id="em-ordine" class="form-control" min="0" step="1">
+                                </div>
+                                <div class="form-group col-span-2">
+                                    <label class="flag-item flag-principale-edit">
+                                        <input type="checkbox" id="em-principale">
+                                        <span>Principale</span>
+                                    </label>
+                                </div>
+                                <div class="form-group col-span-4">
+                                    <label for="em-note">NOTE</label>
+                                    <input type="text" id="em-note" class="form-control">
+                                </div>
+                                <div class="form-group col-span-2 editor-actions-cell">
+                                    <button type="button" class="btn btn-annulla-tess" id="btn-annulla-email">Annulla</button>
+                                    <button type="submit" class="btn btn-salva-tess" id="btn-salva-email">SALVA</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </section>
 
             <section class="anagrafica-section section-tesseramenti" id="section-tesseramenti" style="display: none;">

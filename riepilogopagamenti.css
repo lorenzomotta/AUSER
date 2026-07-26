@@ -112,12 +112,13 @@ html, body {
 .rp-ricerca-grid {
     display: grid;
     grid-template-columns:
-        minmax(110px, 0.85fr)
-        minmax(100px, 0.75fr)
-        minmax(110px, 0.85fr)
-        minmax(220px, 1.4fr)
+        minmax(100px, 1.15fr)
+        minmax(78px, 0.72fr)
+        minmax(78px, 0.72fr)
+        minmax(88px, 0.8fr)
+        minmax(168px, 1.05fr)
         auto;
-    gap: 8px 10px;
+    gap: 6px 8px;
     align-items: end;
 }
 
@@ -125,7 +126,12 @@ html, body {
     min-width: 0;
 }
 
-.rp-field-compatto select {
+.rp-field-nominativo {
+    min-width: 0;
+}
+
+.rp-field-compatto select,
+.rp-field-nominativo input {
     font-size: 11px;
     padding: 5px 4px;
 }
@@ -133,17 +139,20 @@ html, body {
 .rp-periodo {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
 }
 
 .rp-periodo input[type="date"] {
     flex: 1;
     min-width: 0;
+    font-size: 11px;
+    padding: 4px 3px;
 }
 
 .rp-periodo-sep {
     font-weight: 700;
     color: #546e7a;
+    font-size: 11px;
 }
 
 .rp-field label {
@@ -339,7 +348,10 @@ html, body {
 
 @media (max-width: 1100px) {
     .rp-ricerca-grid {
-        grid-template-columns: repeat(3, minmax(100px, 1fr));
+        grid-template-columns: repeat(3, minmax(90px, 1fr));
+    }
+    .rp-field-nominativo {
+        grid-column: 1 / -1;
     }
     .rp-field-periodo,
     .rp-ricerca-azioni {

@@ -53,6 +53,7 @@ struct SupabaseTablesConfigSection {
     richiedenti: Option<String>,
     stato_del_servizio: Option<String>,
     telefoni: Option<String>,
+    email: Option<String>,
     tipo_pagamenti: Option<String>,
     tipo_socio: Option<String>,
     tipologia_socio: Option<String>,
@@ -573,6 +574,9 @@ async fn setup_supabase_from_config(config: &AppConfig) {
             telefoni: cfg
                 .and_then(|t| t.telefoni.clone())
                 .unwrap_or_else(|| "Telefoni_supa".to_string()),
+            email: cfg
+                .and_then(|t| t.email.clone())
+                .unwrap_or_else(|| "Email_supa".to_string()),
             tipo_pagamenti: cfg
                 .and_then(|t| t.tipo_pagamenti.clone())
                 .unwrap_or_else(|| "TipoPagamenti_supa".to_string()),
@@ -603,7 +607,7 @@ async fn setup_supabase_from_config(config: &AppConfig) {
         *guard = Some(SupabaseClient::new(sb_config));
         println!(
             "✓ Client Supabase inizializzato ({} tabelle configurate)",
-            16
+            17
         );
         println!(
             "  tesserati={}, tesseramenti={}, servizi={}, automezzi={}, tipo_socio={}",
@@ -965,10 +969,40 @@ struct TesseramentoRecord {
     note: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct SocioTelefono {
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    idsocio: String,
+    telefono: String,
+    riferimento: String,
+    principale: bool,
+    ordine_utilizzo: String,
+    note: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct SocioEmail {
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    idsocio: String,
+    email: String,
+    riferimento: String,
+    principale: bool,
+    ordine_utilizzo: String,
+    note: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct SocioAnagraficaCompleta {
     anagrafica: SocioAnagrafica,
     tesseramenti: Vec<TesseramentoRecord>,
+    #[serde(default)]
+    telefoni: Vec<SocioTelefono>,
+    #[serde(default)]
+    email: Vec<SocioEmail>,
 }
 
 fn bool_to_db_flag(value: bool) -> String {
@@ -1010,6 +1044,105 @@ fn supabase_row_to_anagrafica(row: &serde_json::Value) -> Option<SocioAnagrafica
 fn is_truthy_str(value: &str) -> bool {
     let v = value.trim().to_lowercase();
     v == "true" || v == "si" || v == "sì" || v == "1" || v == "yes" || v == "attivo"
+}
+
+fn supabase_row_to_telefono(row: &serde_json::Value) -> SocioTelefono {
+    let id = row
+        .get("id")
+        .or_else(|| row.get("Id"))
+        .map(json_to_string)
+        .filter(|s| !s.trim().is_empty());
+    SocioTelefono {
+        id,
+        idsocio: get_field_any(row, &["IdSocio", "IDSocio", "idsocio"]),
+        telefono: get_field_any(row, &["Telefono", "TELEFONO", "telefono"]),
+        riferimento: get_field_any(row, &["Riferimento", "RIFERIMENTO", "riferimento"]),
+        principale: get_bool_from_row(row, &["Principale", "PRINCIPALE", "principale"]),
+        ordine_utilizzo: get_field_any(
+            row,
+            &["OrdineUtilizzo", "Ordine_Utilizzo", "ordineutilizzo"],
+        ),
+        note: get_field_any(
+            row,
+            &["NoteTelefono", "Note_Telefono", "Note", "note"],
+        ),
+    }
+}
+
+fn supabase_row_to_email(row: &serde_json::Value) -> SocioEmail {
+    let id = row
+        .get("id")
+        .or_else(|| row.get("Id"))
+        .map(json_to_string)
+        .filter(|s| !s.trim().is_empty());
+    SocioEmail {
+        id,
+        idsocio: get_field_any(row, &["IdSocio", "IDSocio", "idsocio"]),
+        email: get_field_any(row, &["Email", "EMAIL", "email"]),
+        riferimento: get_field_any(
+            row,
+            &["Riferimento_Email", "RiferimentoEmail", "Riferimento", "riferimento"],
+        ),
+        principale: get_bool_from_row(row, &["Principale", "PRINCIPALE", "principale"]),
+        ordine_utilizzo: get_field_any(
+            row,
+            &["OrdineUtilizzo", "Ordine_Utilizzo", "ordineutilizzo"],
+        ),
+        note: get_field_any(row, &["NoteEmail", "Note_Email", "Note", "note"]),
+    }
+}
+
+/// Testo per il campo "Telefono principale": numero + (riferimento) se presente.
+fn format_telefono_principale(telefoni: &[SocioTelefono]) -> Option<String> {
+    let principale = telefoni.iter().find(|t| t.principale && !t.telefono.trim().is_empty());
+    let chosen = principale.or_else(|| {
+        telefoni
+            .iter()
+            .find(|t| !t.telefono.trim().is_empty())
+    })?;
+    let num = chosen.telefono.trim();
+    let rif = chosen.riferimento.trim();
+    if rif.is_empty() {
+        Some(num.to_string())
+    } else {
+        Some(format!("{} ({})", num, rif))
+    }
+}
+
+/// Mappa IdSocio → telefono principale formattato (da righe Telefoni_supa).
+fn build_telefoni_principali_map(rows: &[serde_json::Value]) -> HashMap<String, String> {
+    let mut by_socio: HashMap<String, Vec<SocioTelefono>> = HashMap::new();
+
+    for row in rows {
+        let idsocio = get_field_any(row, &["IdSocio", "IDSocio", "idsocio"])
+            .trim()
+            .to_string();
+        if idsocio.is_empty() {
+            continue;
+        }
+        by_socio
+            .entry(idsocio)
+            .or_default()
+            .push(supabase_row_to_telefono(row));
+    }
+
+    let mut map = HashMap::new();
+    for (idsocio, telefoni) in by_socio {
+        if let Some(formatted) = format_telefono_principale(&telefoni) {
+            map.insert(idsocio, formatted);
+        }
+    }
+    map
+}
+
+/// Sostituisce il campo telefono dei tesserati con quello principale da Telefoni_supa.
+fn apply_telefoni_principali(tesserati: &mut [Tesserato], principali: &HashMap<String, String>) {
+    for t in tesserati.iter_mut() {
+        let key = t.idsocio.trim();
+        if let Some(tel) = principali.get(key) {
+            t.telefono = tel.clone();
+        }
+    }
 }
 
 fn supabase_row_to_tesseramento(row: &serde_json::Value) -> TesseramentoRecord {
@@ -2166,6 +2299,25 @@ async fn get_all_tesserati() -> Result<Vec<Tesserato>, String> {
             .filter_map(supabase_row_to_tesserato)
             .collect();
 
+        // Telefono in elenco = telefono principale da Telefoni_supa (con riferimento)
+        match client.fetch_telefoni(None).await {
+            Ok(tel_rows) => {
+                let principali = build_telefoni_principali_map(&tel_rows);
+                println!(
+                    "✓ Telefoni_supa: {} riga/e, {} soci con telefono principale",
+                    tel_rows.len(),
+                    principali.len()
+                );
+                apply_telefoni_principali(&mut tesserati, &principali);
+            }
+            Err(e) => {
+                println!(
+                    "⚠️ Telefoni_supa non disponibile per elenco soci ({}), uso Telefono su tesserati",
+                    e
+                );
+            }
+        }
+
         // Ordine alfabetico per nominativo (Elenco Soci / Elenco Operatori)
         tesserati.sort_by(|a, b| {
             a.nominativo
@@ -2242,6 +2394,77 @@ async fn get_socio_anagrafica(idsocio: String) -> Result<SocioAnagraficaCompleta
         let anagrafica = supabase_row_to_anagrafica(row)
             .ok_or_else(|| format!("Dati anagrafici non validi per IdSocio={}", idsocio))?;
 
+        let contatti_filter = format!("IdSocio=eq.{}", idsocio);
+
+        let mut telefoni: Vec<SocioTelefono> = match client.fetch_telefoni(Some(&contatti_filter)).await {
+            Ok(rows) => {
+                println!(
+                    "✓ Telefoni_supa: {} riga/e per IdSocio={}",
+                    rows.len(),
+                    idsocio
+                );
+                rows.iter().map(supabase_row_to_telefono).collect()
+            }
+            Err(e) => {
+                println!("⚠️ Telefoni non disponibili ({}): {}", idsocio, e);
+                Vec::new()
+            }
+        };
+
+        let mut email: Vec<SocioEmail> = match client.fetch_email_socio(Some(&contatti_filter)).await {
+            Ok(rows) => {
+                println!(
+                    "✓ Email_supa: {} riga/e per IdSocio={}",
+                    rows.len(),
+                    idsocio
+                );
+                rows.iter().map(supabase_row_to_email).collect()
+            }
+            Err(e) => {
+                println!("⚠️ Email socio non disponibili ({}): {}", idsocio, e);
+                Vec::new()
+            }
+        };
+
+        // Principale prima, poi OrdineUtilizzo
+        telefoni.sort_by(|a, b| {
+            match b.principale.cmp(&a.principale) {
+                std::cmp::Ordering::Equal => {
+                    let oa = a.ordine_utilizzo.parse::<f64>().unwrap_or(9999.0);
+                    let ob = b.ordine_utilizzo.parse::<f64>().unwrap_or(9999.0);
+                    if oa < ob {
+                        std::cmp::Ordering::Less
+                    } else if oa > ob {
+                        std::cmp::Ordering::Greater
+                    } else {
+                        std::cmp::Ordering::Equal
+                    }
+                }
+                other => other,
+            }
+        });
+        email.sort_by(|a, b| {
+            match b.principale.cmp(&a.principale) {
+                std::cmp::Ordering::Equal => {
+                    let oa = a.ordine_utilizzo.parse::<f64>().unwrap_or(9999.0);
+                    let ob = b.ordine_utilizzo.parse::<f64>().unwrap_or(9999.0);
+                    if oa < ob {
+                        std::cmp::Ordering::Less
+                    } else if oa > ob {
+                        std::cmp::Ordering::Greater
+                    } else {
+                        std::cmp::Ordering::Equal
+                    }
+                }
+                other => other,
+            }
+        });
+
+        let mut anagrafica = anagrafica;
+        if let Some(tel_princ) = format_telefono_principale(&telefoni) {
+            anagrafica.telefono = tel_princ;
+        }
+
         // Storico: tutte le righe in Tesseramenti_supa collegate per IdSocio
         let tess_filter = format!("IdSocio=eq.{}", idsocio);
         let mut tesseramenti: Vec<TesseramentoRecord> = match client
@@ -2289,6 +2512,8 @@ async fn get_socio_anagrafica(idsocio: String) -> Result<SocioAnagraficaCompleta
         Ok(SocioAnagraficaCompleta {
             anagrafica,
             tesseramenti,
+            telefoni,
+            email,
         })
     } else {
         Err("Client Supabase non disponibile".to_string())
@@ -2714,6 +2939,237 @@ async fn save_tesseramento(tesseramento: TesseramentoRecord) -> Result<Tesserame
     } else {
         Err("Client Supabase non disponibile".to_string())
     }
+}
+
+fn idsocio_json_value(idsocio: &str) -> serde_json::Value {
+    if let Ok(n) = idsocio.trim().parse::<i64>() {
+        serde_json::json!(n)
+    } else {
+        serde_json::json!(idsocio.trim())
+    }
+}
+
+fn ordine_utilizzo_json(value: &str) -> serde_json::Value {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return serde_json::Value::Null;
+    }
+    if let Ok(n) = trimmed.parse::<i64>() {
+        serde_json::json!(n)
+    } else if let Ok(n) = trimmed.parse::<f64>() {
+        serde_json::json!(n)
+    } else {
+        serde_json::json!(trimmed)
+    }
+}
+
+async fn sync_telefono_principale_su_tesserati(
+    client: &supabase::SupabaseClient,
+    idsocio: &str,
+) -> Result<(), String> {
+    let filter = format!("IdSocio=eq.{}", idsocio);
+    let rows = client.fetch_telefoni(Some(&filter)).await.unwrap_or_default();
+    let list: Vec<SocioTelefono> = rows.iter().map(supabase_row_to_telefono).collect();
+    let num_only = list
+        .iter()
+        .find(|t| t.principale && !t.telefono.trim().is_empty())
+        .or_else(|| list.iter().find(|t| !t.telefono.trim().is_empty()))
+        .map(|t| t.telefono.trim().to_string())
+        .unwrap_or_default();
+    let mut patch = serde_json::Map::new();
+    patch.insert("Telefono".to_string(), serde_json::json!(num_only));
+    client.patch_tesserato(idsocio, &patch).await
+}
+
+#[tauri::command]
+async fn save_socio_telefono(telefono: SocioTelefono) -> Result<SocioTelefono, String> {
+    println!(
+        "=== save_socio_telefono IdSocio={} Telefono={} ===",
+        telefono.idsocio, telefono.telefono
+    );
+
+    let idsocio = telefono.idsocio.trim().to_string();
+    let numero = telefono.telefono.trim().to_string();
+    if idsocio.is_empty() {
+        return Err("IdSocio obbligatorio per il telefono".to_string());
+    }
+    if numero.is_empty() {
+        return Err("Il numero di telefono è obbligatorio".to_string());
+    }
+
+    ensure_supabase_client().await?;
+
+    let mut body = serde_json::Map::new();
+    body.insert("IdSocio".to_string(), idsocio_json_value(&idsocio));
+    body.insert("Telefono".to_string(), serde_json::json!(numero));
+    body.insert(
+        "Riferimento".to_string(),
+        serde_json::json!(telefono.riferimento.trim()),
+    );
+    body.insert(
+        "Principale".to_string(),
+        serde_json::json!(telefono.principale),
+    );
+    body.insert(
+        "OrdineUtilizzo".to_string(),
+        ordine_utilizzo_json(&telefono.ordine_utilizzo),
+    );
+    body.insert(
+        "NoteTelefono".to_string(),
+        serde_json::json!(telefono.note.trim()),
+    );
+
+    let row_id = telefono
+        .id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    if telefono.principale {
+        if let Err(e) = client.clear_principale_telefoni(&idsocio, row_id).await {
+            println!("⚠️ clear Principale telefoni: {}", e);
+        }
+    }
+
+    let saved_row = client
+        .upsert_socio_telefono(&body, row_id)
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+    let saved = supabase_row_to_telefono(&saved_row);
+
+    if let Err(e) = sync_telefono_principale_su_tesserati(client, &idsocio).await {
+        println!("⚠️ Sync Telefono su tesserati fallito: {}", e);
+    }
+
+    Ok(saved)
+}
+
+#[tauri::command]
+async fn delete_socio_telefono(telefono: SocioTelefono) -> Result<(), String> {
+    println!(
+        "=== delete_socio_telefono IdSocio={} Telefono={} ===",
+        telefono.idsocio, telefono.telefono
+    );
+
+    ensure_supabase_client().await?;
+
+    let row_id = telefono
+        .id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let idsocio = telefono.idsocio.trim().to_string();
+
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    client
+        .delete_socio_telefono(row_id, &idsocio, telefono.telefono.trim())
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+
+    if !idsocio.is_empty() {
+        if let Err(e) = sync_telefono_principale_su_tesserati(client, &idsocio).await {
+            println!("⚠️ Sync Telefono su tesserati dopo delete: {}", e);
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn save_socio_email(email: SocioEmail) -> Result<SocioEmail, String> {
+    println!(
+        "=== save_socio_email IdSocio={} Email={} ===",
+        email.idsocio, email.email
+    );
+
+    let idsocio = email.idsocio.trim().to_string();
+    let indirizzo = email.email.trim().to_string();
+    if idsocio.is_empty() {
+        return Err("IdSocio obbligatorio per l'email".to_string());
+    }
+    if indirizzo.is_empty() {
+        return Err("L'indirizzo email è obbligatorio".to_string());
+    }
+
+    ensure_supabase_client().await?;
+
+    let mut body = serde_json::Map::new();
+    body.insert("IdSocio".to_string(), idsocio_json_value(&idsocio));
+    body.insert("Email".to_string(), serde_json::json!(indirizzo));
+    body.insert(
+        "Riferimento_Email".to_string(),
+        serde_json::json!(email.riferimento.trim()),
+    );
+    body.insert("Principale".to_string(), serde_json::json!(email.principale));
+    body.insert(
+        "OrdineUtilizzo".to_string(),
+        ordine_utilizzo_json(&email.ordine_utilizzo),
+    );
+    body.insert(
+        "NoteEmail".to_string(),
+        serde_json::json!(email.note.trim()),
+    );
+
+    let row_id = email
+        .id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    if email.principale {
+        if let Err(e) = client.clear_principale_email(&idsocio, row_id).await {
+            println!("⚠️ clear Principale email: {}", e);
+        }
+    }
+
+    let saved_row = client
+        .upsert_socio_email(&body, row_id)
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+
+    Ok(supabase_row_to_email(&saved_row))
+}
+
+#[tauri::command]
+async fn delete_socio_email(email: SocioEmail) -> Result<(), String> {
+    println!(
+        "=== delete_socio_email IdSocio={} Email={} ===",
+        email.idsocio, email.email
+    );
+
+    ensure_supabase_client().await?;
+
+    let row_id = email
+        .id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    client
+        .delete_socio_email(row_id, email.idsocio.trim(), email.email.trim())
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+
+    Ok(())
 }
 
 // Comando per ottenere tutti gli automezzi da Supabase
@@ -5875,6 +6331,10 @@ fn main() {
             get_next_idsocio,
             create_socio_anagrafica,
             save_tesseramento,
+            save_socio_telefono,
+            delete_socio_telefono,
+            save_socio_email,
+            delete_socio_email,
             get_all_automezzi,
             save_automezzo,
             create_automezzo,
