@@ -238,6 +238,36 @@ html, body {
     gap: 6px;
 }
 
+.rc-totali-titolo {
+    background: #fff;
+    border: 2px solid #111;
+    padding: 8px 12px;
+    font-weight: 800;
+    font-size: 14px;
+    text-align: center;
+    margin-bottom: 4px;
+}
+
+.rc-totali-generali {
+    margin-top: 28px;
+    padding-top: 12px;
+    border-top: 3px solid #111;
+}
+
+.rc-operatore-blocco {
+    margin: 18px 0 28px;
+    padding-bottom: 12px;
+    border-bottom: 2px dashed #666;
+}
+
+.rc-operatore-blocco:last-child {
+    border-bottom: none;
+}
+
+.rc-operatore-riga-interna {
+    margin-top: 4px;
+}
+
 .rc-totale-riga {
     display: grid;
     grid-template-columns: 1.4fr 70px 1.2fr 70px;
@@ -286,5 +316,10 @@ html, body {
 
     .rc-totale-label {
         background: #bdbdbd !important;
+    }
+
+    .rc-operatore-blocco {
+        break-inside: avoid;
+        page-break-inside: avoid;
     }
 }

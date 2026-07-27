@@ -47,14 +47,10 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Nuova versione v1.0.6:
-            - telefoni ed email socio in anagrafica (Telefoni_supa / Email_supa)
-            - telefono principale in Elenco soci, Report del giorno e Scheda servizio
-            - telefono principale e altri telefoni nel Calendario (desktop e web)
-            - versione app visibile in intestazione / titolo finestra
-
-            Nota admin (calendario web): eseguire su Supabase la policy SELECT
-            su Telefoni_supa (vedi `docs/supabase-calendario-web.sql` sezione 5b).
+            Nuova versione v1.0.7:
+            - home più responsive su schermi 15–17" (niente taglio in basso)
+            - Elenco operatori: pulsante CHILOMETRI TOTALI (report di tutti gli operatori in ordine alfabetico)
+            - finestra minima ridotta a 1024×600 per laptop più piccoli
 
             Gli utenti con l'app già installata riceveranno un avviso all'avvio
             e potranno aggiornare con un clic.

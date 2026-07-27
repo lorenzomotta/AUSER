@@ -274,6 +274,49 @@ async function openChilometraggioOperatore(nominativo, idsocio) {
     }
 }
 
+async function openChilometraggioTotali() {
+    const url = 'REPORTCHILOMETRI.html?tutti=1';
+    const title = 'Chilometri Totali — Tutti gli operatori';
+
+    if (!isTauri()) {
+        window.open(url, '_blank');
+        return;
+    }
+
+    try {
+        const { WebviewWindow } = await import('@tauri-apps/api/window');
+        const label = 'chilometraggio-totali';
+
+        const existing = WebviewWindow.getByLabel(label);
+        if (existing) {
+            try {
+                await existing.show();
+                await existing.setFocus();
+                return;
+            } catch (err) {
+                console.warn('Finestra chilometri totali non riutilizzabile:', err);
+                try { await existing.close(); } catch (_) { /* ignore */ }
+            }
+        }
+
+        const webview = new WebviewWindow(label, {
+            url,
+            title,
+            width: 1000,
+            height: 900,
+            resizable: true,
+            maximized: false,
+            decorations: true,
+            center: true
+        });
+
+        webview.setFocus().catch((err) => console.warn('setFocus chilometri totali:', err));
+    } catch (error) {
+        console.error('Errore apertura chilometri totali:', error);
+        window.open(url, '_blank');
+    }
+}
+
 // Cache globale per gli operatori (prima del filtro di ricerca)
 let allOperatori = [];
 
@@ -709,6 +752,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     await setupSocioAnagraficaListener();
 
     await loadAllOperatori();
+
+    document.getElementById('btn-chilometri-totali')?.addEventListener('click', () => {
+        openChilometraggioTotali();
+    });
     
     // Event listener per mostrare/nascondere la ricerca
     const btnShowSearch = document.getElementById('btn-show-search');

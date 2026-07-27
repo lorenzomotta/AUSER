@@ -28,6 +28,14 @@ body {
 }
 
 .page-title-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 15px;
+}
+
+.page-title-center {
+    grid-column: 2;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -439,6 +447,25 @@ body {
 
 .btn-chilometraggio:hover {
     background-color: #F57C00;
+}
+
+.btn-chilometri-totali {
+    grid-column: 3;
+    justify-self: end;
+    background-color: #1565C0;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s;
+}
+
+.btn-chilometri-totali:hover {
+    background-color: #0D47A1;
 }
 
 /* Footer */

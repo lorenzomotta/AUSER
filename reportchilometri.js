@@ -14,6 +14,8 @@ const GRUPPI = [
 
 let operatoreNome = '';
 let operatoreIdsocio = '';
+/** Se true: mostra tutti gli operatori in ordine alfabetico */
+let modalitaTutti = false;
 let annoRif = new Date().getFullYear();
 /** Mese inizio periodo (0–11) */
 let meseDa = new Date().getMonth();
@@ -78,6 +80,7 @@ function testoPeriodo() {
 
 function leggiParametriUrl() {
     const params = new URLSearchParams(window.location.search);
+    modalitaTutti = params.get('tutti') === '1' || params.get('mode') === 'tutti';
     operatoreNome = (params.get('operatore') || params.get('nominativo') || '').trim();
     operatoreIdsocio = (params.get('idsocio') || '').trim();
 
@@ -120,9 +123,23 @@ function aggiornaPeriodoUI() {
     const printEl = document.getElementById('rc-periodo-label-print');
     if (printEl) printEl.textContent = testoPeriodo();
 
+    const titolo = modalitaTutti
+        ? 'RIEPILOGO CHILOMETRI TOTALI'
+        : 'RIEPILOGO CHILOMETRI PERCORSI';
+    const titleBox = document.getElementById('rc-title-box');
+    if (titleBox) titleBox.textContent = titolo;
+    const printTitle = document.getElementById('rc-print-title');
+    if (printTitle) printTitle.textContent = titolo;
+
     const opEl = document.getElementById('rc-operatore');
-    if (opEl) opEl.textContent = operatoreNome || '—';
-    document.title = `Chilometri ${operatoreNome || ''} — AUSER Asti`;
+    if (opEl) {
+        opEl.textContent = modalitaTutti
+            ? 'TUTTI GLI OPERATORI (ordine alfabetico)'
+            : (operatoreNome || '—');
+    }
+    document.title = modalitaTutti
+        ? 'Chilometri Totali — AUSER Asti'
+        : `Chilometri ${operatoreNome || ''} — AUSER Asti`;
 }
 
 function parseDataItaliana(value) {
@@ -179,14 +196,15 @@ function normalizzaNome(value) {
         .replace(/\s+/g, ' ');
 }
 
-function servizioDellOperatore(servizio) {
-    const op = normalizzaNome(servizio.operatore);
-    const target = normalizzaNome(operatoreNome);
-    if (target && op === target) return true;
+function servizioDellOperatore(servizio, nomeTarget = operatoreNome) {
+    const target = normalizzaNome(nomeTarget);
+    if (!target) return false;
 
-    // fallback: a volte l'operatore è in operatore_2
+    const op = normalizzaNome(servizio.operatore);
+    if (op === target) return true;
+
     const op2 = normalizzaNome(servizio.operatore_2);
-    if (target && op2 === target) return true;
+    if (op2 === target) return true;
 
     return false;
 }
@@ -213,25 +231,50 @@ function servizioEseguito(servizio) {
     return stato === 'ESEGUITO';
 }
 
-function filtraServiziPeriodo(servizi) {
+function nelPeriodo(servizio) {
     const da = Math.min(meseDa, meseA);
     const a = Math.max(meseDa, meseA);
-    return servizi
-        .filter((s) => {
-            if (!servizioDellOperatore(s)) return false;
+    const d = parseDataItaliana(servizio.data_prelievo);
+    if (!d) return false;
+    if (d.getFullYear() !== annoRif) return false;
+    const m = d.getMonth();
+    return m >= da && m <= a;
+}
+
+function ordinaServizi(servizi) {
+    return [...servizi].sort((a, b) => {
+        const daDate = parseDataItaliana(a.data_prelievo)?.getTime() || 0;
+        const dbDate = parseDataItaliana(b.data_prelievo)?.getTime() || 0;
+        if (daDate !== dbDate) return daDate - dbDate;
+        return String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
+    });
+}
+
+function filtraServiziPeriodo(servizi, nomeOp = operatoreNome) {
+    return ordinaServizi(
+        servizi.filter((s) => {
+            if (!servizioDellOperatore(s, nomeOp)) return false;
             if (!servizioEseguito(s)) return false;
-            const d = parseDataItaliana(s.data_prelievo);
-            if (!d) return false;
-            if (d.getFullYear() !== annoRif) return false;
-            const m = d.getMonth();
-            return m >= da && m <= a;
+            return nelPeriodo(s);
         })
-        .sort((a, b) => {
-            const daDate = parseDataItaliana(a.data_prelievo)?.getTime() || 0;
-            const dbDate = parseDataItaliana(b.data_prelievo)?.getTime() || 0;
-            if (daDate !== dbDate) return daDate - dbDate;
-            return String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
+    );
+}
+
+/** Nomi operatori con almeno un servizio eseguito nel periodo (A→Z) */
+function elencoOperatoriDalPeriodo(servizi) {
+    const map = new Map();
+    servizi.forEach((s) => {
+        if (!servizioEseguito(s) || !nelPeriodo(s)) return;
+        [s.operatore, s.operatore_2].forEach((nome) => {
+            const display = String(nome || '').trim();
+            if (!display) return;
+            const key = normalizzaNome(display);
+            if (!map.has(key)) map.set(key, display);
         });
+    });
+    return [...map.values()].sort((a, b) =>
+        a.localeCompare(b, 'it', { sensitivity: 'base' })
+    );
 }
 
 function renderGruppo(container, gruppo, servizi) {
@@ -280,16 +323,133 @@ function renderGruppo(container, gruppo, servizi) {
     return { count: servizi.length, km: totKm, rimborsabile: gruppo.rimborsabile };
 }
 
+function renderTableHead(container) {
+    const head = document.createElement('div');
+    head.className = 'rc-table-head';
+    head.innerHTML = `
+        <span>DATA</span>
+        <span>SERVIZ</span>
+        <span>TRASPORTATO</span>
+        <span>PRELIEVO</span>
+        <span>DESTINAZIONE</span>
+        <span>KM</span>
+    `;
+    container.appendChild(head);
+}
+
+function renderTotaliBox(container, numRimb, kmRimb, numNon, kmNon) {
+    const section = document.createElement('section');
+    section.className = 'rc-totali';
+    section.innerHTML = `
+        <div class="rc-totale-riga">
+            <span class="rc-totale-label">NUMERO SERVIZI RIMBORSABILI</span>
+            <div class="rc-box">${numRimb}</div>
+            <span class="rc-totale-label">TOTALE KM RIMBORSABILI</span>
+            <div class="rc-box">${escapeHtml(formatKm(kmRimb))}</div>
+        </div>
+        <div class="rc-totale-riga">
+            <span class="rc-totale-label">NUMERO SERVIZI NON RIMBORSABILI</span>
+            <div class="rc-box">${numNon}</div>
+            <span class="rc-totale-label">TOTALE KM NON RIMBORSABILI</span>
+            <div class="rc-box">${escapeHtml(formatKm(kmNon))}</div>
+        </div>
+        <div class="rc-totale-riga">
+            <span class="rc-totale-label">NUMERO SERVIZI COMPLESSIVO</span>
+            <div class="rc-box">${numRimb + numNon}</div>
+            <span class="rc-totale-label">TOTALE KM DEL PERIODO</span>
+            <div class="rc-box">${escapeHtml(formatKm(kmRimb + kmNon))}</div>
+        </div>
+    `;
+    container.appendChild(section);
+}
+
+function aggiornaTotaliPagina(numRimb, kmRimb, numNon, kmNon) {
+    document.getElementById('rc-num-rimborsabili').textContent = String(numRimb);
+    document.getElementById('rc-km-rimborsabili').textContent = formatKm(kmRimb);
+    document.getElementById('rc-num-non-rimborsabili').textContent = String(numNon);
+    document.getElementById('rc-km-non-rimborsabili').textContent = formatKm(kmNon);
+    document.getElementById('rc-num-complessivo').textContent = String(numRimb + numNon);
+    document.getElementById('rc-km-complessivo').textContent = formatKm(kmRimb + kmNon);
+}
+
+function calcolaERenderGruppi(container, servizi) {
+    const perGruppo = {
+        'TESSERATI': [],
+        'AUSER RIMBORSO': [],
+        'AUSER GRATIS': []
+    };
+    servizi.forEach((s) => {
+        const cat = categoriaDaRichiedente(s.richiedente);
+        perGruppo[cat].push(s);
+    });
+
+    let numRimb = 0;
+    let kmRimb = 0;
+    let numNon = 0;
+    let kmNon = 0;
+
+    GRUPPI.forEach((g) => {
+        const stats = renderGruppo(container, g, perGruppo[g.key] || []);
+        if (stats.rimborsabile) {
+            numRimb += stats.count;
+            kmRimb += stats.km;
+        } else {
+            numNon += stats.count;
+            kmNon += stats.km;
+        }
+    });
+
+    return { numRimb, kmRimb, numNon, kmNon };
+}
+
+function renderBloccoOperatore(container, nomeOp, servizi) {
+    const blocco = document.createElement('div');
+    blocco.className = 'rc-operatore-blocco';
+
+    const nomeRiga = document.createElement('section');
+    nomeRiga.className = 'rc-operatore-riga rc-operatore-riga-interna';
+    nomeRiga.innerHTML = `
+        <span class="rc-label">OPERATORE</span>
+        <div class="rc-operatore-nome">${escapeHtml(nomeOp)}</div>
+    `;
+    blocco.appendChild(nomeRiga);
+    renderTableHead(blocco);
+
+    const stats = calcolaERenderGruppi(blocco, servizi);
+    renderTotaliBox(blocco, stats.numRimb, stats.kmRimb, stats.numNon, stats.kmNon);
+    container.appendChild(blocco);
+    return stats;
+}
+
+function assicuraTitoloTotaliGenerali(mostra) {
+    const totSection = document.querySelector('#rc-contenuto > .rc-totali');
+    if (!totSection) return;
+    let titolo = totSection.querySelector('.rc-totali-titolo');
+    if (mostra) {
+        totSection.classList.add('rc-totali-generali');
+        if (!titolo) {
+            titolo = document.createElement('div');
+            titolo.className = 'rc-totali-titolo';
+            totSection.insertBefore(titolo, totSection.firstChild);
+        }
+        titolo.textContent = 'TOTALE GENERALE — TUTTI GLI OPERATORI';
+    } else {
+        totSection.classList.remove('rc-totali-generali');
+        titolo?.remove();
+    }
+}
+
 async function caricaERender() {
     const loading = document.getElementById('rc-loading');
     const errore = document.getElementById('rc-errore');
     const contenuto = document.getElementById('rc-contenuto');
     const gruppiEl = document.getElementById('rc-gruppi');
+    const tableHeadFisso = document.querySelector('#rc-contenuto > .rc-table-head');
 
     normalizzaPeriodo();
     aggiornaPeriodoUI();
 
-    if (!operatoreNome && !operatoreIdsocio) {
+    if (!modalitaTutti && !operatoreNome && !operatoreIdsocio) {
         if (loading) loading.hidden = true;
         if (errore) {
             errore.hidden = false;
@@ -310,41 +470,67 @@ async function caricaERender() {
         if (!invoke) throw new Error('Apri questo report dall\'app AUSER');
 
         const serviziAnno = await fetchServiziAnno(annoRif);
-        const delPeriodo = filtraServiziPeriodo(serviziAnno);
-
-        const perGruppo = {
-            'TESSERATI': [],
-            'AUSER RIMBORSO': [],
-            'AUSER GRATIS': []
-        };
-        delPeriodo.forEach((s) => {
-            const cat = categoriaDaRichiedente(s.richiedente);
-            perGruppo[cat].push(s);
-        });
-
         if (gruppiEl) gruppiEl.innerHTML = '';
-        let numRimb = 0;
-        let kmRimb = 0;
-        let numNon = 0;
-        let kmNon = 0;
 
-        GRUPPI.forEach((g) => {
-            const stats = renderGruppo(gruppiEl, g, perGruppo[g.key] || []);
-            if (stats.rimborsabile) {
-                numRimb += stats.count;
-                kmRimb += stats.km;
+        if (modalitaTutti) {
+            if (tableHeadFisso) tableHeadFisso.hidden = true;
+            assicuraTitoloTotaliGenerali(true);
+
+            const nomi = elencoOperatoriDalPeriodo(serviziAnno);
+            let totNumRimb = 0;
+            let totKmRimb = 0;
+            let totNumNon = 0;
+            let totKmNon = 0;
+
+            if (!nomi.length) {
+                const vuoto = document.createElement('div');
+                vuoto.className = 'rc-gruppo-vuoto';
+                vuoto.textContent = 'Nessun servizio eseguito nel periodo selezionato.';
+                gruppiEl.appendChild(vuoto);
             } else {
-                numNon += stats.count;
-                kmNon += stats.km;
+                nomi.forEach((nome) => {
+                    const delPeriodo = filtraServiziPeriodo(serviziAnno, nome);
+                    if (!delPeriodo.length) return;
+                    renderBloccoOperatore(gruppiEl, nome, delPeriodo);
+                });
             }
-        });
 
-        document.getElementById('rc-num-rimborsabili').textContent = String(numRimb);
-        document.getElementById('rc-km-rimborsabili').textContent = formatKm(kmRimb);
-        document.getElementById('rc-num-non-rimborsabili').textContent = String(numNon);
-        document.getElementById('rc-km-non-rimborsabili').textContent = formatKm(kmNon);
-        document.getElementById('rc-num-complessivo').textContent = String(numRimb + numNon);
-        document.getElementById('rc-km-complessivo').textContent = formatKm(kmRimb + kmNon);
+            // Totale generale: ogni servizio del periodo contato una sola volta
+            const tuttiPeriodo = ordinaServizi(
+                serviziAnno.filter((s) => servizioEseguito(s) && nelPeriodo(s))
+            );
+            const statsGenerali = {
+                numRimb: 0,
+                kmRimb: 0,
+                numNon: 0,
+                kmNon: 0
+            };
+            tuttiPeriodo.forEach((s) => {
+                const cat = categoriaDaRichiedente(s.richiedente);
+                const km = parseKm(s.km);
+                const gruppo = GRUPPI.find((g) => g.key === cat);
+                if (gruppo?.rimborsabile) {
+                    statsGenerali.numRimb += 1;
+                    statsGenerali.kmRimb += km;
+                } else {
+                    statsGenerali.numNon += 1;
+                    statsGenerali.kmNon += km;
+                }
+            });
+            totNumRimb = statsGenerali.numRimb;
+            totKmRimb = statsGenerali.kmRimb;
+            totNumNon = statsGenerali.numNon;
+            totKmNon = statsGenerali.kmNon;
+
+            aggiornaTotaliPagina(totNumRimb, totKmRimb, totNumNon, totKmNon);
+        } else {
+            if (tableHeadFisso) tableHeadFisso.hidden = false;
+            assicuraTitoloTotaliGenerali(false);
+
+            const delPeriodo = filtraServiziPeriodo(serviziAnno);
+            const stats = calcolaERenderGruppi(gruppiEl, delPeriodo);
+            aggiornaTotaliPagina(stats.numRimb, stats.kmRimb, stats.numNon, stats.kmNon);
+        }
 
         if (loading) loading.hidden = true;
         if (contenuto) contenuto.hidden = false;
