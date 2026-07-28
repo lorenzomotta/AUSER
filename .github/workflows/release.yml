@@ -47,10 +47,11 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Nuova versione v1.0.7:
-            - home più responsive su schermi 15–17" (niente taglio in basso)
-            - Elenco operatori: pulsante CHILOMETRI TOTALI (report di tutti gli operatori in ordine alfabetico)
-            - finestra minima ridotta a 1024×600 per laptop più piccoli
+            Nuova versione v1.0.8:
+            - adattamento a schermi piccoli (scala proporzionale + liste più leggibili)
+            - Elenco servizi: usa meglio lo spazio a tutto schermo
+            - Elenco operatori / mezzi: CHIUDI in alto accanto agli altri pulsanti
+            - Modifica / Completa servizio: data e ora sotto Creato da / Modificato da
 
             Gli utenti con l'app già installata riceveranno un avviso all'avvio
             e potranno aggiornare con un clic.

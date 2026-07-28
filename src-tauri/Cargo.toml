@@ -1,6 +1,6 @@
 [package]
 name = "auser-tauri-app"
-version = "1.0.7"
+version = "1.0.8"
 description = "AUSER Asti - Gestione Operativa"
 authors = ["LP. Creation"]
 license = ""
