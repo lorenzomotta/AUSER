@@ -946,3 +946,139 @@ body {
     background: #555;
 }
 
+/* ─── Adattamento schermi piccoli (oltre alla scala globale) ─── */
+@media screen and (max-width: 1500px) {
+    body {
+        padding: 12px;
+        padding-bottom: 72px;
+    }
+
+    .soci-container {
+        padding: 10px 12px;
+        max-width: 100%;
+    }
+
+    .page-header-wrapper {
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+    }
+
+    .page-title {
+        font-size: 26px;
+    }
+
+    .soci-container-scrollabile {
+        max-height: calc(100vh - 190px);
+        overflow-x: auto; /* se ancora non entra: scroll orizzontale, niente taglio */
+    }
+
+    .socio-form-row {
+        gap: 5px;
+    }
+
+    .socio-form-group label {
+        font-size: 10px;
+    }
+
+    .socio-form-group input,
+    .socio-form-group textarea {
+        padding: 3px 5px;
+        font-size: 12px;
+    }
+
+    .socio-form-group-idsocio {
+        flex: 0 0 56px;
+        min-width: 52px;
+    }
+
+    .socio-form-group-nominativo {
+        flex: 1 1 140px;
+        min-width: 120px;
+    }
+
+    .socio-form-group-codicefiscale {
+        flex: 0 0 118px;
+        min-width: 110px;
+    }
+
+    .socio-form-group-tipologiasocio {
+        flex: 0 0 95px;
+        min-width: 90px;
+    }
+
+    .socio-form-group-operatore {
+        flex: 0 0 78px;
+        min-width: 72px;
+        margin-right: -8px;
+    }
+
+    .socio-form-group-attivo {
+        flex: 0 0 70px;
+        min-width: 64px;
+        margin-left: -8px;
+    }
+
+    .socio-form-group-disponibilita {
+        flex: 0 0 110px;
+        min-width: 90px;
+    }
+
+    .socio-form-group-telefono {
+        flex: 0 0 110px;
+        min-width: 95px;
+    }
+
+    .socio-form-group-numerotessera {
+        flex: 0 0 95px;
+        min-width: 85px;
+    }
+
+    .socio-form-group-scadenzatessera {
+        flex: 0 0 105px;
+        min-width: 95px;
+    }
+
+    .socio-form-group-archivia {
+        flex: 0 0 72px;
+        min-width: 68px;
+    }
+
+    .socio-form-group-nota {
+        min-width: 100px;
+    }
+
+    .socio-form-actions .btn {
+        padding: 5px 10px;
+        font-size: 11px;
+    }
+
+    .search-input {
+        width: 280px;
+    }
+}
+
+/* Schermi molto stretti: la riga può andare a capo invece di tagliarsi */
+@media screen and (max-width: 1200px) {
+    .socio-form-row {
+        flex-wrap: wrap;
+    }
+
+    .page-title {
+        font-size: 22px;
+    }
+
+    .header-left .tessere-scadute-label {
+        font-size: 11px;
+    }
+
+    .btn-ricerca-avanzata,
+    .btn-nuovo-socio,
+    .btn-chiudi {
+        font-size: 12px;
+        padding: 6px 10px;
+    }
+}
+
+

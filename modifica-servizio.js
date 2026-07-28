@@ -219,19 +219,103 @@ function ensureAuditBarInHeader(modalId, prefix) {
     }
 }
 
-/** Aggiorna le etichette Creato da / Modificato da nell'header (solo username). */
+/** Formatta timestamp Supabase (ISO) in dd/mm/aaaa HH:mm */
+function formatTimestampAudit(value) {
+    if (value === null || value === undefined) return '';
+    const raw = String(value).trim();
+    if (!raw) return '';
+
+    // Già in formato italiano con ora
+    const it = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::\d{2})?)?/);
+    if (it) {
+        if (it[4] != null) {
+            return `${it[1]}/${it[2]}/${it[3]} ${String(it[4]).padStart(2, '0')}:${it[5]}`;
+        }
+        return `${it[1]}/${it[2]}/${it[3]}`;
+    }
+
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return raw;
+
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function timestampCreazioneServizio(servizio) {
+    return formatTimestampAudit(
+        servizio?.created_at
+        || servizio?.created
+        || servizio?.Created
+        || ''
+    );
+}
+
+function timestampModificaServizio(servizio) {
+    return formatTimestampAudit(
+        servizio?.updated_at
+        || servizio?.modificated
+        || servizio?.Modificated
+        || servizio?.modified
+        || ''
+    );
+}
+
+function escapeHtmlAudit(text) {
+    return String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+/** Aggiorna le etichette Creato da / Modificato da nell'header (+ data/ora). */
 export function aggiornaEtichetteAudit(prefix, servizio) {
     const creatoEl = document.getElementById(`${prefix}-audit-creato`);
     const modEl = document.getElementById(`${prefix}-audit-modificato`);
-    const creato = soloUsernameAccount(servizio?.creato_da);
-    const modificato = soloUsernameAccount(servizio?.modificato_da);
+    const creato = soloUsernameAccount(servizio?.creato_da)
+        || String(servizio?.creato_da || '').trim();
+    const modificato = soloUsernameAccount(servizio?.modificato_da)
+        || String(servizio?.modificato_da || '').trim();
+    const quandoCreato = timestampCreazioneServizio(servizio);
+    const quandoModificato = timestampModificaServizio(servizio);
+
     if (creatoEl) {
-        creatoEl.textContent = creato ? `Creato da "${creato}"` : 'Creato da —';
-        creatoEl.title = creato || '';
+        if (creato) {
+            creatoEl.innerHTML = `
+                <span class="mod-audit-chi">Creato da "${escapeHtmlAudit(creato)}"</span>
+                ${quandoCreato ? `<span class="mod-audit-quando">${escapeHtmlAudit(quandoCreato)}</span>` : ''}
+            `.trim();
+            creatoEl.title = quandoCreato ? `Creato da ${creato} — ${quandoCreato}` : `Creato da ${creato}`;
+        } else if (quandoCreato) {
+            creatoEl.innerHTML = `
+                <span class="mod-audit-chi">Creato da —</span>
+                <span class="mod-audit-quando">${escapeHtmlAudit(quandoCreato)}</span>
+            `.trim();
+            creatoEl.title = quandoCreato;
+        } else {
+            creatoEl.textContent = 'Creato da —';
+            creatoEl.title = '';
+        }
     }
     if (modEl) {
-        modEl.textContent = modificato ? `Modificato da "${modificato}"` : 'Modificato da —';
-        modEl.title = modificato || '';
+        if (modificato) {
+            modEl.innerHTML = `
+                <span class="mod-audit-chi">Modificato da "${escapeHtmlAudit(modificato)}"</span>
+                ${quandoModificato ? `<span class="mod-audit-quando">${escapeHtmlAudit(quandoModificato)}</span>` : ''}
+            `.trim();
+            modEl.title = quandoModificato
+                ? `Modificato da ${modificato} — ${quandoModificato}`
+                : `Modificato da ${modificato}`;
+        } else if (quandoModificato) {
+            modEl.innerHTML = `
+                <span class="mod-audit-chi">Modificato da —</span>
+                <span class="mod-audit-quando">${escapeHtmlAudit(quandoModificato)}</span>
+            `.trim();
+            modEl.title = quandoModificato;
+        } else {
+            modEl.textContent = 'Modificato da —';
+            modEl.title = '';
+        }
     }
 }
 

@@ -8,16 +8,25 @@
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #d8d6d3;
-    padding: 20px;
+    padding: 12px 16px;
     margin: 0;
-    padding-bottom: 80px; /* Spazio per il footer fisso */
+    padding-bottom: 72px; /* Spazio per il footer fisso */
+    min-height: 100vh;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
 }
 
 .servizi-container {
-    max-width: 1600px;
-    margin: 0 auto;
+    width: 100%;
+    max-width: none;
+    margin: 0;
     background-color: transparent;
-    padding: 20px;
+    padding: 8px 4px 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .page-header-wrapper {
@@ -180,11 +189,14 @@ body {
 
 /* Container scrollabile con tutti i servizi */
 .servizi-container-scrollabile {
-    max-height: calc(100vh - 220px);
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    height: calc(100vh - 160px);
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: auto;
     padding: 3px 0;
-    margin-bottom: 8px;
+    margin-bottom: 0;
 }
 
 /* Blocco servizio singolo (replica del form) */
@@ -526,8 +538,10 @@ body {
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    max-width: 1600px;
+    width: 100%;
+    max-width: none;
     margin: 0 auto;
+    padding: 0 8px;
 }
 
 .footer-buttons-left,
@@ -677,21 +691,93 @@ body {
     background-color: #cc0014;
 }
 
-/* Responsive */
-@media (max-width: 1200px) {
-    .servizi-container {
-        padding: 20px;
+/* Schermi larghi: i campi “elastici” usano lo spazio laterale libero */
+@media screen and (min-width: 1500px) {
+    html.page-elenco-servizi {
+        zoom: 1;
     }
-    
-    .form-group {
-        min-width: 120px;
+
+    .form-group-indirizzo {
+        flex: 1 1 280px !important;
+        min-width: 200px !important;
+        max-width: none !important;
     }
-    
+
+    .form-group-name {
+        flex: 1 1 220px !important;
+        max-width: none !important;
+    }
+
+    .form-group-with-filtra {
+        flex: 1 1 280px !important;
+        min-width: 240px !important;
+        max-width: none !important;
+    }
+
+    .form-group-mezzo {
+        flex: 1 1 260px !important;
+        max-width: none !important;
+    }
+
+    .form-group-large,
+    .form-group-motivazione {
+        flex: 1 1 220px !important;
+        min-width: 180px !important;
+        max-width: none !important;
+    }
+
+    .form-group-medium {
+        flex: 0 1 140px;
+        max-width: none;
+    }
+
+    .servizi-container-scrollabile {
+        height: calc(100vh - 150px);
+    }
+}
+
+/*
+ * Schermi piccoli: riduce TUTTA la pagina in proporzione (zoom),
+ * senza stringere i singoli campi.
+ * Solo sotto i 1500px, così a tutto schermo su monitor grandi non resta vuoto.
+ */
+@media screen and (max-width: 1499px) {
+    html.page-elenco-servizi {
+        zoom: 0.88;
+    }
+
+    .servizi-container-scrollabile {
+        height: calc(100vh - 150px);
+    }
+}
+
+@media screen and (max-width: 1366px) {
+    html.page-elenco-servizi {
+        zoom: 0.78;
+    }
+}
+
+@media screen and (max-width: 1280px) {
+    html.page-elenco-servizi {
+        zoom: 0.72;
+    }
+}
+
+@media screen and (max-width: 1200px) {
+    html.page-elenco-servizi {
+        zoom: 0.66;
+    }
+
+    .page-header-wrapper {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
     .form-group-with-button {
         flex-direction: column;
         align-items: stretch;
     }
-    
+
     .form-group-with-button .btn-filtra {
         width: 100%;
     }

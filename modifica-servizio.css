@@ -72,23 +72,48 @@
 
 .mod-audit-creato,
 .mod-audit-modificato {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     color: #546e7a;
-    line-height: 1.25;
-    max-width: 28%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.2;
+    max-width: 32%;
+    min-width: 0;
+    overflow: visible;
+    white-space: normal;
     flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }
 
 .mod-audit-creato {
     text-align: left;
+    align-items: flex-start;
 }
 
 .mod-audit-modificato {
     text-align: right;
+    align-items: flex-end;
+}
+
+.mod-audit-chi {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 600;
+    color: #546e7a;
+}
+
+.mod-audit-quando {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    color: #78909c;
+    line-height: 1.2;
+    white-space: nowrap;
 }
 
 .modal-modifica-body {

@@ -1,0 +1,45 @@
+/**
+ * Adattamento proporzionale dell'app su schermi piccoli / bassi (laptop 14–15").
+ * WebView2 (Tauri) supporta `zoom`: riduce tutta l'interfaccia in modo uniforme.
+ *
+ * Su monitor grandi non cambia nulla.
+ */
+
+/* Laptop tipici 15–17" (es. 1366×768, 1440×900) */
+@media screen and (max-width: 1440px) {
+    html {
+        zoom: 0.90;
+    }
+}
+
+@media screen and (max-width: 1280px) {
+    html {
+        zoom: 0.84;
+    }
+}
+
+@media screen and (max-width: 1100px) {
+    html {
+        zoom: 0.78;
+    }
+}
+
+/* Schermi bassi: riduce anche se la larghezza è ok (es. 1920×1080 con barra / scalatura Windows) */
+@media screen and (max-height: 820px) {
+    html {
+        zoom: 0.88;
+    }
+}
+
+@media screen and (max-height: 720px) {
+    html {
+        zoom: 0.80;
+    }
+}
+
+/* Se sia larghezza che altezza sono strette, riduci un po' di più */
+@media screen and (max-width: 1366px) and (max-height: 800px) {
+    html {
+        zoom: 0.82;
+    }
+}

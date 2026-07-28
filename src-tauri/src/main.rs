@@ -891,6 +891,12 @@ struct ServizioCompleto {
     creato_da: String,
     #[serde(default)]
     modificato_da: String,
+    /// Timestamp creazione (colonne Supabase: created / created_at)
+    #[serde(default)]
+    created_at: String,
+    /// Timestamp ultima modifica (colonne: modificated / updated_at)
+    #[serde(default)]
+    updated_at: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1934,6 +1940,28 @@ fn supabase_row_to_servizio_completo(
                 "modificato_da",
                 "Modificato_Da",
                 "MODIFICATODA",
+            ],
+        ),
+        created_at: get_field_any(
+            row,
+            &[
+                "created",
+                "Created",
+                "CREATED",
+                "created_at",
+                "Created_At",
+            ],
+        ),
+        updated_at: get_field_any(
+            row,
+            &[
+                "modificated",
+                "Modificated",
+                "MODIFICATED",
+                "modified",
+                "Modified",
+                "updated_at",
+                "Updated_At",
             ],
         ),
     })
