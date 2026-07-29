@@ -539,25 +539,64 @@ async function caricaNominativi() {
     const { data } = await supabaseClient.from(tabella('tesserati')).select('*').limit(5000);
     const operatori = [];
     (data || []).forEach(row => {
-        const id = getFieldAny(row, ['IdSocio', 'IDSOCIO', 'idsocio']);
+        const id = String(getFieldAny(row, ['IdSocio', 'IDSOCIO', 'idsocio']) || '').trim();
         const nom = getFieldAny(row, ['NominativoSocio', 'NOMINATIVO', 'Nominativo', 'nominativo']);
-        if (id && nom) nominativiMap[id] = nom;
+        if (id && nom) {
+            nominativiMap[id] = nom;
+            const idNum = parseInt(id, 10);
+            if (!Number.isNaN(idNum)) nominativiMap[String(idNum)] = nom;
+        }
         const opFlag = getFieldAny(row, ['Operatore', 'OPERATORE', 'operatore']);
         if (id && nom && isTruthyFlag(opFlag)) {
-            operatori.push({ value: String(id), label: nom });
+            operatori.push({ value: id, label: nom });
         }
     });
     allOperatori = operatori.sort((a, b) => a.label.localeCompare(b.label, 'it'));
 }
 
+/** Solo colonne ID operatore (non il flag/testo Operatore) */
+function idOperatoreDaRow(row) {
+    return String(
+        getFieldAny(row, ['IdOperatore', 'IDOPERATORE', 'Id_Operatore']) || ''
+    ).trim();
+}
+
+function nomeOperatoreDaId(idOp) {
+    const key = String(idOp || '').trim();
+    if (!key) return '';
+    if (nominativiMap[key]) return nominativiMap[key];
+    const n = parseInt(key, 10);
+    if (!Number.isNaN(n) && nominativiMap[String(n)]) return nominativiMap[String(n)];
+    return '';
+}
+
 function resolveOperatoreNome(row) {
-    const idOp = getFieldAny(row, ['IdOperatore', 'IDOPERATORE', 'Id_Operatore', 'Operatore', 'OPERATORE']);
-    if (idOp && nominativiMap[idOp]) return nominativiMap[idOp];
+    const idOp = idOperatoreDaRow(row);
+    const daMappa = nomeOperatoreDaId(idOp);
+    if (daMappa) return daMappa;
+    // se in mappa non c'è ancora, restituisci l'id (verrà riarricchito dopo caricaNominativi)
     return idOp;
 }
 
 function resolveOperatoreId(row) {
-    return getFieldAny(row, ['IdOperatore', 'IDOPERATORE', 'Id_Operatore', 'Operatore', 'OPERATORE']);
+    return idOperatoreDaRow(row);
+}
+
+/** Risolve di nuovo il nominativo (utile se i servizi erano in cache prima dei tesserati) */
+function arricchisciNomeOperatore(servizio) {
+    if (!servizio) return servizio;
+    const idOp = String(servizio.operatore_id || '').trim()
+        || (/^\d+$/.test(String(servizio.operatore || '').trim())
+            ? String(servizio.operatore).trim()
+            : '');
+    const nome = nomeOperatoreDaId(idOp);
+    if (!nome) return servizio;
+    if (servizio.operatore === nome && servizio.operatore_id === idOp) return servizio;
+    return {
+        ...servizio,
+        operatore_id: idOp || servizio.operatore_id,
+        operatore: nome
+    };
 }
 
 function buildTipoServizioDaRow(row) {
@@ -739,10 +778,15 @@ async function caricaAutomezzi() {
 
 async function caricaServiziPerRange(start, endEsclusivo) {
     const servizi = await fetchServiziRange(start, endEsclusivo);
-    servizi.forEach(s => {
-        if (s.id) serviziById.set(String(s.id), s);
+    const arricchiti = servizi.map((s) => {
+        const completo = arricchisciNomeOperatore(s);
+        if (completo.id) serviziById.set(String(completo.id), completo);
+        return completo;
     });
-    return servizi;
+    // Aggiorna la cache del range con i nomi risolti (evita ID “congelati”)
+    const key = chiaveRangeCache(start, endEsclusivo);
+    serviziPerRangeCache.set(key, arricchiti);
+    return arricchiti;
 }
 
 function costruisciStringaMezzo(servizio) {
@@ -906,7 +950,9 @@ function htmlTestoConIcona(testo, iconaHtml) {
 }
 
 function renderEventContent(arg) {
-    const s = arg.event.extendedProps.servizio || {};
+    const raw = arg.event.extendedProps.servizio || {};
+    const fromMap = raw.id ? serviziById.get(String(raw.id)) : null;
+    const s = arricchisciNomeOperatore(fromMap || raw);
     const vista = arg.view?.type || '';
     const isGiorno = vista === 'dayGridDay';
     const ora = s.ora_inizio || '';
@@ -1749,7 +1795,8 @@ function esportaExcelVistaCorrente() {
     const btn = document.getElementById('btn-export-excel-cal');
     try {
         if (btn) btn.disabled = true;
-        generaExcelCalendarioWeb(serviziVistaCorrente, {
+        const servizi = (serviziVistaCorrente || []).map(arricchisciNomeOperatore);
+        generaExcelCalendarioWeb(servizi, {
             vista: vistaCorrente || calendar?.view?.type || '',
             periodoLabel: periodoLabelVistaCorrente(),
             getMezzo: costruisciStringaMezzo
@@ -1809,6 +1856,9 @@ async function avviaCalendario(user, perm) {
     console.log('Calendario permessi:', permessiCorrenti, 'admin=', isUtenteAdmin(permessiCorrenti));
     mostraCalendario(etichettaUtente(user, perm));
     configuraVistaInizialeMobile();
+    setLoading(true, 'Caricamento anagrafiche...');
+    await caricaNominativi();
+    await caricaAutomezzi();
     initCalendario();
     setupEventListenersCalendario();
     if (isVistaMobileCalendario() && calendar) {
@@ -1816,8 +1866,6 @@ async function avviaCalendario(user, perm) {
         calendar.today();
     }
     setLoading(true);
-    await caricaNominativi();
-    await caricaAutomezzi();
     if (calendar) await aggiornaEventiCalendario();
 }
 

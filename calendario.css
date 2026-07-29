@@ -340,6 +340,20 @@ body {
     cursor: pointer;
 }
 
+/* Vista mese: testo più piccolo per far stare meglio ora · socio · operatore */
+#calendario-mount .fc-dayGridMonth-view .cal-event {
+    font-size: 8.5px;
+    line-height: 1.1;
+    padding: 0 2px;
+}
+
+#calendario-mount .fc-dayGridMonth-view .cal-icona-carrozzina {
+    width: 12px;
+    height: 12px;
+    margin-left: 2px;
+    vertical-align: -2px;
+}
+
 .cal-event-op {
     color: #1565c0;
     font-size: calc(1em + 1pt);
