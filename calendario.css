@@ -71,6 +71,45 @@ body {
     gap: 6px;
 }
 
+.btn-export-excel-cal {
+    display: none; /* solo PC / tablet */
+    align-items: center;
+    justify-content: center;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: bold;
+    background-color: #1565c0;
+    color: #fff;
+    border: 2px solid #0d47a1;
+    border-radius: 5px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s;
+}
+
+.btn-export-excel-cal:hover {
+    background-color: #0d47a1;
+}
+
+.btn-export-excel-cal:disabled {
+    opacity: 0.65;
+    cursor: wait;
+}
+
+@media (min-width: 768px) {
+    .btn-export-excel-cal {
+        display: inline-flex;
+    }
+
+    .web-calendario-app .header-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+}
+
 .btn-vista {
     padding: 8px 14px;
     font-size: 13px;

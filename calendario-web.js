@@ -7,7 +7,7 @@
  * 3. Tabella user_permissions: user_id + Calendario = true (o is_admin = true)
  * 4. Esegui supabase-calendario-web.sql per le policy RLS
  * 5. Pubblica su GitHub Pages i file: CALENDARIO_WEB.html, calendario-web.css,
- *    calendario-web.js, calendario.css, tratta-riepilogo.js, config.public.json
+ *    calendario-web.js, calendario-web-excel.js, calendario.css, tratta-riepilogo.js, config.public.json
  */
 
 import {
@@ -26,6 +26,7 @@ import {
     payloadSenzaMeta,
     OPZIONI_DEFAULT
 } from './calendario-web-edit.js?v=26';
+import { generaExcelCalendarioWeb } from './calendario-web-excel.js?v=1';
 
 let supabaseClient = null;
 let publicConfig = null;
@@ -35,6 +36,8 @@ let calendar = null;
 let allAutomezzi = [];
 const serviziPerRangeCache = new Map();
 const serviziById = new Map();
+/** Servizi caricati per la vista/periodo corrente (per export Excel) */
+let serviziVistaCorrente = [];
 let vistaCorrente = 'dayGridMonth';
 let permessiCorrenti = null;
 /** @type {object|null} utente Auth Supabase corrente */
@@ -505,6 +508,7 @@ async function gestisciLogout() {
     await supabaseClient.auth.signOut();
     invalidaCacheServizi();
     serviziById.clear();
+    serviziVistaCorrente = [];
     nominativiMap = {};
     allOperatori = [];
     permessiCorrenti = null;
@@ -996,6 +1000,7 @@ async function aggiornaEventiCalendario() {
         const view = calendar.view;
         const servizi = await caricaServiziPerRange(view.activeStart, view.activeEnd);
         if (reqId !== loadRequestId) return;
+        serviziVistaCorrente = servizi;
         const eventi = servizi.map(servizioToEvent).filter(Boolean);
         calendar.removeAllEvents();
         calendar.addEventSource(eventi);
@@ -1004,6 +1009,7 @@ async function aggiornaEventiCalendario() {
         requestAnimationFrame(() => applicaIntestazioniGiornoListaMobile());
     } catch (error) {
         if (reqId !== loadRequestId) return;
+        serviziVistaCorrente = [];
         console.error('Errore aggiornamento calendario:', error);
         setLoading(true, `Errore: ${error.message || error}`);
     }
@@ -1734,6 +1740,28 @@ function impostaVista(nomeVista) {
 
 let listenersCalendarioOk = false;
 
+function periodoLabelVistaCorrente() {
+    if (calendar?.view?.title) return String(calendar.view.title).trim();
+    return 'periodo corrente';
+}
+
+function esportaExcelVistaCorrente() {
+    const btn = document.getElementById('btn-export-excel-cal');
+    try {
+        if (btn) btn.disabled = true;
+        generaExcelCalendarioWeb(serviziVistaCorrente, {
+            vista: vistaCorrente || calendar?.view?.type || '',
+            periodoLabel: periodoLabelVistaCorrente(),
+            getMezzo: costruisciStringaMezzo
+        });
+    } catch (error) {
+        console.error('Export Excel calendario:', error);
+        alert(error?.message || String(error));
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
 function setupEventListenersCalendario() {
     if (listenersCalendarioOk) return;
     listenersCalendarioOk = true;
@@ -1741,6 +1769,7 @@ function setupEventListenersCalendario() {
         btn.addEventListener('click', () => impostaVista(btn.dataset.vista));
     });
 
+    document.getElementById('btn-export-excel-cal')?.addEventListener('click', esportaExcelVistaCorrente);
     document.getElementById('btn-logout')?.addEventListener('click', gestisciLogout);
     document.getElementById('btn-close-modal')?.addEventListener('click', chiudiModalServizio);
     document.getElementById('btn-chiudi-modal')?.addEventListener('click', chiudiModalServizio);

@@ -217,6 +217,10 @@
         gap: 6px;
     }
 
+    .web-calendario-app .btn-export-excel-cal {
+        display: none !important; /* telefono: niente export */
+    }
+
     .web-calendario-app .btn-vista {
         flex: 1;
         min-height: 44px;
