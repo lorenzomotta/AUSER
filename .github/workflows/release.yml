@@ -47,7 +47,9 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Nuova versione v1.0.9:
+            Nuova versione v1.0.10:
+            - Correzione: il numero ricevuta della serie si vede e si salva sul servizio principale
+            - Salvando il principale, numero e data ricevuta si copiano anche sugli altri servizi della serie
             - Nuovo servizio: ripetizione su più date (ora, operatore e mezzo per ciascuna)
             - Ricevuta unica: importo sul servizio principale, stesso numero sugli altri
             - In modifica/completamento dei servizi aggiuntivi: pagamento bloccato e pulsante per aprire il principale

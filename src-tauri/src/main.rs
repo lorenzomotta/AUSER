@@ -358,6 +358,16 @@ fn resolve_column_key(row: &serde_json::Value, candidates: &[&str]) -> Option<St
             return Some((*name).to_string());
         }
     }
+    if let Some(obj) = row.as_object() {
+        for name in candidates {
+            let name_lower = name.to_lowercase();
+            for key in obj.keys() {
+                if key.to_lowercase() == name_lower {
+                    return Some(key.clone());
+                }
+            }
+        }
+    }
     None
 }
 
@@ -1919,6 +1929,8 @@ fn supabase_row_to_servizio_completo(
                 "Ricevuta_Numero",
                 "RICEVUTA_NUMERO",
                 "NumeroRicevuta",
+                "Numero_Ricevuta",
+                "ricevuta_numero",
             ],
         ),
         stato_servizio: get_field_any(row, &["StatoServizio", "STATOSERVIZIO"]),
@@ -5324,10 +5336,12 @@ fn put_servizio_field(
     value: serde_json::Value,
 ) {
     if let Some(r) = row {
-        insert_patch_field(body, r, candidates, value);
-    } else {
-        body.insert(default_key.to_string(), value);
+        if let Some(key) = resolve_column_key(r, candidates) {
+            body.insert(key, value);
+            return;
+        }
     }
+    body.insert(default_key.to_string(), value);
 }
 
 fn put_opt_string_field(
@@ -5811,6 +5825,8 @@ async fn build_servizio_supabase_body(
             "Ricevuta_Numero",
             "RICEVUTA_NUMERO",
             "NumeroRicevuta",
+            "Numero_Ricevuta",
+            "ricevuta_numero",
         ],
         "Ricevuta_numero",
         payload.numero_ricevuta.clone(),
@@ -5969,12 +5985,14 @@ fn riga_e_aggiuntivo_della_serie(row: &serde_json::Value, id_principale: u32) ->
     t.contains(&needle_a) || t.contains(&needle_b)
 }
 
-/// Aggiorna stato incasso e data incasso sui servizi aggiuntivi di una serie.
+/// Aggiorna stato incasso, data incasso e ricevuta sui servizi aggiuntivi di una serie.
 #[tauri::command]
 async fn aggiorna_incasso_serie_servizi(
     id_principale: u32,
     stato_incasso: Option<String>,
     data_bonifico: Option<String>,
+    numero_ricevuta: Option<String>,
+    data_ricevuta: Option<String>,
     modificato_da: Option<String>,
 ) -> Result<u32, String> {
     println!(
@@ -6035,6 +6053,39 @@ async fn aggiorna_incasso_serie_servizi(
             "Bonifico_Data",
             data_bonifico.clone(),
         );
+        if numero_ricevuta
+            .as_ref()
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false)
+        {
+            put_opt_numeric_field(
+                &mut body,
+                Some(&row),
+                &[
+                    "Ricevuta_numero",
+                    "Ricevuta_Numero",
+                    "RICEVUTA_NUMERO",
+                    "NumeroRicevuta",
+                    "Numero_Ricevuta",
+                    "ricevuta_numero",
+                ],
+                "Ricevuta_numero",
+                numero_ricevuta.clone(),
+            );
+        }
+        if data_ricevuta
+            .as_ref()
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false)
+        {
+            put_opt_date_field(
+                &mut body,
+                Some(&row),
+                &["Ricevuta_Data", "DATARICEVUTA", "DataRicevuta"],
+                "Ricevuta_Data",
+                data_ricevuta.clone(),
+            );
+        }
         strip_servizio_audit_fields(&mut body);
         apply_servizio_audit_fields(
             &mut body,

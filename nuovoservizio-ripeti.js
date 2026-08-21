@@ -442,3 +442,15 @@ export function idPrincipaleDaServizioAggiuntivo(servizio) {
     const id = parseInt(m[1], 10);
     return Number.isNaN(id) ? 0 : id;
 }
+
+/**
+ * Numero ricevuta dal campo, oppure dalle note della serie
+ * ("ricevuta n. 1234") se il campo in archivio è rimasto vuoto.
+ */
+export function numeroRicevutaDaServizio(servizio) {
+    const diretto = String(servizio?.numero_ricevuta ?? '').trim();
+    if (diretto) return diretto;
+    const t = testoNoteSerie(servizio);
+    const m = t.match(/ricevuta n\.\s*([0-9]+)/i);
+    return m ? m[1] : '';
+}

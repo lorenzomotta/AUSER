@@ -15,7 +15,7 @@ import {
     messaggioAvvisoDopoRimozioneTratta
 } from './tratta-riepilogo.js';
 import { formatoAccountSessione, soloUsernameAccount } from './auth-session.js';
-import { isServizioSerieAggiuntivo, isServizioSeriePrincipale, idPrincipaleDaServizioAggiuntivo } from './nuovoservizio-ripeti.js';
+import { isServizioSerieAggiuntivo, isServizioSeriePrincipale, idPrincipaleDaServizioAggiuntivo, numeroRicevutaDaServizio } from './nuovoservizio-ripeti.js';
 import { apriCalcolaTariffa, ensureCalcolaTariffaMarkup, formatEuroCalcolaTariffa, applicaRiepilogoTariffaNelDom, rimuoviRiepilogoTariffaDalForm, htmlBloccoRiepilogoTariffa, parseTariffaDaNote, mergeTariffaInNote, leggiTariffaDalDom } from './calcola-tariffa.js';
 
 let getInvokeFn = () => null;
@@ -870,6 +870,10 @@ export function costruisciFormServizio(
     { idPrefix = 'mod', chiusuraPrima = false, tipiPagamentoExtra = null, mostraArchivia = true, pagamentoSecondo = false } = {}
 ) {
     const p = idPrefix;
+    const numeroRicevutaVisibile = numeroRicevutaDaServizio(servizio);
+    if (numeroRicevutaVisibile) {
+        servizio.numero_ricevuta = numeroRicevutaVisibile;
+    }
     const tipiPagamentoOpts = getTipiPagamentoOptions(servizio.tipo_pagamento, tipiPagamentoExtra);
 
     const operatoriOpts = [{ value: '', label: '— Seleziona operatore —' }].concat(
@@ -1153,6 +1157,8 @@ export async function propagaIncassoSerieDaPayload(payload, servizioOriginale) {
             idPrincipale: payload.id,
             statoIncasso: payload.stato_incasso || '',
             dataBonifico: payload.data_bonifico || '',
+            numeroRicevuta: payload.numero_ricevuta || '',
+            dataRicevuta: payload.data_ricevuta || '',
             modificatoDa: payload.modificato_da || formatoAccountSessione() || null
         });
         return Number(n) || 0;
