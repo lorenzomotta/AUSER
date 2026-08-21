@@ -5950,6 +5950,124 @@ async fn update_servizio_completo(payload: UpdateServizioPayload) -> Result<(), 
         .map_err(|e| format_supabase_error(&e))
 }
 
+fn testo_note_serie_da_riga(row: &serde_json::Value) -> String {
+    let prelievo = get_field_any(row, &["Prelievo_Note", "PRELIEVO_NOTE"]);
+    let fine = get_field_any(
+        row,
+        &["NoteFineServizio", "NOTAFINESERVIZIO", "NOTE_FINE_SERVIZIO"],
+    );
+    format!("{}\n{}", prelievo, fine)
+}
+
+fn riga_e_aggiuntivo_della_serie(row: &serde_json::Value, id_principale: u32) -> bool {
+    if servizio_id_from_row(row) == id_principale {
+        return false;
+    }
+    let t = testo_note_serie_da_riga(row).to_lowercase();
+    let needle_a = format!("sul servizio n. {}", id_principale);
+    let needle_b = format!("sul servizio n.{}", id_principale);
+    t.contains(&needle_a) || t.contains(&needle_b)
+}
+
+/// Aggiorna stato incasso e data incasso sui servizi aggiuntivi di una serie.
+#[tauri::command]
+async fn aggiorna_incasso_serie_servizi(
+    id_principale: u32,
+    stato_incasso: Option<String>,
+    data_bonifico: Option<String>,
+    modificato_da: Option<String>,
+) -> Result<u32, String> {
+    println!(
+        "=== aggiorna_incasso_serie_servizi principale={} ===",
+        id_principale
+    );
+    if id_principale == 0 {
+        return Ok(0);
+    }
+
+    ensure_supabase_client().await?;
+
+    let principale = fetch_servizio_row_template(id_principale).await?;
+    let idsocio = get_field_any(&principale, &["IdSocio", "IDSOCIO", "idsocio"]);
+
+    let rows = if !idsocio.trim().is_empty() {
+        let filtro = format!("IdSocio=eq.{}", idsocio.trim());
+        match fetch_servizi_supabase(Some(&filtro)).await {
+            Ok(r) => r,
+            Err(e) => {
+                println!("⚠️ Filtro IdSocio fallito ({}), riprovo senza filtro ristretto", e);
+                let filtro_id = format!("idservizio=gte.{}", id_principale.saturating_sub(50));
+                fetch_servizi_supabase(Some(&filtro_id)).await.unwrap_or_default()
+            }
+        }
+    } else {
+        Vec::new()
+    };
+
+    let aggiuntivi: Vec<serde_json::Value> = rows
+        .into_iter()
+        .filter(|row| riga_e_aggiuntivo_della_serie(row, id_principale))
+        .collect();
+
+    if aggiuntivi.is_empty() {
+        println!("ℹ️ Nessun servizio aggiuntivo trovato per serie {}", id_principale);
+        return Ok(0);
+    }
+
+    let mut aggiornati = 0u32;
+    for row in aggiuntivi {
+        let extra_id = servizio_id_from_row(&row);
+        if extra_id == 0 {
+            continue;
+        }
+        let mut body = serde_json::Map::new();
+        put_opt_string_field(
+            &mut body,
+            Some(&row),
+            &["Incassato", "INCASSATO"],
+            "Incassato",
+            stato_incasso.clone(),
+        );
+        put_opt_date_field(
+            &mut body,
+            Some(&row),
+            &["Bonifico_Data", "DATABONIFICO", "DataBonifico"],
+            "Bonifico_Data",
+            data_bonifico.clone(),
+        );
+        strip_servizio_audit_fields(&mut body);
+        apply_servizio_audit_fields(
+            &mut body,
+            Some(&row),
+            None,
+            modificato_da.as_deref(),
+            false,
+            true,
+        );
+        if body.is_empty() {
+            continue;
+        }
+
+        let guard = get_supabase_client().lock().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+        client
+            .patch_servizio(extra_id, &body)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+        drop(guard);
+        aggiornati += 1;
+        println!("✓ Incasso serie: aggiornato servizio {}", extra_id);
+    }
+
+    println!(
+        "✓ aggiorna_incasso_serie_servizi: {} servizi aggiuntivi aggiornati",
+        aggiornati
+    );
+    Ok(aggiornati)
+}
+
 // Comando per creare un nuovo servizio (Supabase / Servizi_supa)
 #[tauri::command]
 async fn create_servizio(payload: UpdateServizioPayload) -> Result<u32, String> {
@@ -6403,6 +6521,7 @@ fn main() {
             save_credentials,
             update_servizio_sharepoint,
             update_servizio_completo,
+            aggiorna_incasso_serie_servizi,
             create_servizio,
             delete_servizio,
             duplicate_servizio,

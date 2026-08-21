@@ -113,6 +113,10 @@
                 <div class="ns-section-header">
                     <h2 class="ns-section-title">2. Dati prelievo</h2>
                     <div class="ns-section-header-actions">
+                        <label class="ns-check-ripeti" for="ns-ripeti-servizio" title="Crea lo stesso servizio su più date">
+                            <input type="checkbox" id="ns-ripeti-servizio">
+                            <span>RIPETI SU PIÙ DATE</span>
+                        </label>
                         <button type="button" class="ns-btn-tratta-fuori-asti" id="btn-tratta-fuori-asti-prelievo">TRATTA FUORI ASTI</button>
                         <button type="button" class="btn btn-prelievo-da-casa" id="btn-prelievo-da-casa">
                             PRELIEVO DA CASA TRASPORTATO
@@ -147,6 +151,34 @@
                     <div class="ns-field ns-field-note-prelievo">
                         <label for="ns-note-prelievo">NOTE PRELIEVO</label>
                         <textarea id="ns-note-prelievo" class="ns-input ns-textarea" rows="2"></textarea>
+                    </div>
+                </div>
+
+                <div id="ns-ripeti-panel" class="ns-ripeti-panel" hidden>
+                    <p class="ns-ripeti-hint">
+                        La prima riga è la data principale del form (si aggiorna da sola).
+                        Per ogni altra data puoi cambiare ora, operatore e mezzo.
+                        Consiglio: scegli prima operatore e mezzo nella sezione 5, poi aggiungi le date.
+                    </p>
+                    <div class="ns-ripeti-tabella-wrap">
+                        <table class="ns-ripeti-tabella">
+                            <thead>
+                                <tr>
+                                    <th>Data prelievo</th>
+                                    <th>Ora sotto casa</th>
+                                    <th>Operatore</th>
+                                    <th>Mezzo</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="ns-ripeti-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="ns-ripeti-azioni">
+                        <label class="ns-ripeti-aggiungi-label" for="ns-ripeti-nuova-data">Nuova data</label>
+                        <input type="date" id="ns-ripeti-nuova-data" class="ns-input ns-ripeti-nuova-data">
+                        <button type="button" class="ns-btn-ripeti-aggiungi" id="btn-ripeti-aggiungi">+ AGGIUNGI DATA</button>
+                        <span class="ns-ripeti-conteggio" id="ns-ripeti-conteggio"></span>
                     </div>
                 </div>
             </section>
@@ -340,11 +372,13 @@
                         <input type="date" id="ns-data-bonifico" class="ns-input ns-input-data">
                     </div>
                     </div>
-                    <input type="hidden" id="ns-tratta-fuori-asti" value="">
-                    <div class="ns-tratta-selezionata" id="ns-tratta-fuori-asti-box" hidden></div>
                     <input type="hidden" id="ns-tariffa-calcolata" value="">
                     <div class="ns-tratta-selezionata ns-tariffa-calcolata" id="ns-tariffa-calcolata-box" hidden></div>
                 </div>
+                <p id="ns-ripeti-pagamento-hint" class="ns-ripeti-pagamento-hint" hidden>
+                    Serie ripetuta: l’importo e il numero ricevuta valgono per tutte le date.
+                    L’importo viene salvato solo sul primo servizio; gli altri tengono lo stesso numero di ricevuta.
+                </p>
             </section>
         </form>
         </div>

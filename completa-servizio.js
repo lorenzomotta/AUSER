@@ -6,8 +6,12 @@ import {
     costruisciFormServizio,
     setupFormServizioListeners,
     raccogliPayloadServizio,
-    aggiornaEtichetteAudit
+    aggiornaEtichetteAudit,
+    propagaIncassoSerieDaPayload,
+    abilitaPulsantiApriPrincipaleSerie,
+    mostraAvvisoModifica
 } from './modifica-servizio.js';
+import { isServizioSerieAggiuntivo } from './nuovoservizio-ripeti.js';
 
 let getInvokeFn = () => null;
 let isTauriEnv = () => false;
@@ -149,6 +153,7 @@ export async function apriModalCompleta(servizioId) {
         pagamentoSecondo: true
     });
     setupFormServizioListeners('comp');
+    abilitaPulsantiApriPrincipaleSerie(body);
     modal.style.display = 'flex';
     modal.setAttribute('aria-hidden', 'false');
 }
@@ -166,6 +171,15 @@ async function salvaCompletaServizio() {
         ? 'SI'
         : 'NO';
 
+    if (isServizioSerieAggiuntivo(servizioInCompletamento)) {
+        payload.pagamento = servizioInCompletamento.pagamento || '';
+        payload.stato_incasso = servizioInCompletamento.stato_incasso || '';
+        payload.tipo_pagamento = servizioInCompletamento.tipo_pagamento || '';
+        payload.data_bonifico = servizioInCompletamento.data_bonifico || '';
+        payload.data_ricevuta = servizioInCompletamento.data_ricevuta || '';
+        payload.numero_ricevuta = servizioInCompletamento.numero_ricevuta || '';
+    }
+
     const btnSalva = document.getElementById('btn-salva-completa');
     if (btnSalva) btnSalva.disabled = true;
 
@@ -174,8 +188,14 @@ async function salvaCompletaServizio() {
         if (isTauriEnv() && invoke) {
             await invoke('init_supabase_from_config').catch(() => {});
             await invoke('update_servizio_completo', { payload });
+            const extraSerie = await propagaIncassoSerieDaPayload(payload, servizioInCompletamento);
             const aggiornato = await invoke('get_servizio_completo', { servizioId: payload.id });
             await onSaveSuccess(aggiornato, payload);
+            if (extraSerie > 0) {
+                await mostraAvvisoModifica(
+                    `Stato incasso e data incasso aggiornati anche su ${extraSerie} servizi della serie.`
+                );
+            }
             chiudiModalCompleta();
         } else {
             await onSaveSuccess({ ...servizioInCompletamento, ...payload, id: String(payload.id) }, payload);

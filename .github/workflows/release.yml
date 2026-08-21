@@ -47,11 +47,11 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Nuova versione v1.0.8:
-            - adattamento a schermi piccoli (scala proporzionale + liste più leggibili)
-            - Elenco servizi: usa meglio lo spazio a tutto schermo
-            - Elenco operatori / mezzi: CHIUDI in alto accanto agli altri pulsanti
-            - Modifica / Completa servizio: data e ora sotto Creato da / Modificato da
+            Nuova versione v1.0.9:
+            - Nuovo servizio: ripetizione su più date (ora, operatore e mezzo per ciascuna)
+            - Ricevuta unica: importo sul servizio principale, stesso numero sugli altri
+            - In modifica/completamento dei servizi aggiuntivi: pagamento bloccato e pulsante per aprire il principale
+            - Salvando stato incasso e data incasso sul principale, si aggiornano anche gli altri della serie
 
             Gli utenti con l'app già installata riceveranno un avviso all'avvio
             e potranno aggiornare con un clic.

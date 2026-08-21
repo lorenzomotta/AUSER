@@ -15,6 +15,7 @@ import {
     messaggioAvvisoDopoRimozioneTratta
 } from './tratta-riepilogo.js';
 import { formatoAccountSessione, soloUsernameAccount } from './auth-session.js';
+import { isServizioSerieAggiuntivo, isServizioSeriePrincipale, idPrincipaleDaServizioAggiuntivo } from './nuovoservizio-ripeti.js';
 import { apriCalcolaTariffa, ensureCalcolaTariffaMarkup, formatEuroCalcolaTariffa, applicaRiepilogoTariffaNelDom, rimuoviRiepilogoTariffaDalForm, htmlBloccoRiepilogoTariffa, parseTariffaDaNote, mergeTariffaInNote, leggiTariffaDalDom } from './calcola-tariffa.js';
 
 let getInvokeFn = () => null;
@@ -32,6 +33,7 @@ let allTipiPagamento = [];
 let servizioInModifica = null;
 let solaLetturaAttiva = false;
 let pagamentoModificabile = false;
+let pagamentoSerieBloccato = false;
 /** Prefisso form che riceve la prossima selezione tratta (mod / comp) */
 let trattaTargetPrefix = null;
 let listenerTrattaFormAttivo = false;
@@ -575,7 +577,7 @@ async function controllaMezzoGiaUsatoNellaDataModifica(idPrefix = 'mod') {
     }
 }
 
-function mostraAvvisoModifica(messaggio) {
+export function mostraAvvisoModifica(messaggio) {
     return new Promise((resolve) => {
         const overlay = document.getElementById('mod-dialog-avviso');
         const msgEl = document.getElementById('mod-dialog-avviso-messaggio');
@@ -981,8 +983,17 @@ export function costruisciFormServizio(
                 </div>
             </section>`;
 
+    const idPrincipaleSerie = idPrincipaleDaServizioAggiuntivo(servizio);
     const sezionePagamento = (num) => `
-            <section class="ns-section ns-section-pagamento">
+            <section class="ns-section ns-section-pagamento${isServizioSerieAggiuntivo(servizio) ? ' mod-pagamento-serie-bloccato' : ''}">
+                ${isServizioSerieAggiuntivo(servizio)
+                    ? `<div class="mod-pagamento-serie-hint-wrap">
+                    <p class="mod-pagamento-serie-hint">Pagamento della serie: visibile qui, modificabile solo sul servizio principale.</p>
+                    ${idPrincipaleSerie
+                        ? `<button type="button" class="ns-btn-apri-principale-serie" data-id-principale="${idPrincipaleSerie}">APRI SERVIZIO PRINCIPALE n. ${idPrincipaleSerie}</button>`
+                        : ''}
+                </div>`
+                    : ''}
                 <div class="ns-pagamento-layout">
                     <h2 class="ns-section-title ns-pagamento-title">${num}. Pagamento e incasso</h2>
                     <div class="ns-pagamento-quick-btns" aria-label="Importi rapidi donazione">
@@ -1074,6 +1085,81 @@ function aggiornaDettagliMezzoServizio(idPrefix) {
 
     const noteEl = document.getElementById(`${idPrefix}-note-mezzo`);
     if (noteEl) noteEl.value = automezzo?.note_mezzo || '';
+}
+
+function isPulsanteApriPrincipaleSerie(el) {
+    return el?.classList?.contains('ns-btn-apri-principale-serie');
+}
+
+function bloccaSezionePagamentoSeSerie(idPrefix) {
+    const sezione = document.querySelector(
+        `#form-${idPrefix}-servizio .ns-section-pagamento.mod-pagamento-serie-bloccato`
+    );
+    if (!sezione) return false;
+
+    sezione.querySelectorAll('.ns-pagamento-quick-btns, .ns-pagamento-azioni-destra').forEach((el) => {
+        el.hidden = true;
+    });
+    sezione.querySelectorAll('input, select, textarea, button').forEach((el) => {
+        if (isPulsanteApriPrincipaleSerie(el)) {
+            el.disabled = false;
+            return;
+        }
+        if (el.tagName === 'BUTTON') {
+            el.disabled = true;
+            return;
+        }
+        el.disabled = true;
+        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+            el.readOnly = true;
+        }
+    });
+    return true;
+}
+
+export function abilitaPulsantiApriPrincipaleSerie(root) {
+    (root || document).querySelectorAll('.ns-btn-apri-principale-serie').forEach((btn) => {
+        btn.disabled = false;
+    });
+}
+
+async function apriServizioPrincipaleSerie(idPrincipale) {
+    const id = parseInt(idPrincipale, 10);
+    if (!id || Number.isNaN(id)) return;
+
+    const solaLettura = solaLetturaAttiva;
+    const modalCompleta = document.getElementById('modal-completa');
+    if (modalCompleta?.style.display === 'flex') {
+        modalCompleta.style.display = 'none';
+        modalCompleta.setAttribute('aria-hidden', 'true');
+    }
+
+    await apriModalModifica(id, {
+        solaLettura,
+        apriSezionePagamento: true,
+        avvisoIniziale:
+            'Questo è il servizio principale della serie.\n\n' +
+            'Modifica qui stato incasso e data incasso: al salvataggio verranno copiati sugli altri servizi della serie.'
+    });
+}
+
+export async function propagaIncassoSerieDaPayload(payload, servizioOriginale) {
+    const origine = servizioOriginale || payload;
+    if (!isServizioSeriePrincipale(origine)) return 0;
+    const invoke = getInvokeFn();
+    if (!isTauriEnv() || !invoke || !payload?.id) return 0;
+    try {
+        const n = await invoke('aggiorna_incasso_serie_servizi', {
+            idPrincipale: payload.id,
+            statoIncasso: payload.stato_incasso || '',
+            dataBonifico: payload.data_bonifico || '',
+            modificatoDa: payload.modificato_da || formatoAccountSessione() || null
+        });
+        return Number(n) || 0;
+    } catch (err) {
+        console.warn('Aggiornamento incasso serie:', err);
+        return 0;
+    }
 }
 
 export function setupFormServizioListeners(idPrefix = 'mod') {
@@ -1178,6 +1264,13 @@ export function setupFormServizioListeners(idPrefix = 'mod') {
     });
 
     setupListenerTrattaPerFormServizio();
+    bloccaSezionePagamentoSeSerie(idPrefix);
+    document.querySelector(`#form-${idPrefix}-servizio .ns-btn-apri-principale-serie`)
+        ?.addEventListener('click', (e) => {
+            e.preventDefault();
+            const id = parseInt(e.currentTarget.getAttribute('data-id-principale'), 10);
+            apriServizioPrincipaleSerie(id);
+        });
 }
 
 async function applicaTrattaSelezionataAlForm(idPrefix, tratta) {
@@ -1380,7 +1473,17 @@ export function raccogliPayloadServizio(idPrefix = 'mod') {
 }
 
 function raccogliPayloadModifica() {
-    return raccogliPayloadServizio('mod');
+    const payload = raccogliPayloadServizio('mod');
+    if (!pagamentoSerieBloccato || !servizioInModifica) return payload;
+    return {
+        ...payload,
+        pagamento: servizioInModifica.pagamento || '',
+        stato_incasso: servizioInModifica.stato_incasso || '',
+        tipo_pagamento: servizioInModifica.tipo_pagamento || '',
+        data_bonifico: servizioInModifica.data_bonifico || '',
+        data_ricevuta: servizioInModifica.data_ricevuta || '',
+        numero_ricevuta: servizioInModifica.numero_ricevuta || ''
+    };
 }
 
 export async function caricaDatiModificaServizio() {
@@ -1475,8 +1578,37 @@ function applicaModalitaSolaLettura(attiva) {
     });
 }
 
+function applicaBloccoPagamentoSerie(servizio) {
+    pagamentoSerieBloccato = isServizioSerieAggiuntivo(servizio);
+    const body = document.getElementById('modal-modifica-body');
+    const btnModPag = document.getElementById('btn-modifica-pagamento');
+    const sezione = body?.querySelector('.ns-section-pagamento');
+
+    if (!pagamentoSerieBloccato || !sezione) return;
+
+    if (btnModPag) btnModPag.hidden = true;
+
+    sezione.querySelectorAll('.ns-pagamento-quick-btns, .ns-pagamento-azioni-destra').forEach((el) => {
+        el.hidden = true;
+    });
+    sezione.querySelectorAll('input, select, textarea, button').forEach((el) => {
+        if (isPulsanteApriPrincipaleSerie(el)) {
+            el.disabled = false;
+            return;
+        }
+        if (el.tagName === 'BUTTON') {
+            el.disabled = true;
+            return;
+        }
+        el.disabled = true;
+        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+            el.readOnly = true;
+        }
+    });
+}
+
 function abilitaModificaPagamento() {
-    if (!solaLetturaAttiva || pagamentoModificabile) return;
+    if (!solaLetturaAttiva || pagamentoModificabile || pagamentoSerieBloccato) return;
 
     const body = document.getElementById('modal-modifica-body');
     const modal = document.getElementById('modal-modifica');
@@ -1569,6 +1701,17 @@ export async function apriModalModifica(servizioId, options = {}) {
     body.innerHTML = costruisciFormModifica(servizio);
     setupFormModificaListeners();
     applicaModalitaSolaLettura(solaLettura);
+    applicaBloccoPagamentoSerie(servizio);
+    abilitaPulsantiApriPrincipaleSerie(body);
+
+    if (options.apriSezionePagamento) {
+        const sezione = body.querySelector('.ns-section-pagamento');
+        sezione?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (solaLettura && !isServizioSerieAggiuntivo(servizio)) {
+            abilitaModificaPagamento();
+        }
+    }
+
     modal.style.display = 'flex';
     modal.setAttribute('aria-hidden', 'false');
 
@@ -1584,6 +1727,7 @@ export function chiudiModalModifica() {
     modal.setAttribute('aria-hidden', 'true');
     servizioInModifica = null;
     pagamentoModificabile = false;
+    pagamentoSerieBloccato = false;
     if (solaLetturaAttiva) {
         applicaModalitaSolaLettura(false);
     } else {
@@ -1680,8 +1824,14 @@ async function salvaModificaServizio() {
         if (isTauriEnv() && invoke) {
             await invoke('init_supabase_from_config').catch(() => {});
             await invoke('update_servizio_completo', { payload });
+            const extraSerie = await propagaIncassoSerieDaPayload(payload, servizioInModifica);
             const aggiornato = await invoke('get_servizio_completo', { servizioId: payload.id });
             await onSaveSuccess(aggiornato, payload);
+            if (extraSerie > 0) {
+                await mostraAvvisoModifica(
+                    `Stato incasso e data incasso aggiornati anche su ${extraSerie} servizi della serie.`
+                );
+            }
             chiudiModalModifica();
         } else {
             const demo = { ...servizioInModifica, ...payload, id: String(payload.id) };

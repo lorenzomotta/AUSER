@@ -271,6 +271,72 @@
     background-color: #fff;
 }
 
+.ns-section-pagamento.mod-pagamento-serie-bloccato {
+    background: #f4f4f4;
+    border-color: #c5c5c5;
+}
+
+.mod-pagamento-serie-hint-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 10px;
+}
+
+.mod-pagamento-serie-hint-wrap .mod-pagamento-serie-hint {
+    margin: 0;
+    flex: 1 1 220px;
+    padding: 8px 12px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #4a4a4a;
+    background: #eeeeee;
+    border: 1px solid #cfcfcf;
+    border-radius: 4px;
+}
+
+.ns-btn-apri-principale-serie {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #fff;
+    background: #1565c0;
+    border: 1px solid #0d47a1;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.ns-btn-apri-principale-serie:hover:not(:disabled) {
+    background: #0d47a1;
+}
+
+.ns-btn-apri-principale-serie:disabled {
+    opacity: 1;
+    cursor: pointer;
+}
+
+.ns-section-pagamento.mod-pagamento-serie-bloccato .ns-pagamento-quick-btns,
+.ns-section-pagamento.mod-pagamento-serie-bloccato .ns-pagamento-azioni-destra {
+    display: none;
+}
+
+.ns-section-pagamento.mod-pagamento-serie-bloccato .ns-pagamento-title {
+    grid-column: 1 / -1;
+}
+
+.ns-section-pagamento.mod-pagamento-serie-bloccato input:disabled,
+.ns-section-pagamento.mod-pagamento-serie-bloccato select:disabled,
+.ns-section-pagamento.mod-pagamento-serie-bloccato textarea:disabled {
+    opacity: 1;
+    color: #222;
+    background-color: #eee;
+    cursor: default;
+}
+
 .mod-mezzo-dettagli-row {
     margin-top: 10px;
 }

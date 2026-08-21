@@ -977,6 +977,21 @@ body {
         grid-template-columns: 1fr 1fr;
     }
 
+    .ns-check-ripeti {
+        white-space: normal;
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .ns-ripeti-azioni {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .ns-ripeti-nuova-data {
+        width: 100%;
+    }
+
     .ns-field-data-prelievo,
     .ns-field-ora-prelievo,
     .ns-field-comune-prelievo,
@@ -1441,4 +1456,189 @@ body {
 
 .ns-mezzo-occupato-tabella tbody tr:last-child td {
     border-bottom: none;
+}
+
+/* Servizio ripetuto su più date */
+.ns-check-ripeti {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #1b5e20;
+    background: #e8f5e9;
+    border: 1px solid #81c784;
+    border-radius: 4px;
+    padding: 7px 12px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.ns-check-ripeti input {
+    margin: 0;
+    accent-color: #2d7a32;
+}
+
+.ns-check-ripeti:hover {
+    background: #c8e6c9;
+}
+
+.ns-check-ripeti:has(input:checked) {
+    background: #2d7a32;
+    color: #fff;
+    border-color: #1b5e20;
+}
+
+.ns-check-ripeti:has(input:checked) input {
+    accent-color: #fff;
+}
+
+.ns-check-ripeti:has(input.ns-campo-errore) {
+    border-color: #c0392b;
+    background: #fff5f5;
+    color: #721c24;
+}
+
+.ns-ripeti-panel {
+    margin-top: 14px;
+    padding: 12px 14px 14px;
+    background: #f4faf4;
+    border: 1px dashed #81c784;
+    border-radius: 6px;
+}
+
+.ns-ripeti-hint {
+    font-size: 12px;
+    color: #3d5c40;
+    margin-bottom: 10px;
+    line-height: 1.45;
+}
+
+.ns-ripeti-tabella-wrap {
+    overflow-x: auto;
+}
+
+.ns-ripeti-tabella {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    font-size: 13px;
+}
+
+.ns-ripeti-tabella th,
+.ns-ripeti-tabella td {
+    padding: 6px 8px;
+    text-align: left;
+    border-bottom: 1px solid #e0e0e0;
+    vertical-align: middle;
+}
+
+.ns-ripeti-tabella th {
+    background: #e8f5e9;
+    font-size: 11px;
+    font-weight: 700;
+    color: #1b5e20;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.ns-ripeti-tabella .ns-input {
+    width: 100%;
+    min-width: 0;
+}
+
+.ns-ripeti-tabella .ns-ripeti-data {
+    min-width: 138px;
+}
+
+.ns-ripeti-tabella .ns-ripeti-ora {
+    min-width: 110px;
+}
+
+.ns-ripeti-azioni-riga {
+    width: 88px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.ns-ripeti-prima {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #1b5e20;
+    background: #e8f5e9;
+    border: 1px solid #a5d6a7;
+    border-radius: 3px;
+    padding: 3px 6px;
+}
+
+.ns-ripeti-rimuovi {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #e57373;
+    background: #ffebee;
+    color: #c62828;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.ns-ripeti-rimuovi:hover {
+    background: #ffcdd2;
+}
+
+.ns-ripeti-azioni {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.ns-ripeti-aggiungi-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #333;
+}
+
+.ns-ripeti-nuova-data {
+    width: 160px;
+}
+
+.ns-btn-ripeti-aggiungi {
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    background: #2d7a32;
+    border: 1px solid #246628;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.ns-btn-ripeti-aggiungi:hover {
+    background: #246628;
+}
+
+.ns-ripeti-conteggio {
+    font-size: 12px;
+    color: #3d5c40;
+    font-weight: 600;
+}
+
+.ns-ripeti-pagamento-hint {
+    margin: 12px 0 0;
+    padding: 8px 12px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #1b4d1e;
+    background: #e8f5e9;
+    border: 1px solid #a5d6a7;
+    border-radius: 4px;
 }

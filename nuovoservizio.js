@@ -12,6 +12,7 @@ import {
     messaggioAvvisoDopoRimozioneTratta
 } from './tratta-riepilogo.js';
 import { setupNuovoSocioTrasportato } from './nuovoservizio-nuovo-socio.js';
+import { setupRipetiServizio } from './nuovoservizio-ripeti.js';
 import { formatoAccountSessione } from './auth-session.js';
 import { apriCalcolaTariffa, ensureCalcolaTariffaMarkup, applicaRiepilogoTariffaNelDom, rimuoviRiepilogoTariffaDalForm, mergeTariffaInNote, leggiTariffaDalDom } from './calcola-tariffa.js';
 
@@ -28,6 +29,7 @@ let allLuoghiDestinazione = [];
 let allRichiedenti = [];
 let allTipiPagamento = [];
 let allStatiServizio = [];
+let ripetiApi = null;
 
 const CAMPI_OBBLIGATORI = [
     { id: 'ns-trasportato', label: 'TRASPORTATO' },
@@ -285,6 +287,10 @@ function validaCampiObbligatori() {
             mancanti.push(c);
         }
     });
+
+    if (ripetiApi?.isAttivo()) {
+        mancanti.push(...ripetiApi.valida());
+    }
 
     if (mancanti.length > 0) {
         mostraErrori(mancanti);
@@ -1062,9 +1068,9 @@ function mostraModaleMezzoOccupato(lista, mezzo, dataIso) {
     btnChiudi?.focus();
 }
 
-async function controllaMezzoGiaUsatoNellaData() {
-    const mezzo = getValore('ns-mezzo');
-    const dataPrelievo = getValore('ns-data-prelievo');
+async function controllaMezzoGiaUsatoNellaData(mezzoArg, dataArg) {
+    const mezzo = mezzoArg ?? getValore('ns-mezzo');
+    const dataPrelievo = dataArg ?? getValore('ns-data-prelievo');
     if (!mezzo || !dataPrelievo) return;
     if (!isTauri() || typeof invoke !== 'function') return;
 
@@ -1714,15 +1720,28 @@ function raccogliDatiForm() {
     };
 }
 
-async function salvaNuovoServizio() {
-    if (!validaCampiObbligatori()) {
-        return;
+function dettagliMezzoPerNr(nr) {
+    const key = normalizzaNumero(nr);
+    if (!key) return { mezzo: '', dotazioni: '', note_mezzo: '' };
+    const m = allAutomezzi.find((a) => normalizzaNumero(a.nr_automezzo) === key);
+    return {
+        mezzo: key,
+        dotazioni: m?.dotazione || '',
+        note_mezzo: m?.note_mezzo || ''
+    };
+}
+
+function notaPagamentoSerie({ isCapofila, totale, numeroRicevuta, idCapofila, dateIt }) {
+    const ric = numeroRicevuta ? ` ricevuta n. ${numeroRicevuta}` : ' ricevuta unica';
+    if (isCapofila) {
+        return `Serie di ${totale} servizi (${dateIt}). Importo e${ric} su questo servizio.`;
     }
+    const rif = idCapofila ? `n. ${idCapofila}` : 'primo della serie';
+    return `Serie di ${totale} servizi. Pagamento e${ric} sul servizio ${rif}.`;
+}
 
-    formattaCampoPagamento();
-
-    const dati = raccogliDatiForm();
-    const payload = {
+function costruisciPayloadServizio(dati) {
+    return {
         id: 0,
         data_prelievo: dati.data_prelievo || null,
         idsocio: dati.idsocio || null,
@@ -1757,6 +1776,95 @@ async function salvaNuovoServizio() {
         archivia: dati.archivia || 'NO',
         creato_da: formatoAccountSessione() || null
     };
+}
+
+function datiPerOccorrenza(datiBase, occ, extraSerie) {
+    const destIso = ripetiApi?.dataDestinazionePerOccorrenza(occ.dataIso) || occ.dataIso;
+    const formMezzo = getValore('ns-mezzo');
+    let dotazioni = datiBase.dotazioni;
+    let noteMezzo = datiBase.note_mezzo;
+    if (normalizzaNumero(occ.mezzo) !== normalizzaNumero(formMezzo)) {
+        const dett = dettagliMezzoPerNr(occ.mezzo);
+        dotazioni = dett.dotazioni;
+        noteMezzo = dett.note_mezzo;
+    }
+    const notaSerie = extraSerie
+        ? notaPagamentoSerie({
+            isCapofila: extraSerie.isCapofila,
+            totale: extraSerie.totale,
+            numeroRicevuta: extraSerie.numeroRicevuta,
+            idCapofila: extraSerie.idCapofila,
+            dateIt: extraSerie.dateIt
+        })
+        : '';
+    const noteFine = [datiBase.note_fine_servizio, notaSerie].filter(Boolean).join('\n');
+    const notePrelievo = [datiBase.note_prelievo, notaSerie].filter(Boolean).join('\n');
+    return {
+        ...datiBase,
+        data_prelievo: dataIsoToItaliana(occ.dataIso),
+        ora_inizio: occ.ora,
+        ora_arrivo: dataIsoToItaliana(destIso),
+        operatore: occ.operatore,
+        mezzo: occ.mezzo,
+        dotazioni,
+        note_mezzo: noteMezzo,
+        pagamento: extraSerie && !extraSerie.isCapofila ? '' : datiBase.pagamento,
+        note_prelievo: notePrelievo,
+        note_fine_servizio: noteFine
+    };
+}
+
+function aggiornaTestoPulsanteSalva(n) {
+    const btn = document.getElementById('btn-salva');
+    if (!btn) return;
+    const count = Number(n) || 1;
+    btn.textContent = count > 1 ? `SALVA ${count} SERVIZI` : 'SALVA';
+}
+
+async function avvisaMezziOccupatiNellaSerie(occorrenze) {
+    if (!isTauri() || typeof invoke !== 'function') return true;
+    const avvisi = [];
+    for (const o of occorrenze) {
+        if (!o.mezzo || !o.dataIso) continue;
+        try {
+            const lista = await invoke('get_servizi_mezzo_nella_data', {
+                mezzo: o.mezzo,
+                dataPrelievo: o.dataIso,
+                escludiIdServizio: null
+            });
+            if (Array.isArray(lista) && lista.length > 0) {
+                const dataIt = dataIsoToItaliana(o.dataIso) || o.dataIso;
+                avvisi.push(`- ${dataIt}: mezzo ${o.mezzo} già usato in ${lista.length} servizi`);
+            }
+        } catch (err) {
+            console.warn('Controllo mezzo già usato (serie):', err);
+        }
+    }
+    if (!avvisi.length) return true;
+    return chiediSiNo(
+        'Attenzione: in alcune date il mezzo è già in uso:\n\n' +
+        avvisi.join('\n') +
+        '\n\nVuoi salvare comunque i servizi?'
+    );
+}
+
+async function salvaNuovoServizio() {
+    if (!validaCampiObbligatori()) {
+        return;
+    }
+
+    formattaCampoPagamento();
+
+    const dati = raccogliDatiForm();
+    const serieAttiva = Boolean(ripetiApi?.isAttivo());
+    let occorrenze = serieAttiva ? ripetiApi.leggiOccorrenze() : [];
+    if (occorrenze.length >= 2) {
+        occorrenze = [...occorrenze].sort((a, b) => String(a.dataIso).localeCompare(String(b.dataIso)));
+        const okMezzi = await avvisaMezziOccupatiNellaSerie(occorrenze);
+        if (!okMezzi) return;
+    } else {
+        occorrenze = [];
+    }
 
     const btnSalva = document.getElementById('btn-salva');
     if (btnSalva) btnSalva.disabled = true;
@@ -1771,8 +1879,57 @@ async function salvaNuovoServizio() {
         }
 
         await invoke('init_supabase_from_config').catch(() => {});
-        const nuovoId = await invoke('create_servizio', { payload });
-        await mostraAvviso(`Servizio n. ${nuovoId} salvato correttamente.`);
+
+        const idsCreati = [];
+
+        if (occorrenze.length < 2) {
+            const nuovoId = await invoke('create_servizio', { payload: costruisciPayloadServizio(dati) });
+            await mostraAvviso(`Servizio n. ${nuovoId} salvato correttamente.`);
+            await chiudiPagina();
+            return;
+        }
+
+        const dateIt = occorrenze.map((o) => dataIsoToItaliana(o.dataIso) || o.dataIso).join(', ');
+        const extraBase = {
+            totale: occorrenze.length,
+            numeroRicevuta: dati.numero_ricevuta || '',
+            dateIt,
+            idCapofila: null
+        };
+
+        try {
+            for (let i = 0; i < occorrenze.length; i += 1) {
+                const isCapofila = i === 0;
+                const datiOcc = datiPerOccorrenza(dati, occorrenze[i], {
+                    ...extraBase,
+                    isCapofila,
+                    idCapofila: idsCreati[0] || null
+                });
+                const nuovoId = await invoke('create_servizio', {
+                    payload: costruisciPayloadServizio(datiOcc)
+                });
+                idsCreati.push(nuovoId);
+            }
+        } catch (errorSerie) {
+            const msg = errorSerie?.message || errorSerie || 'Errore sconosciuto';
+            if (idsCreati.length) {
+                await mostraAvviso(
+                    `Salvati ${idsCreati.length} di ${occorrenze.length} servizi (n. ${idsCreati.join(', ')}).\n\n` +
+                    `Errore sulle date successive:\n${msg}`
+                );
+            } else {
+                await mostraAvviso('Errore nel salvataggio del servizio:\n\n' + msg);
+            }
+            return;
+        }
+
+        const elencoId = idsCreati.join(', ');
+        const ric = dati.numero_ricevuta
+            ? `\nRicevuta n. ${dati.numero_ricevuta} (importo sul servizio n. ${idsCreati[0]}).`
+            : `\nL'importo è stato salvato solo sul servizio n. ${idsCreati[0]}.`;
+        await mostraAvviso(
+            `Creati ${idsCreati.length} servizi (n. ${elencoId}).${ric}`
+        );
         await chiudiPagina();
     } catch (error) {
         console.error('Errore salvataggio nuovo servizio:', error);
@@ -1793,6 +1950,8 @@ function resetForm() {
     aggiornaDettaglioDaMezzo();
     applicaRiepilogoTrattaNelDom(null, { hiddenId: 'ns-tratta-fuori-asti' });
     rimuoviRiepilogoTariffaDalForm('ns-tariffa-calcolata');
+    ripetiApi?.reset();
+    aggiornaTestoPulsanteSalva(1);
 }
 
 async function chiudiPagina() {
@@ -1911,6 +2070,7 @@ async function caricaDatiIniziali() {
     popolaSelectStatiServizio();
     popolaSelectOperatori();
     popolaSelectMezzi();
+    ripetiApi?.aggiornaOpzioniNelleRighe();
     setupAutocompleteTrasportato();
     setupAutocompleteMotivazione();
     setupAutocompleteComunePrelievo();
@@ -1936,6 +2096,10 @@ function setupEventListeners() {
     setupPulsantiTipoServizio();
     setupCopiaDataPrelievoSuDestinazione();
     setupModaleMezzoOccupato();
+    ripetiApi = setupRipetiServizio({
+        onCambioMezzo: (mezzo, dataIso) => controllaMezzoGiaUsatoNellaData(mezzo, dataIso),
+        onConteggioCambio: aggiornaTestoPulsanteSalva
+    });
     setupNuovoSocioTrasportato({
         getInvoke: () => invoke,
         isTauri,
