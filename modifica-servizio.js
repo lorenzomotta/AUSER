@@ -17,6 +17,7 @@ import {
 import { formatoAccountSessione, soloUsernameAccount } from './auth-session.js';
 import { isServizioSerieAggiuntivo, isServizioSeriePrincipale, idPrincipaleDaServizioAggiuntivo, numeroRicevutaDaServizio } from './nuovoservizio-ripeti.js';
 import { apriCalcolaTariffa, ensureCalcolaTariffaMarkup, formatEuroCalcolaTariffa, applicaRiepilogoTariffaNelDom, rimuoviRiepilogoTariffaDalForm, htmlBloccoRiepilogoTariffa, parseTariffaDaNote, mergeTariffaInNote, leggiTariffaDalDom } from './calcola-tariffa.js';
+import { collegaHintKmOperatore, avvisaSeLimiteKmOperatore, aggiornaHintKmOperatore } from './operatore-km-mese.js';
 
 let getInvokeFn = () => null;
 let isTauriEnv = () => false;
@@ -800,7 +801,7 @@ function valoreDaInputData(val) {
     return dataIsoToItaliana(val);
 }
 
-function creaSelectNs(id, label, value, options, fieldClass = '') {
+function creaSelectNs(id, label, value, options, fieldClass = '', extraHtml = '') {
     const opts = options.map(opt => {
         const val = typeof opt === 'object' ? opt.value : opt;
         const text = typeof opt === 'object' ? opt.label : opt;
@@ -810,6 +811,7 @@ function creaSelectNs(id, label, value, options, fieldClass = '') {
     return `<div class="ns-field ${fieldClass}">
         <label for="${id}">${escapeHtmlModifica(label)}</label>
         <select id="${id}" class="ns-input">${opts}</select>
+        ${extraHtml || ''}
     </div>`;
 }
 
@@ -974,7 +976,12 @@ export function costruisciFormServizio(
 
     const sezioneOperatore = (num) => `
             <section class="ns-section">
-                <h2 class="ns-section-title">${num}. Operatore e mezzo</h2>
+                <div class="ns-section-header ns-section-header-operatore">
+                    <h2 class="ns-section-title">${num}. Operatore e mezzo</h2>
+                    <div class="ns-km-operatore-hint-wrap">
+                        <p class="ns-km-operatore-hint" id="${p}-operatore-km-hint" hidden></p>
+                    </div>
+                </div>
                 <div class="ns-grid ns-grid-operatore">
                     ${creaSelectNs(`${p}-operatore`, 'OPERATORE', servizio.operatore, operatoriOpts, 'ns-field-operatore')}
                     ${creaSelectNs(`${p}-mezzo`, 'MEZZO USATO', mezzoCorrente, mezziOpts, 'ns-field-mezzo')}
@@ -1171,6 +1178,11 @@ export async function propagaIncassoSerieDaPayload(payload, servizioOriginale) {
 export function setupFormServizioListeners(idPrefix = 'mod') {
     trattaTargetPrefix = idPrefix;
     const hiddenTrattaId = `${idPrefix}-tratta-fuori-asti`;
+    let kmHintMod = null;
+
+    const rinfrescaKmDopoRimozioneTratta = () => {
+        kmHintMod?.refresh?.({ tratta: null });
+    };
 
     setupPulsantiTipoServizioForm(idPrefix);
 
@@ -1183,6 +1195,7 @@ export function setupFormServizioListeners(idPrefix = 'mod') {
 
             // Qualsiasi bottone importo cambia la donazione → togli tratta / tariffa
             avvisaSeTrattaRimossaModifica(rimuoviTrattaDalForm(hiddenTrattaId));
+            rinfrescaKmDopoRimozioneTratta();
             rimuoviRiepilogoTariffaDalForm(`${idPrefix}-tariffa-calcolata`);
 
             document.querySelectorAll(`[data-serv-importo="${idPrefix}"]`).forEach(b => b.classList.remove('ns-btn-importo-attivo'));
@@ -1222,6 +1235,7 @@ export function setupFormServizioListeners(idPrefix = 'mod') {
             if (campoPagamento.readOnly) return;
             if (ignoraCambioPagamentoPerTrattaMod) return;
             avvisaSeTrattaRimossaModifica(rimuoviTrattaDalForm(hiddenTrattaId));
+            rinfrescaKmDopoRimozioneTratta();
             rimuoviRiepilogoTariffaDalForm(`${idPrefix}-tariffa-calcolata`);
         };
         campoPagamento.addEventListener('input', onCambioDonazione);
@@ -1236,6 +1250,22 @@ export function setupFormServizioListeners(idPrefix = 'mod') {
     });
     document.getElementById(`${idPrefix}-data-prelievo`)?.addEventListener('change', async () => {
         await controllaMezzoGiaUsatoNellaDataModifica(idPrefix);
+    });
+    document.getElementById(`${idPrefix}-data-prelievo`)?.addEventListener('input', async () => {
+        await controllaMezzoGiaUsatoNellaDataModifica(idPrefix);
+    });
+    kmHintMod = collegaHintKmOperatore({
+        hintId: `${idPrefix}-operatore-km-hint`,
+        operatoreId: `${idPrefix}-operatore`,
+        dataId: `${idPrefix}-data-prelievo`,
+        getInvoke: getInvokeFn,
+        isTauri: isTauriEnv,
+        mostraAvviso: mostraAvvisoModifica,
+        getTrattaCorrente: () => leggiTrattaDalDom(`${idPrefix}-tratta-fuori-asti`),
+        getStatoServizio: () => document.getElementById(`${idPrefix}-stato-servizio`)?.value || '',
+        getKmReali: () => document.getElementById(`${idPrefix}-km`)?.value || '',
+        getEscludiId: () => servizioInModifica?.id || '',
+        getRichiedente: () => document.getElementById(`${idPrefix}-richiedente`)?.value || ''
     });
 
     document.getElementById(`${idPrefix}-btn-tratta-fuori-asti`)?.addEventListener('click', () => {
@@ -1253,6 +1283,7 @@ export function setupFormServizioListeners(idPrefix = 'mod') {
             chilometriIniziali: kmVal,
             onConferma: (totale, dettaglio) => {
                 avvisaSeTrattaRimossaModifica(rimuoviTrattaDalForm(hiddenTrattaIdBtn));
+                rinfrescaKmDopoRimozioneTratta();
                 const campo = document.getElementById(`${idPrefix}-pagamento`);
                 const statoIncasso = document.getElementById(`${idPrefix}-stato-incasso`);
                 if (!campo) return;
@@ -1305,6 +1336,38 @@ async function applicaTrattaSelezionataAlForm(idPrefix, tratta) {
     window.setTimeout(() => {
         ignoraCambioPagamentoPerTrattaMod = false;
     }, 300);
+
+    const op = document.getElementById(`${idPrefix}-operatore`)?.value || '';
+    const data = document.getElementById(`${idPrefix}-data-prelievo`)?.value || '';
+    const hintEl = document.getElementById(`${idPrefix}-operatore-km-hint`);
+    if (op && data) {
+        const ctx = {
+            tratta: conRuolo,
+            statoServizio: document.getElementById(`${idPrefix}-stato-servizio`)?.value || '',
+            kmReali: document.getElementById(`${idPrefix}-km`)?.value || '',
+            escludiId: servizioInModifica?.id || '',
+            richiedente: document.getElementById(`${idPrefix}-richiedente`)?.value || '',
+            comuneDestinazione: document.getElementById(`${idPrefix}-comune-destinazione`)?.value || '',
+            comunePrelievo: document.getElementById(`${idPrefix}-comune-prelievo`)?.value || ''
+        };
+        aggiornaHintKmOperatore({
+            el: hintEl,
+            operatore: op,
+            dataPrelievo: data,
+            getInvoke: getInvokeFn,
+            isTauri: isTauriEnv,
+            ...ctx
+        });
+        avvisaSeLimiteKmOperatore({
+            getInvoke: getInvokeFn,
+            isTauri: isTauriEnv,
+            operatore: op,
+            dataPrelievo: data,
+            ...ctx,
+            mostraAvviso: mostraAvvisoModifica,
+            chiaveEl: hintEl
+        }).catch(() => {});
+    }
 }
 
 async function setupListenerTrattaPerFormServizio() {

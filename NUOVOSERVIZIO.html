@@ -275,7 +275,12 @@
 
             <!-- Operatore e mezzo -->
             <section class="ns-section">
-                <h2 class="ns-section-title">5. Operatore e mezzo</h2>
+                <div class="ns-section-header ns-section-header-operatore">
+                    <h2 class="ns-section-title">5. Operatore e mezzo</h2>
+                    <div class="ns-km-operatore-hint-wrap">
+                        <p class="ns-km-operatore-hint" id="ns-operatore-km-hint" hidden></p>
+                    </div>
+                </div>
                 <div class="ns-grid ns-grid-operatore">
                     <div class="ns-field ns-field-operatore">
                         <label for="ns-operatore">OPERATORE</label>
@@ -372,6 +377,8 @@
                         <input type="date" id="ns-data-bonifico" class="ns-input ns-input-data">
                     </div>
                     </div>
+                    <input type="hidden" id="ns-tratta-fuori-asti" value="">
+                    <div class="ns-tratta-selezionata" id="ns-tratta-fuori-asti-box" hidden></div>
                     <input type="hidden" id="ns-tariffa-calcolata" value="">
                     <div class="ns-tratta-selezionata ns-tariffa-calcolata" id="ns-tariffa-calcolata-box" hidden></div>
                 </div>
@@ -566,6 +573,30 @@
             </div>
             <div class="ns-dialog-actions">
                 <button type="button" id="ns-dialog-mezzo-occupato-chiudi" class="ns-dialog-btn ns-dialog-btn-si">CHIUDI</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ns-dialog-luogo-dest" class="ns-dialog-overlay" hidden aria-hidden="true">
+        <div class="ns-dialog ns-dialog-luogo-dest" role="dialog" aria-modal="true" aria-labelledby="ns-dialog-luogo-dest-titolo">
+            <h2 id="ns-dialog-luogo-dest-titolo" class="ns-dialog-titolo">Altri servizi verso questa destinazione</h2>
+            <p id="ns-dialog-luogo-dest-sottotitolo" class="ns-dialog-sottotitolo"></p>
+            <div class="ns-luogo-dest-tabella-wrap">
+                <table class="ns-luogo-dest-tabella">
+                    <thead>
+                        <tr>
+                            <th>Data prelievo</th>
+                            <th>Comune di partenza</th>
+                            <th>Luogo partenza</th>
+                            <th>Trasportato</th>
+                            <th>Donazione</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ns-dialog-luogo-dest-body"></tbody>
+                </table>
+            </div>
+            <div class="ns-dialog-actions">
+                <button type="button" id="ns-dialog-luogo-dest-chiudi" class="ns-dialog-btn ns-dialog-btn-si">CHIUDI</button>
             </div>
         </div>
     </div>

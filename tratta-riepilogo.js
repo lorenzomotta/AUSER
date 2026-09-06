@@ -64,7 +64,7 @@ export function normalizzaPayloadTratta(payload) {
         comune: payload.comune || '',
         provincia: payload.provincia || '',
         localita: payload.localita || '',
-        km: payload.km || '',
+        km: payload.km || payload.km_ar || payload.KmAr || '',
         costo_km: payload.costo_km || '',
         costo: payload.costo || '',
         pedaggio: payload.pedaggio || '',
@@ -129,18 +129,42 @@ export function htmlBloccoRiepilogoTratta(payload, { hiddenId = 'ns-tratta-fuori
     `;
 }
 
+function assicuratiBloccoTrattaNelDom(hiddenId, boxId) {
+    let hidden = document.getElementById(hiddenId);
+    let box = document.getElementById(boxId || `${hiddenId}-box`);
+    if (hidden && box) return { hidden, box };
+
+    const host = hidden?.parentElement
+        || box?.parentElement
+        || document.querySelector('.ns-pagamento-layout')
+        || document.getElementById('form-nuovo-servizio')
+        || document.body;
+
+    if (!hidden) {
+        hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.id = hiddenId;
+        hidden.value = '';
+        host.appendChild(hidden);
+    }
+    if (!box) {
+        box = document.createElement('div');
+        box.className = 'ns-tratta-selezionata';
+        box.id = boxId || `${hiddenId}-box`;
+        box.hidden = true;
+        hidden.after(box);
+    }
+    return { hidden, box };
+}
+
 /** Aggiorna box + hidden in pagina (Nuovo Servizio / form già montato) */
 export function applicaRiepilogoTrattaNelDom(payload, {
     hiddenId = 'ns-tratta-fuori-asti',
     boxId = null
 } = {}) {
     const t = normalizzaPayloadTratta(payload);
-    const hidden = document.getElementById(hiddenId);
-    const box = document.getElementById(boxId || `${hiddenId}-box`);
-    if (hidden) {
-        hidden.value = t ? JSON.stringify(t) : '';
-    }
-    if (!box) return;
+    const { hidden, box } = assicuratiBloccoTrattaNelDom(hiddenId, boxId);
+    hidden.value = t ? JSON.stringify(t) : '';
     if (!t) {
         box.hidden = true;
         box.innerHTML = '';

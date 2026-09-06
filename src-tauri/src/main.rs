@@ -735,6 +735,23 @@ async fn fetch_servizi_supabase(filter: Option<&str>) -> Result<Vec<serde_json::
         .map_err(|e| format_supabase_error(&e))
 }
 
+async fn fetch_servizi_ilike_colonna(
+    colonna: &str,
+    valore: &str,
+    order: &str,
+    limit: usize,
+) -> Result<Vec<serde_json::Value>, String> {
+    ensure_supabase_client().await?;
+    let guard = get_supabase_client().lock().await;
+    let client = guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+    client
+        .fetch_servizi_ilike_colonna(colonna, valore, order, limit)
+        .await
+        .map_err(|e| format_supabase_error(&e))
+}
+
 async fn fetch_motivazioni_servizi_supabase() -> Result<Vec<serde_json::Value>, String> {
     ensure_supabase_client().await?;
     let guard = get_supabase_client().lock().await;
@@ -860,6 +877,16 @@ struct ServizioMezzoOccupato {
     trasportato: String,
     comune_destinazione: String,
     luogo_destinazione: String,
+}
+
+/// Riga informativa: servizi già registrati verso lo stesso luogo di destinazione
+#[derive(Debug, Serialize, Deserialize)]
+struct ServizioStessoLuogoDest {
+    data_prelievo: String,
+    comune_prelievo: String,
+    luogo_prelievo: String,
+    trasportato: String,
+    donazione: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1394,6 +1421,96 @@ async fn fetch_costo_al_km(client: &supabase::SupabaseClient) -> Result<f64, Str
         .await
         .map_err(|e| format_supabase_error(&e))?;
     Ok(costo_al_km_da_impostazioni(&all))
+}
+
+const NOME_IMP_ULTIMI_SERVIZI_POPUP: &str = "ULTIMI SERVIZI NEL POPUP";
+const DEFAULT_ULTIMI_SERVIZI_POPUP: usize = 5;
+const MAX_ULTIMI_SERVIZI_POPUP: usize = 50;
+
+fn parse_limite_ultimi_servizi_popup(valore: &str) -> Option<usize> {
+    let t = valore.trim().replace(',', ".");
+    if t.is_empty() {
+        return None;
+    }
+    if let Ok(n) = t.parse::<usize>() {
+        return Some(n.clamp(1, MAX_ULTIMI_SERVIZI_POPUP));
+    }
+    if let Ok(n) = t.parse::<f64>() {
+        if n.is_finite() && n >= 1.0 {
+            return Some((n.round() as usize).clamp(1, MAX_ULTIMI_SERVIZI_POPUP));
+        }
+    }
+    None
+}
+
+fn ultimi_servizi_popup_da_impostazioni(rows: &[serde_json::Value]) -> usize {
+    let attesa = NOME_IMP_ULTIMI_SERVIZI_POPUP;
+    for row in rows {
+        let chiave = get_field_any(
+            row,
+            &[
+                "Impostazione",
+                "IMPOSTAZIONE",
+                "Nome",
+                "Chiave",
+                "Impostazione_Nome",
+            ],
+        );
+        if normalizza_luogo_dest(&chiave) != attesa {
+            continue;
+        }
+        let valore = get_field_any(
+            row,
+            &[
+                "ValoreImpostazione",
+                "Valore",
+                "VALORE",
+                "Valore_Impostazione",
+                "Impostazione_Valore",
+            ],
+        );
+        if let Some(n) = parse_limite_ultimi_servizi_popup(&valore) {
+            return n;
+        }
+        let num = get_numeric_any(
+            row,
+            &[
+                "ValoreImpostazione",
+                "Valore",
+                "VALORE",
+                "Valore_Impostazione",
+                "Impostazione_Valore",
+            ],
+        );
+        if num >= 1.0 {
+            return (num.round() as usize).clamp(1, MAX_ULTIMI_SERVIZI_POPUP);
+        }
+    }
+    DEFAULT_ULTIMI_SERVIZI_POPUP
+}
+
+async fn fetch_limite_ultimi_servizi_popup() -> usize {
+    if ensure_supabase_client().await.is_err() {
+        return DEFAULT_ULTIMI_SERVIZI_POPUP;
+    }
+    let guard = get_supabase_client().lock().await;
+    let Some(client) = guard.as_ref() else {
+        return DEFAULT_ULTIMI_SERVIZI_POPUP;
+    };
+    match client.fetch_impostazioni(None).await {
+        Ok(rows) => {
+            let n = ultimi_servizi_popup_da_impostazioni(&rows);
+            println!("✓ Impostazione {} = {}", NOME_IMP_ULTIMI_SERVIZI_POPUP, n);
+            n
+        }
+        Err(e) => {
+            println!(
+                "⚠️ Lettura {}: {} — uso default {}",
+                NOME_IMP_ULTIMI_SERVIZI_POPUP, e, DEFAULT_ULTIMI_SERVIZI_POPUP
+            );
+            DEFAULT_ULTIMI_SERVIZI_POPUP
+        }
+    }
 }
 
 async fn sync_tratte_tariffa_km(
@@ -2178,6 +2295,113 @@ async fn get_servizi_mezzo_nella_data(
         data_it
     );
     Ok(servizi)
+}
+
+fn normalizza_luogo_dest(s: &str) -> String {
+    s.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_uppercase()
+}
+
+fn servizio_chiave_ord_prelievo(row: &serde_json::Value) -> String {
+    let raw = servizio_data_raw(row);
+    let data = raw.trim();
+    let iso = if data.len() >= 10 && data.as_bytes().get(4) == Some(&b'-') {
+        data[..10].to_string()
+    } else {
+        italian_date_to_iso(data).unwrap_or_else(|| data.to_string())
+    };
+    format!("{} {}", iso, servizio_ora_prelievo(row))
+}
+
+/// Ultimi servizi già registrati verso lo stesso luogo di destinazione (popup Nuovo Servizio)
+#[tauri::command]
+async fn get_servizi_stesso_luogo_destinazione(
+    luogo_destinazione: String,
+) -> Result<Vec<ServizioStessoLuogoDest>, String> {
+    let luogo = luogo_destinazione.trim();
+    if luogo.is_empty() {
+        return Ok(Vec::new());
+    }
+    let luogo_norm = normalizza_luogo_dest(luogo);
+    if luogo_norm.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    println!(
+        "=== get_servizi_stesso_luogo_destinazione luogo='{}' ===",
+        luogo
+    );
+
+    let limite = fetch_limite_ultimi_servizi_popup().await;
+    let fetch_limit = limite.saturating_mul(8).clamp(limite.max(10), 200);
+
+    let colonne = ["Destinazione_Indirizzo", "DESTINAZIONE_INDIRIZZO"];
+    let ordini = ["Prelievo_Data.desc", "DATA_PRELIEVO.desc"];
+
+    let mut rows: Vec<serde_json::Value> = Vec::new();
+    let mut last_err: Option<String> = None;
+    'outer: for colonna in &colonne {
+        for ordine in &ordini {
+            match fetch_servizi_ilike_colonna(colonna, luogo, ordine, fetch_limit).await {
+                Ok(r) => {
+                    rows = r;
+                    break 'outer;
+                }
+                Err(e) => last_err = Some(e),
+            }
+        }
+    }
+
+    if rows.is_empty() {
+        if let Some(e) = last_err {
+            println!("⚠️ get_servizi_stesso_luogo_destinazione: {}", e);
+        }
+    }
+
+    let nominativi = fetch_idsocio_nominativo_map().await;
+
+    let mut servizi: Vec<(String, ServizioStessoLuogoDest)> = rows
+        .iter()
+        .filter(|row| {
+            let dest = get_field_any(
+                row,
+                &["Destinazione_Indirizzo", "DESTINAZIONE_INDIRIZZO"],
+            );
+            normalizza_luogo_dest(&dest) == luogo_norm
+        })
+        .map(|row| {
+            let donazioni_raw = get_field_any(row, &["Donazioni", "DONAZIONI"]);
+            let item = ServizioStessoLuogoDest {
+                data_prelievo: servizio_data_italiana(row),
+                comune_prelievo: get_field_any(
+                    row,
+                    &["Prelievo_Comune", "PRELIEVO_COMUNE"],
+                ),
+                luogo_prelievo: get_field_any(
+                    row,
+                    &["Prelievo_Indirizzo", "PRELIEVO_INDIRIZZO"],
+                ),
+                trasportato: resolve_trasportato_nome(row, &nominativi),
+                donazione: format_euro_italiano(&donazioni_raw),
+            };
+            (servizio_chiave_ord_prelievo(row), item)
+        })
+        .collect();
+
+    servizi.sort_by(|a, b| b.0.cmp(&a.0));
+    servizi.truncate(limite);
+
+    let result: Vec<ServizioStessoLuogoDest> = servizi.into_iter().map(|(_, s)| s).collect();
+    println!(
+        "✓ Trovati {} servizi verso '{}' (limite impostazione={}, righe supabase={})",
+        result.len(),
+        luogo,
+        limite,
+        rows.len()
+    );
+    Ok(result)
 }
 
 // Comando per ottenere prossimi servizi (Supabase / Servizi_supa)
@@ -6521,6 +6745,7 @@ fn main() {
             get_prossimi_servizi,
             get_servizi_inseriti_oggi,
             get_servizi_mezzo_nella_data,
+            get_servizi_stesso_luogo_destinazione,
             get_tessere_da_fare,
             get_all_tesserati,
             get_socio_anagrafica,

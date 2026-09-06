@@ -1458,6 +1458,55 @@ body {
     border-bottom: none;
 }
 
+.ns-dialog-luogo-dest {
+    width: min(100%, 880px);
+    max-height: calc(100vh - 40px);
+    overflow: auto;
+}
+
+.ns-luogo-dest-tabella-wrap {
+    max-height: 280px;
+    overflow: auto;
+    margin-bottom: 16px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+}
+
+.ns-luogo-dest-tabella {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.ns-luogo-dest-tabella th,
+.ns-luogo-dest-tabella td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.ns-luogo-dest-tabella th {
+    background: #f5f5f5;
+    font-weight: 600;
+    color: #333;
+    position: sticky;
+    top: 0;
+}
+
+.ns-luogo-dest-tabella tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.ns-luogo-dest-tabella td:first-child {
+    white-space: nowrap;
+}
+
+.ns-luogo-dest-tabella th:last-child,
+.ns-luogo-dest-tabella td:last-child {
+    text-align: right;
+    white-space: nowrap;
+}
+
 /* Servizio ripetuto su più date */
 .ns-check-ripeti {
     display: flex;
@@ -1641,4 +1690,46 @@ body {
     background: #e8f5e9;
     border: 1px solid #a5d6a7;
     border-radius: 4px;
+}
+
+.ns-section-header-operatore {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px 16px;
+}
+
+.ns-section-header-operatore .ns-section-title {
+    justify-self: start;
+    min-width: 0;
+}
+
+.ns-km-operatore-hint-wrap {
+    grid-column: 2;
+    justify-self: center;
+    min-width: 0;
+}
+
+.ns-km-operatore-hint {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #1b5e20;
+    line-height: 1.2;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.ns-km-operatore-hint.is-loading {
+    color: #546e7a;
+    font-weight: 500;
+}
+
+.ns-km-operatore-hint-riga {
+    margin: 5px 0 0;
+    font-size: 10px;
+    font-weight: 600;
+    max-width: 240px;
+    white-space: normal;
+    text-align: left;
 }

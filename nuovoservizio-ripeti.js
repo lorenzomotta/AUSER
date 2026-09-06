@@ -4,6 +4,8 @@
  * Il pagamento resta unico (importo sul primo servizio, stessa ricevuta su tutti).
  */
 
+import { aggiornaHintKmOperatore } from './operatore-km-mese.js';
+
 function escapeHtml(text) {
     return String(text ?? '')
         .replace(/&/g, '&amp;')
@@ -59,7 +61,9 @@ function copiaOpzioniSelect(fromId, toSelect) {
 /**
  * @param {{
  *   onCambioMezzo: (mezzo: string, dataIso: string) => Promise<void> | void,
- *   onConteggioCambio: (n: number) => void
+ *   onConteggioCambio: (n: number) => void,
+ *   getInvoke: () => Function | null,
+ *   isTauri: () => boolean
  * }} deps
  */
 export function setupRipetiServizio(deps = {}) {
@@ -87,8 +91,32 @@ export function setupRipetiServizio(deps = {}) {
             data: tr.querySelector('.ns-ripeti-data'),
             ora: tr.querySelector('.ns-ripeti-ora'),
             operatore: tr.querySelector('.ns-ripeti-operatore'),
-            mezzo: tr.querySelector('.ns-ripeti-mezzo')
+            mezzo: tr.querySelector('.ns-ripeti-mezzo'),
+            kmHint: tr.querySelector('.ns-km-operatore-hint')
         };
+    }
+
+    function aggiornaHintKmRiga(tr) {
+        if (!tr) return;
+        const c = campiRiga(tr);
+        if (!c.kmHint) return;
+        aggiornaHintKmOperatore({
+            el: c.kmHint,
+            operatore: c.operatore?.value || '',
+            dataPrelievo: c.data?.value || '',
+            getInvoke: deps.getInvoke,
+            isTauri: deps.isTauri,
+            tratta: typeof deps.getTrattaCorrente === 'function' ? deps.getTrattaCorrente() : null,
+            statoServizio: typeof deps.getStatoServizio === 'function' ? deps.getStatoServizio() : '',
+            kmReali: typeof deps.getKmReali === 'function' ? deps.getKmReali() : '',
+            richiedente: typeof deps.getRichiedente === 'function' ? deps.getRichiedente() : '',
+            comuneDestinazione: val('ns-comune-destinazione'),
+            comunePrelievo: val('ns-comune-prelievo')
+        });
+    }
+
+    function aggiornaHintKmTutteLeRighe() {
+        righe().forEach((tr) => aggiornaHintKmRiga(tr));
     }
 
     function valoriUltimaRiga() {
@@ -144,6 +172,7 @@ export function setupRipetiServizio(deps = {}) {
             </td>
             <td>
                 <select class="ns-input ns-ripeti-operatore" id="ns-ripeti-operatore-${uid}"></select>
+                <p class="ns-km-operatore-hint ns-km-operatore-hint-riga" id="ns-ripeti-km-${uid}" hidden></p>
             </td>
             <td>
                 <select class="ns-input ns-ripeti-mezzo" id="ns-ripeti-mezzo-${uid}"></select>
@@ -159,6 +188,7 @@ export function setupRipetiServizio(deps = {}) {
         copiaOpzioniSelect('ns-mezzo', c.mezzo);
         if (c.operatore) c.operatore.value = operatore || '';
         if (c.mezzo) c.mezzo.value = mezzo || '';
+        aggiornaHintKmRiga(tr);
         return tr;
     }
 
@@ -234,6 +264,7 @@ export function setupRipetiServizio(deps = {}) {
         if (checkbox.checked) {
             assicuraPrimaRiga();
             syncFormVersoPrimaRiga();
+            aggiornaHintKmTutteLeRighe();
         }
         aggiornaConteggio();
     }
@@ -361,6 +392,10 @@ export function setupRipetiServizio(deps = {}) {
         if (el.classList.contains('ns-campo-errore')) {
             el.classList.remove('ns-campo-errore');
         }
+        const tr = el.closest('tr');
+        if (tr && (el.classList.contains('ns-ripeti-data') || el.classList.contains('ns-ripeti-operatore'))) {
+            aggiornaHintKmRiga(tr);
+        }
     });
 
     tbody?.addEventListener('change', async (e) => {
@@ -380,6 +415,17 @@ export function setupRipetiServizio(deps = {}) {
             syncPrimaRigaVersoForm('mezzo');
         }
 
+        if (el.classList.contains('ns-ripeti-data') || el.classList.contains('ns-ripeti-operatore')) {
+            aggiornaHintKmRiga(tr);
+            if (!isPrima && el.classList.contains('ns-ripeti-operatore')) {
+                deps.onCambioOperatoreRiga?.(
+                    c.operatore?.value || '',
+                    c.data?.value || '',
+                    c.kmHint
+                );
+            }
+        }
+
         if (!isPrima && (el.classList.contains('ns-ripeti-data') || el.classList.contains('ns-ripeti-mezzo'))) {
             const mezzo = c.mezzo?.value || '';
             const dataIso = c.data?.value || '';
@@ -390,9 +436,17 @@ export function setupRipetiServizio(deps = {}) {
     });
 
     ['ns-data-prelievo', 'ns-ora-inizio', 'ns-operatore', 'ns-mezzo'].forEach((id) => {
-        document.getElementById(id)?.addEventListener('change', () => {
+        const nodo = document.getElementById(id);
+        const onCambio = () => {
             syncFormVersoPrimaRiga();
-        });
+            if (id === 'ns-data-prelievo' || id === 'ns-operatore') {
+                aggiornaHintKmRiga(righe()[0]);
+            }
+        };
+        nodo?.addEventListener('change', onCambio);
+        if (id === 'ns-data-prelievo') {
+            nodo?.addEventListener('input', onCambio);
+        }
     });
 
     return {
@@ -403,6 +457,7 @@ export function setupRipetiServizio(deps = {}) {
         dataIsoToItaliana,
         reset,
         aggiornaOpzioniNelleRighe,
+        aggiornaHintKmTutteLeRighe,
         setAttivo
     };
 }

@@ -47,13 +47,12 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Nuova versione v1.0.10:
-            - Correzione: il numero ricevuta della serie si vede e si salva sul servizio principale
-            - Salvando il principale, numero e data ricevuta si copiano anche sugli altri servizi della serie
-            - Nuovo servizio: ripetizione su più date (ora, operatore e mezzo per ciascuna)
-            - Ricevuta unica: importo sul servizio principale, stesso numero sugli altri
-            - In modifica/completamento dei servizi aggiuntivi: pagamento bloccato e pulsante per aprire il principale
-            - Salvando stato incasso e data incasso sul principale, si aggiornano anche gli altri della serie
+            Nuova versione v1.0.11:
+            - Nuovo servizio: popup con gli ultimi servizi verso lo stesso luogo di destinazione
+            - Il numero di righe del popup si imposta da Impostazioni (ULTIMI SERVIZI NEL POPUP)
+            - Tabella con data prelievo, comune e luogo di partenza, trasportato e donazione
+            - Avviso chilometri dell'operatore nel mese su nuovo servizio, ripetizioni e modifica
+            - Tratta fuori Asti: i km si recuperano anche dal campo km andata/ritorno
 
             Gli utenti con l'app già installata riceveranno un avviso all'avvio
             e potranno aggiornare con un clic.

@@ -941,6 +941,68 @@ impl SupabaseClient {
             .await
     }
 
+    /// Servizi con una colonna che contiene il testo (ilike, una sola pagina).
+    /// Usa query() di reqwest così spazi e caratteri speciali vengono codificati
+    /// nel modo che PostgREST si aspetta (senza virgolette %22 che non matchano).
+    pub async fn fetch_servizi_ilike_colonna(
+        &self,
+        colonna: &str,
+        valore: &str,
+        order: &str,
+        limit: usize,
+    ) -> Result<Vec<Value>, String> {
+        let table_name = self
+            .config
+            .tables
+            .table_name("servizi")
+            .ok_or_else(|| "Tipo tabella Supabase sconosciuto: servizi".to_string())?;
+
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/rest/v1/{}", base, table_name);
+        let limit = limit.clamp(1, 200);
+        let limit_s = limit.to_string();
+        let pulito = valore.trim().replace('*', "").replace('%', "");
+        if pulito.is_empty() {
+            return Ok(Vec::new());
+        }
+        let pattern = format!("ilike.*{}*", pulito);
+
+        println!(
+            "📡 Supabase GET servizi ilike {} {}",
+            colonna, pattern
+        );
+
+        let request = self
+            .http
+            .get(&url)
+            .header("Content-Type", "application/json")
+            .query(&[
+                ("select", "*"),
+                (colonna, pattern.as_str()),
+                ("order", order),
+                ("limit", limit_s.as_str()),
+            ]);
+
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Supabase: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(format!("Errore Supabase HTTP {}: {}", status, body));
+        }
+
+        let rows: Vec<Value> = response
+            .json()
+            .await
+            .map_err(|e| format!("Errore parsing risposta Supabase: {}", e))?;
+        println!("  → {} righe", rows.len());
+        Ok(rows)
+    }
+
     pub async fn fetch_servizi_motivazioni(&self) -> Result<Vec<Value>, String> {
         self.fetch_table(
             "servizi",

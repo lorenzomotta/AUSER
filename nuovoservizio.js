@@ -15,6 +15,7 @@ import { setupNuovoSocioTrasportato } from './nuovoservizio-nuovo-socio.js';
 import { setupRipetiServizio } from './nuovoservizio-ripeti.js';
 import { formatoAccountSessione } from './auth-session.js';
 import { apriCalcolaTariffa, ensureCalcolaTariffaMarkup, applicaRiepilogoTariffaNelDom, rimuoviRiepilogoTariffaDalForm, mergeTariffaInNote, leggiTariffaDalDom } from './calcola-tariffa.js';
+import { collegaHintKmOperatore, ensureDatiKmOperatoreMese, avvisaSeLimiteKmOperatore } from './operatore-km-mese.js';
 
 let invoke;
 
@@ -30,6 +31,10 @@ let allRichiedenti = [];
 let allTipiPagamento = [];
 let allStatiServizio = [];
 let ripetiApi = null;
+let kmHintNs = null;
+let ultimoLuogoDestinazioneAvvisato = '';
+let luogoDestinazioneInCorso = '';
+let seqLuogoDestinazione = 0;
 
 const CAMPI_OBBLIGATORI = [
     { id: 'ns-trasportato', label: 'TRASPORTATO' },
@@ -755,18 +760,30 @@ function setupAutocompleteLuogoDestinazione() {
     setupAutocompleteDaLista(
         'ns-luogo-destinazione',
         'ns-luogo-destinazione-suggestions',
-        () => allLuoghiDestinazione
+        () => allLuoghiDestinazione,
+        (valore) => controllaServiziStessoLuogoDestinazione(valore)
     );
+    const input = document.getElementById('ns-luogo-destinazione');
+    input?.addEventListener('change', () => controllaServiziStessoLuogoDestinazione());
 }
 
 /** Autocomplete generico: lista unica, filtro digitando */
-function setupAutocompleteDaLista(inputId, suggestionsId, getLista) {
+function setupAutocompleteDaLista(inputId, suggestionsId, getLista, onSelect) {
     const input = document.getElementById(inputId);
     const suggestionsDiv = document.getElementById(suggestionsId);
     if (!input || !suggestionsDiv) return;
 
     let selectedIndex = -1;
     let filteredSuggestions = [];
+
+    function scegliValore(valore) {
+        input.value = valore;
+        input.classList.remove('ns-campo-errore');
+        suggestionsDiv.style.display = 'none';
+        filteredSuggestions = [];
+        selectedIndex = -1;
+        if (typeof onSelect === 'function') onSelect(valore);
+    }
 
     function renderSuggestions() {
         suggestionsDiv.innerHTML = '';
@@ -777,11 +794,7 @@ function setupAutocompleteDaLista(inputId, suggestionsId, getLista) {
             div.textContent = valore;
             div.addEventListener('mousedown', (e) => {
                 e.preventDefault();
-                input.value = valore;
-                input.classList.remove('ns-campo-errore');
-                suggestionsDiv.style.display = 'none';
-                filteredSuggestions = [];
-                selectedIndex = -1;
+                scegliValore(valore);
             });
             suggestionsDiv.appendChild(div);
         });
@@ -833,11 +846,7 @@ function setupAutocompleteDaLista(inputId, suggestionsId, getLista) {
             updateSelectedSuggestion();
         } else if (e.key === 'Enter' && selectedIndex >= 0) {
             e.preventDefault();
-            input.value = filteredSuggestions[selectedIndex];
-            input.classList.remove('ns-campo-errore');
-            suggestionsDiv.style.display = 'none';
-            filteredSuggestions = [];
-            selectedIndex = -1;
+            scegliValore(filteredSuggestions[selectedIndex]);
         } else if (e.key === 'Escape') {
             suggestionsDiv.style.display = 'none';
         }
@@ -1093,6 +1102,91 @@ function setupModaleMezzoOccupato() {
         ?.addEventListener('click', chiudiModaleMezzoOccupato);
 }
 
+function chiudiModaleLuogoDestinazione() {
+    const overlay = document.getElementById('ns-dialog-luogo-dest');
+    if (!overlay) return;
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+}
+
+function mostraModaleLuogoDestinazione(lista, luogo) {
+    const overlay = document.getElementById('ns-dialog-luogo-dest');
+    const sottotitolo = document.getElementById('ns-dialog-luogo-dest-sottotitolo');
+    const tbody = document.getElementById('ns-dialog-luogo-dest-body');
+    const btnChiudi = document.getElementById('ns-dialog-luogo-dest-chiudi');
+    if (!overlay || !tbody) return;
+
+    if (sottotitolo) {
+        sottotitolo.textContent =
+            `Ultimi servizi già registrati verso «${luogo || ''}» (dal più recente):`;
+    }
+
+    tbody.innerHTML = lista.map((s) => {
+        const data = escapeHtmlMezzo(s.data_prelievo || '—');
+        const comunePartenza = escapeHtmlMezzo(s.comune_prelievo || '—');
+        const partenza = escapeHtmlMezzo(s.luogo_prelievo || '—');
+        const trasportato = escapeHtmlMezzo(s.trasportato || '—');
+        const donazione = escapeHtmlMezzo(s.donazione || '—');
+        return `<tr>
+            <td>${data}</td>
+            <td>${comunePartenza}</td>
+            <td>${partenza}</td>
+            <td>${trasportato}</td>
+            <td>${donazione}</td>
+        </tr>`;
+    }).join('');
+
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    btnChiudi?.focus();
+}
+
+async function controllaServiziStessoLuogoDestinazione(luogoArg) {
+    const luogo = String(luogoArg ?? getValore('ns-luogo-destinazione') ?? '').trim();
+    if (!luogo) return;
+
+    const chiave = normalizzaTestoRicerca(luogo);
+    if (!chiave) return;
+    if (chiave === ultimoLuogoDestinazioneAvvisato) return;
+    if (chiave === luogoDestinazioneInCorso) return;
+
+    const mySeq = ++seqLuogoDestinazione;
+    luogoDestinazioneInCorso = chiave;
+
+    if (!isTauri() || typeof invoke !== 'function') {
+        luogoDestinazioneInCorso = '';
+        return;
+    }
+
+    try {
+        const lista = await invoke('get_servizi_stesso_luogo_destinazione', {
+            luogoDestinazione: luogo
+        });
+        if (mySeq !== seqLuogoDestinazione) return;
+        luogoDestinazioneInCorso = '';
+        if (Array.isArray(lista) && lista.length > 0) {
+            ultimoLuogoDestinazioneAvvisato = chiave;
+            mostraModaleLuogoDestinazione(lista, luogo);
+        }
+    } catch (err) {
+        if (mySeq === seqLuogoDestinazione) {
+            luogoDestinazioneInCorso = '';
+        }
+        console.warn('Controllo servizi stesso luogo destinazione:', err);
+    }
+}
+
+function setupModaleLuogoDestinazione() {
+    document.getElementById('ns-dialog-luogo-dest-chiudi')
+        ?.addEventListener('click', chiudiModaleLuogoDestinazione);
+    document.getElementById('ns-dialog-luogo-dest')
+        ?.addEventListener('click', (e) => {
+            if (e.target?.id === 'ns-dialog-luogo-dest') {
+                chiudiModaleLuogoDestinazione();
+            }
+        });
+}
+
 function aggiornaStatoPulsanteNoteMezzo() {
     const btn = document.getElementById('btn-modifica-note-mezzo');
     if (!btn || noteMezzoInModifica) return;
@@ -1263,6 +1357,23 @@ function mostraAvviso(messaggio) {
     });
 }
 
+async function avvisaLimiteKmNuovoServizio(operatore, dataIso, chiaveEl, trattaOverride) {
+    return avvisaSeLimiteKmOperatore({
+        getInvoke: () => invoke,
+        isTauri,
+        operatore: operatore ?? getValore('ns-operatore'),
+        dataPrelievo: dataIso ?? getValore('ns-data-prelievo'),
+        tratta: trattaOverride !== undefined ? trattaOverride : leggiTrattaDalDom('ns-tratta-fuori-asti'),
+        statoServizio: getValore('ns-stato-servizio'),
+        kmReali: getValore('ns-km'),
+        richiedente: getValore('ns-richiedente'),
+        comuneDestinazione: getValore('ns-comune-destinazione'),
+        comunePrelievo: getValore('ns-comune-prelievo'),
+        mostraAvviso,
+        chiaveEl: chiaveEl || document.getElementById('ns-operatore-km-hint')
+    });
+}
+
 function chiediSiNo(messaggio) {
     return new Promise((resolve) => {
         const overlay = document.getElementById('ns-dialog-sino');
@@ -1417,6 +1528,8 @@ function setupPulsantiTipoServizio() {
 function avvisaSeTrattaRimossa(trattaRimossa) {
     if (!trattaRimossa) return;
     mostraAvviso(messaggioAvvisoDopoRimozioneTratta(trattaRimossa)).catch(() => {});
+    kmHintNs?.refresh?.({ tratta: null });
+    ripetiApi?.aggiornaHintKmTutteLeRighe?.();
 }
 
 // Pulsanti importo rapido
@@ -1581,10 +1694,19 @@ async function applicaTotaleTrattaFuoriAsti(payload) {
         } else {
             attivaCampoDonazionePagamento();
         }
+        await avvisaLimiteKmNuovoServizio(undefined, undefined, undefined, conRuolo);
+        kmHintNs?.refresh?.({ tratta: conRuolo });
+        ripetiApi?.aggiornaHintKmTutteLeRighe?.();
+        if (dove === 'arrivo') {
+            await controllaServiziStessoLuogoDestinazione();
+        }
     } catch (err) {
         console.warn('Applicazione tratta fuori Asti:', err);
         rimuoviRiepilogoTariffaDalForm('ns-tariffa-calcolata');
         applicaRiepilogoTrattaNelDom(payload, { hiddenId: 'ns-tratta-fuori-asti' });
+        await avvisaLimiteKmNuovoServizio(undefined, undefined, undefined, payload);
+        kmHintNs?.refresh?.({ tratta: payload });
+        ripetiApi?.aggiornaHintKmTutteLeRighe?.();
     } finally {
         window.setTimeout(() => {
             ignoraCambioPagamentoPerTratta = false;
@@ -1619,14 +1741,15 @@ function setupCopiaDataPrelievoSuDestinazione() {
     const dataDestinazione = document.getElementById('ns-ora-arrivo');
     if (!dataPrelievo || !dataDestinazione) return;
 
-    dataPrelievo.addEventListener('change', async () => {
+    const onCambioDataPrelievo = async () => {
         dataDestinazione.value = dataPrelievo.value;
         dataDestinazione.classList.remove('ns-campo-errore');
-        // Se un mezzo è già scelto, ricontrolla se è usato in questa nuova data
         if (getValore('ns-mezzo')) {
             await controllaMezzoGiaUsatoNellaData();
         }
-    });
+    };
+    dataPrelievo.addEventListener('change', onCambioDataPrelievo);
+    dataPrelievo.addEventListener('input', onCambioDataPrelievo);
 }
 
 function unisciIndirizzoECivico(indirizzo, civico) {
@@ -1675,6 +1798,7 @@ function compilaPrelievoDaCasaTrasportato() {
 
 function compilaDestinazioneCasaTrasportato() {
     compilaDaResidenzaTrasportato('ns-comune-destinazione', 'ns-luogo-destinazione');
+    controllaServiziStessoLuogoDestinazione();
 }
 
 function raccogliDatiForm() {
@@ -2080,6 +2204,23 @@ async function caricaDatiIniziali() {
     setupMezzoListener();
     setupPagamentoQuickButtons();
     impostaValoriPredefiniti();
+    kmHintNs = collegaHintKmOperatore({
+        hintId: 'ns-operatore-km-hint',
+        operatoreId: 'ns-operatore',
+        dataId: 'ns-data-prelievo',
+        getInvoke: () => invoke,
+        isTauri,
+        mostraAvviso,
+        getTrattaCorrente: () => leggiTrattaDalDom('ns-tratta-fuori-asti'),
+        getStatoServizio: () => getValore('ns-stato-servizio'),
+        getKmReali: () => getValore('ns-km'),
+        getRichiedente: () => getValore('ns-richiedente')
+    });
+    ensureDatiKmOperatoreMese({
+        getInvoke: () => invoke,
+        isTauri,
+        anno: new Date().getFullYear()
+    }).catch(() => {});
     svuotaDettaglioTrasportato();
     setLoading(false);
 }
@@ -2096,9 +2237,19 @@ function setupEventListeners() {
     setupPulsantiTipoServizio();
     setupCopiaDataPrelievoSuDestinazione();
     setupModaleMezzoOccupato();
+    setupModaleLuogoDestinazione();
     ripetiApi = setupRipetiServizio({
         onCambioMezzo: (mezzo, dataIso) => controllaMezzoGiaUsatoNellaData(mezzo, dataIso),
-        onConteggioCambio: aggiornaTestoPulsanteSalva
+        onConteggioCambio: aggiornaTestoPulsanteSalva,
+        getInvoke: () => invoke,
+        isTauri,
+        onCambioOperatoreRiga: (operatore, dataIso, hintEl) => {
+            avvisaLimiteKmNuovoServizio(operatore, dataIso, hintEl);
+        },
+        getTrattaCorrente: () => leggiTrattaDalDom('ns-tratta-fuori-asti'),
+        getStatoServizio: () => getValore('ns-stato-servizio'),
+        getKmReali: () => getValore('ns-km'),
+        getRichiedente: () => getValore('ns-richiedente')
     });
     setupNuovoSocioTrasportato({
         getInvoke: () => invoke,
