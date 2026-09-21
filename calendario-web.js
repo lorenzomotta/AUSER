@@ -376,7 +376,7 @@ function creaFetchSupabase(apiKey) {
         headers.apikey = apiKey;
 
         const userJwt = jwtDaAuthorization(headers.Authorization || headers.authorization)
-            || (accessTokenCorrente.startsWith('eyJ') ? accessTokenCorrente : '');
+            || accessTokenCorrente;
         delete headers.authorization;
 
         const isAuth = reqUrl.includes('/auth/v1/');
@@ -425,8 +425,12 @@ async function caricaConfigPubblica() {
         global: { fetch: creaFetchSupabase(key) }
     });
     supabaseClient.auth.onAuthStateChange((event, session) => {
-        impostaAccessToken(session);
-        if (event === 'SIGNED_OUT') mostraSchermataLogin();
+        if (session?.access_token) {
+            impostaAccessToken(session);
+        } else if (event === 'SIGNED_OUT') {
+            accessTokenCorrente = '';
+            mostraSchermataLogin();
+        }
     });
 }
 
@@ -770,7 +774,10 @@ async function scaricaRighePaginate(buildQuery) {
         const from = page * SUPABASE_PAGE_SIZE;
         const to = from + SUPABASE_PAGE_SIZE - 1;
         const { data, error } = await buildQuery(from, to);
-        if (error) throw error;
+        if (error) {
+            console.warn('Supabase servizi errore:', error.message || error, error);
+            throw error;
+        }
         const batch = data || [];
         tutte.push(...batch);
         if (batch.length < SUPABASE_PAGE_SIZE) break;
@@ -779,6 +786,16 @@ async function scaricaRighePaginate(buildQuery) {
         console.warn('Supabase: raggiunto limite massimo righe scaricate per tabella servizi');
     }
     return tutte;
+}
+
+async function assicuratiTokenSessione() {
+    if (accessTokenCorrente) return;
+    try {
+        const { data } = await supabaseClient.auth.getSession();
+        if (data?.session?.access_token) impostaAccessToken(data.session);
+    } catch (err) {
+        console.warn('Token sessione non letto:', err.message || err);
+    }
 }
 
 async function fetchServiziRange(start, endEsclusivo, forceRefresh = false) {
@@ -790,6 +807,14 @@ async function fetchServiziRange(start, endEsclusivo, forceRefresh = false) {
     const serviziTable = tabella('servizi');
     const inizio = dateToIsoGiorno(start);
     const fineEsclusa = isoGiornoSuccessivo(fineRangeInclusive(endEsclusivo));
+    await assicuratiTokenSessione();
+    console.log('Calendario fetch servizi', {
+        tabella: serviziTable,
+        inizio,
+        fineEsclusa,
+        haToken: Boolean(accessTokenCorrente),
+        tokenJwt: String(accessTokenCorrente).startsWith('eyJ')
+    });
 
     let data;
     try {
