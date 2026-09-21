@@ -550,7 +550,6 @@ function initCalendario() {
         initialView: vistaCorrente,
         firstDay: 1,
         height: 'auto',
-        dayMinHeight: 118,
         moreLinkClick: 'popover',
         views: {
             dayGridMonth: { dayMaxEvents: 8 },

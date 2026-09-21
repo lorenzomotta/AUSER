@@ -398,27 +398,29 @@ async function caricaConfigPubblica() {
     }
     publicConfig = await risposta.json();
     const url = publicConfig?.supabase?.url?.trim();
-    const key = (
-        publicConfig?.supabase?.publishable_key ||
-        publicConfig?.supabase?.anon_key ||
-        ''
-    ).trim();
+    const anonJwt = String(publicConfig?.supabase?.anon_key || '').trim();
+    const publishable = String(publicConfig?.supabase?.publishable_key || '').trim();
+    // Preferisci la chiave anon JWT (eyJ...): PostgREST e il login funzionano senza hacks.
+    const key = (anonJwt.startsWith('eyJ') ? anonJwt : (publishable || anonJwt));
     if (!url || !key) {
         throw new Error(
-            'config.public.json incompleto: servono supabase.url e publishable_key (sb_publishable_...)'
+            'config.public.json incompleto: servono supabase.url e anon_key (JWT eyJ...)'
         );
     }
     if (typeof window.supabase?.createClient !== 'function') {
         throw new Error('Libreria Supabase non caricata');
     }
-    supabaseClient = window.supabase.createClient(url, key, {
+    const opzioni = {
         auth: {
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true
-        },
-        global: { fetch: creaFetchSupabase(key) }
-    });
+        }
+    };
+    if (!key.startsWith('eyJ')) {
+        opzioni.global = { fetch: creaFetchSupabase(key) };
+    }
+    supabaseClient = window.supabase.createClient(url, key, opzioni);
     supabaseClient.auth.onAuthStateChange((event, session) => {
         impostaAccessToken(session);
         if (event === 'SIGNED_OUT') mostraSchermataLogin();
@@ -799,6 +801,11 @@ async function fetchServiziRange(start, endEsclusivo, forceRefresh = false) {
         );
     } catch (error) {
         console.warn('Filtro periodo fallito, scarico con paginazione:', error.message);
+        data = [];
+    }
+
+    if (!data.length) {
+        console.warn('Nessun servizio nel filtro date, scarico l\'archivio paginato');
         data = await scaricaRighePaginate((from, to) =>
             supabaseClient
                 .from(serviziTable)
@@ -808,10 +815,12 @@ async function fetchServiziRange(start, endEsclusivo, forceRefresh = false) {
         );
     }
 
-    const servizi = (data || [])
-        .map(rowToServizioCompleto)
-        .filter(Boolean)
-        .filter(s => servizioNelRange(s, start, endEsclusivo));
+    const mappati = (data || []).map(rowToServizioCompleto).filter(Boolean);
+    const servizi = mappati.filter(s => servizioNelRange(s, start, endEsclusivo));
+    console.log(
+        `Calendario servizi: scaricati ${data.length}, validi ${mappati.length}, nel periodo ${servizi.length}`,
+        { inizio, fineEsclusa }
+    );
 
     serviziPerRangeCache.set(key, servizi);
     return servizi;
@@ -1792,7 +1801,6 @@ function initCalendario() {
         initialView: vistaCalendarioEffettiva(vistaCorrente),
         firstDay: 1,
         height: 'auto',
-        dayMinHeight: 118,
         moreLinkClick: 'popover',
         views: {
             dayGridMonth: { dayMaxEvents: 8 },
