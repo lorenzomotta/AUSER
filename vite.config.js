@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import { resolve, extname } from 'path';
-import { readdirSync, copyFileSync, existsSync, statSync } from 'fs';
+import { readdirSync, copyFileSync, existsSync, statSync, mkdirSync } from 'fs';
 
 const root = resolve(__dirname);
 
@@ -59,6 +59,25 @@ function copyStaticAssetsPlugin() {
           copyFileSync(src, dest);
         } catch (err) {
           console.warn(`Copia statica fallita ${name}:`, err.message);
+        }
+      }
+
+      // Cartella icone calendario (carrozzina): Vite usa già dist/assets per i chunk JS,
+      // quindi copiamo i PNG a fianco senza sovrascrivere i file esistenti.
+      const assetsSrc = resolve(root, 'assets');
+      const assetsDest = resolve(outDir, 'assets');
+      if (existsSync(assetsSrc) && statSync(assetsSrc).isDirectory()) {
+        mkdirSync(assetsDest, { recursive: true });
+        for (const name of readdirSync(assetsSrc)) {
+          const src = resolve(assetsSrc, name);
+          const dest = resolve(assetsDest, name);
+          if (!statSync(src).isFile()) continue;
+          if (existsSync(dest)) continue;
+          try {
+            copyFileSync(src, dest);
+          } catch (err) {
+            console.warn(`Copia icona fallita ${name}:`, err.message);
+          }
         }
       }
 

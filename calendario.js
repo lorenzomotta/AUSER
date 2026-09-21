@@ -302,10 +302,10 @@ function htmlIconaCarrozzina(carrozzina) {
     let file = '';
     let label = '';
     if (v === 'SOCIO') {
-        file = 'assets/carrozzina-bleu.png?v=4';
+        file = 'assets/carrozzina-bleu.png?v=5';
         label = 'Carrozzina socio';
     } else if (v === 'AUSER') {
-        file = 'assets/carrozzina-verde.png?v=2';
+        file = 'assets/carrozzina-verde.png?v=5';
         label = 'Carrozzina AUSER';
     } else {
         return '';
@@ -546,6 +546,7 @@ function initCalendario() {
 
     calendar = new FullCalendar.Calendar(mount, {
         locale: 'it',
+        timeZone: 'local',
         initialView: vistaCorrente,
         firstDay: 1,
         height: 'auto',

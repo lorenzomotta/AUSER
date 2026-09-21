@@ -314,7 +314,12 @@ function servizioNelRange(servizio, start, endEsclusivo) {
     if (!d) return false;
     const giorno = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
     const startT = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
-    const endT = new Date(endEsclusivo.getFullYear(), endEsclusivo.getMonth(), endEsclusivo.getDate()).getTime();
+    let endT = new Date(endEsclusivo.getFullYear(), endEsclusivo.getMonth(), endEsclusivo.getDate()).getTime();
+    // FullCalendar: activeEnd è esclusivo. Su alcuni telefoni cade nello stesso
+    // giorno della start → il filtro < endT toglieva TUTTI i servizi.
+    if (endT <= startT) {
+        endT = startT + 24 * 60 * 60 * 1000;
+    }
     return giorno >= startT && giorno < endT;
 }
 
@@ -929,10 +934,10 @@ function htmlIconaCarrozzina(carrozzina) {
     let file = '';
     let label = '';
     if (v === 'SOCIO') {
-        file = 'assets/carrozzina-bleu.png?v=4';
+        file = 'assets/carrozzina-bleu.png?v=5';
         label = 'Carrozzina socio';
     } else if (v === 'AUSER') {
-        file = 'assets/carrozzina-verde.png?v=2';
+        file = 'assets/carrozzina-verde.png?v=5';
         label = 'Carrozzina AUSER';
     } else {
         return '';
@@ -1732,6 +1737,7 @@ function initCalendario() {
 
     calendar = new FullCalendar.Calendar(mount, {
         locale: 'it',
+        timeZone: 'local',
         initialView: vistaCalendarioEffettiva(vistaCorrente),
         firstDay: 1,
         height: 'auto',
