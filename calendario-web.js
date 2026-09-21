@@ -82,7 +82,7 @@ function isVistaListaMobile(viewType) {
 
 function configuraVistaInizialeMobile() {
     if (isVistaMobileCalendario()) {
-        vistaCorrente = 'dayGridMonth';
+        vistaCorrente = 'dayGridDay';
     }
 }
 let loadRequestId = 0;
@@ -298,12 +298,6 @@ function dateToIsoGiorno(date) {
     return `${y}-${m}-${day}`;
 }
 
-function isoGiornoSuccessivo(isoGiorno) {
-    const [y, m, d] = String(isoGiorno || '').split('-').map(Number);
-    if (!y || !m || !d) return isoGiorno;
-    return dateToIsoGiorno(new Date(y, m - 1, d + 1));
-}
-
 /** FullCalendar usa activeEnd esclusivo: ultimo giorno visibile = end - 1 ms */
 function fineRangeInclusive(endEsclusivo) {
     const d = new Date(endEsclusivo);
@@ -320,12 +314,7 @@ function servizioNelRange(servizio, start, endEsclusivo) {
     if (!d) return false;
     const giorno = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
     const startT = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
-    let endT = new Date(endEsclusivo.getFullYear(), endEsclusivo.getMonth(), endEsclusivo.getDate()).getTime();
-    // FullCalendar: activeEnd è esclusivo. Su alcuni telefoni cade nello stesso
-    // giorno della start → il filtro < endT toglieva TUTTI i servizi.
-    if (endT <= startT) {
-        endT = startT + 24 * 60 * 60 * 1000;
-    }
+    const endT = new Date(endEsclusivo.getFullYear(), endEsclusivo.getMonth(), endEsclusivo.getDate()).getTime();
     return giorno >= startT && giorno < endT;
 }
 
@@ -335,61 +324,22 @@ function invalidaCacheServizi() {
 
 // ─── Config e Supabase ─────────────────────────────────────────────────────
 
-let accessTokenCorrente = '';
-
-function impostaAccessToken(session) {
-    accessTokenCorrente = String(session?.access_token || '').trim();
-}
-
-function copiaHeadersInOggetto(initHeaders) {
-    const out = {};
-    try {
-        new Headers(initHeaders || {}).forEach((value, key) => {
-            out[key] = value;
-        });
-    } catch (err) {
-        if (initHeaders && typeof initHeaders === 'object' && !Array.isArray(initHeaders)) {
-            Object.entries(initHeaders).forEach(([key, value]) => {
-                if (value != null) out[key] = String(value);
-            });
-        }
-    }
-    return out;
-}
-
-function jwtDaAuthorization(auth) {
-    const s = String(auth || '').trim();
-    const m = s.match(/^Bearer\s+(.+)$/i);
-    const token = m ? m[1].trim() : s;
-    return token.startsWith('eyJ') ? token : '';
-}
-
-/**
- * Login (auth): apikey + Bearer della chiave pubblica.
- * Dati (rest): apikey + Bearer JWT dell'operatore loggato.
- * Non chiamare getSession() qui.
- */
+/** Chiavi sb_publishable_ vanno solo nell'header apikey, non in Authorization Bearer. */
 function creaFetchSupabase(apiKey) {
+    const isLegacyJwt = apiKey.startsWith('eyJ');
     return (input, init = {}) => {
-        const reqUrl = String(typeof input === 'string' ? input : (input && input.url) || '');
-        const headers = copiaHeadersInOggetto(init.headers);
-        headers.apikey = apiKey;
-
-        const userJwt = jwtDaAuthorization(headers.Authorization || headers.authorization)
-            || accessTokenCorrente;
-        delete headers.authorization;
-
-        const isAuth = reqUrl.includes('/auth/v1/');
-        if (isAuth) {
-            headers.Authorization = `Bearer ${userJwt || apiKey}`;
-        } else if (userJwt) {
-            headers.Authorization = `Bearer ${userJwt}`;
-        } else if (String(apiKey).startsWith('eyJ')) {
-            headers.Authorization = `Bearer ${apiKey}`;
+        const headers = new Headers(init.headers || {});
+        headers.set('apikey', apiKey);
+        if (isLegacyJwt) {
+            if (!headers.has('Authorization')) {
+                headers.set('Authorization', `Bearer ${apiKey}`);
+            }
         } else {
-            delete headers.Authorization;
+            const auth = headers.get('Authorization');
+            if (auth === `Bearer ${apiKey}`) {
+                headers.delete('Authorization');
+            }
         }
-
         return fetch(input, { ...init, headers });
     };
 }
@@ -404,33 +354,21 @@ async function caricaConfigPubblica() {
     }
     publicConfig = await risposta.json();
     const url = publicConfig?.supabase?.url?.trim();
-    const publishable = String(publicConfig?.supabase?.publishable_key || '').trim();
-    const anonJwt = String(publicConfig?.supabase?.anon_key || '').trim();
-    // Il login Auth accetta la chiave publishable; la JWT anon vecchia dà 401.
-    const key = publishable || anonJwt;
+    const key = (
+        publicConfig?.supabase?.publishable_key ||
+        publicConfig?.supabase?.anon_key ||
+        ''
+    ).trim();
     if (!url || !key) {
         throw new Error(
-            'config.public.json incompleto: servono supabase.url e publishable_key'
+            'config.public.json incompleto: servono supabase.url e publishable_key (sb_publishable_...)'
         );
     }
     if (typeof window.supabase?.createClient !== 'function') {
         throw new Error('Libreria Supabase non caricata');
     }
     supabaseClient = window.supabase.createClient(url, key, {
-        auth: {
-            persistSession: true,
-            autoRefreshToken: true,
-            detectSessionInUrl: true
-        },
-        global: { fetch: creaFetchSupabase(key) }
-    });
-    supabaseClient.auth.onAuthStateChange((event, session) => {
-        if (session?.access_token) {
-            impostaAccessToken(session);
-        } else if (event === 'SIGNED_OUT') {
-            accessTokenCorrente = '';
-            mostraSchermataLogin();
-        }
+        global: { fetch: creaFetchSupabase(key) },
     });
 }
 
@@ -550,7 +488,6 @@ async function gestisciLogin(event) {
     try {
         const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        impostaAccessToken(data.session);
 
         const ok = await verificaOperatore(data.user);
         if (!ok) {
@@ -568,7 +505,6 @@ async function gestisciLogin(event) {
 }
 
 async function gestisciLogout() {
-    accessTokenCorrente = '';
     await supabaseClient.auth.signOut();
     invalidaCacheServizi();
     serviziById.clear();
@@ -583,7 +519,6 @@ async function gestisciLogout() {
 
 async function controllaSessioneEsistente() {
     const { data: { session } } = await supabaseClient.auth.getSession();
-    impostaAccessToken(session);
     if (!session?.user) return false;
 
     const ok = await verificaOperatore(session.user);
@@ -774,10 +709,7 @@ async function scaricaRighePaginate(buildQuery) {
         const from = page * SUPABASE_PAGE_SIZE;
         const to = from + SUPABASE_PAGE_SIZE - 1;
         const { data, error } = await buildQuery(from, to);
-        if (error) {
-            console.warn('Supabase servizi errore:', error.message || error, error);
-            throw error;
-        }
+        if (error) throw error;
         const batch = data || [];
         tutte.push(...batch);
         if (batch.length < SUPABASE_PAGE_SIZE) break;
@@ -788,16 +720,6 @@ async function scaricaRighePaginate(buildQuery) {
     return tutte;
 }
 
-async function assicuratiTokenSessione() {
-    if (accessTokenCorrente) return;
-    try {
-        const { data } = await supabaseClient.auth.getSession();
-        if (data?.session?.access_token) impostaAccessToken(data.session);
-    } catch (err) {
-        console.warn('Token sessione non letto:', err.message || err);
-    }
-}
-
 async function fetchServiziRange(start, endEsclusivo, forceRefresh = false) {
     const key = chiaveRangeCache(start, endEsclusivo);
     if (!forceRefresh && serviziPerRangeCache.has(key)) {
@@ -806,15 +728,7 @@ async function fetchServiziRange(start, endEsclusivo, forceRefresh = false) {
 
     const serviziTable = tabella('servizi');
     const inizio = dateToIsoGiorno(start);
-    const fineEsclusa = isoGiornoSuccessivo(fineRangeInclusive(endEsclusivo));
-    await assicuratiTokenSessione();
-    console.log('Calendario fetch servizi', {
-        tabella: serviziTable,
-        inizio,
-        fineEsclusa,
-        haToken: Boolean(accessTokenCorrente),
-        tokenJwt: String(accessTokenCorrente).startsWith('eyJ')
-    });
+    const fine = fineRangeInclusive(endEsclusivo);
 
     let data;
     try {
@@ -823,17 +737,12 @@ async function fetchServiziRange(start, endEsclusivo, forceRefresh = false) {
                 .from(serviziTable)
                 .select('*')
                 .gte('Prelievo_Data', inizio)
-                .lt('Prelievo_Data', fineEsclusa)
+                .lte('Prelievo_Data', fine)
                 .order('Prelievo_Data', { ascending: true })
                 .range(from, to)
         );
     } catch (error) {
         console.warn('Filtro periodo fallito, scarico con paginazione:', error.message);
-        data = [];
-    }
-
-    if (!data.length) {
-        console.warn('Nessun servizio nel filtro date, scarico l\'archivio paginato');
         data = await scaricaRighePaginate((from, to) =>
             supabaseClient
                 .from(serviziTable)
@@ -843,12 +752,10 @@ async function fetchServiziRange(start, endEsclusivo, forceRefresh = false) {
         );
     }
 
-    const mappati = (data || []).map(rowToServizioCompleto).filter(Boolean);
-    const servizi = mappati.filter(s => servizioNelRange(s, start, endEsclusivo));
-    console.log(
-        `Calendario servizi: scaricati ${data.length}, validi ${mappati.length}, nel periodo ${servizi.length}`,
-        { inizio, fineEsclusa }
-    );
+    const servizi = (data || [])
+        .map(rowToServizioCompleto)
+        .filter(Boolean)
+        .filter(s => servizioNelRange(s, start, endEsclusivo));
 
     serviziPerRangeCache.set(key, servizi);
     return servizi;
@@ -1022,10 +929,10 @@ function htmlIconaCarrozzina(carrozzina) {
     let file = '';
     let label = '';
     if (v === 'SOCIO') {
-        file = 'assets/carrozzina-bleu.png?v=5';
+        file = 'assets/carrozzina-bleu.png?v=4';
         label = 'Carrozzina socio';
     } else if (v === 'AUSER') {
-        file = 'assets/carrozzina-verde.png?v=5';
+        file = 'assets/carrozzina-verde.png?v=2';
         label = 'Carrozzina AUSER';
     } else {
         return '';
@@ -1825,10 +1732,10 @@ function initCalendario() {
 
     calendar = new FullCalendar.Calendar(mount, {
         locale: 'it',
-        timeZone: 'local',
         initialView: vistaCalendarioEffettiva(vistaCorrente),
         firstDay: 1,
         height: 'auto',
+        dayMinHeight: 118,
         moreLinkClick: 'popover',
         views: {
             dayGridMonth: { dayMaxEvents: 8 },
@@ -1955,10 +1862,8 @@ async function avviaCalendario(user, perm) {
     initCalendario();
     setupEventListenersCalendario();
     if (isVistaMobileCalendario() && calendar) {
-        impostaVista('dayGridMonth');
+        impostaVista('dayGridDay');
         calendar.today();
-        requestAnimationFrame(() => calendar.updateSize());
-        setTimeout(() => calendar.updateSize(), 250);
     }
     setLoading(true);
     if (calendar) await aggiornaEventiCalendario();
@@ -1970,6 +1875,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         await caricaConfigPubblica();
         document.getElementById('web-login-form')?.addEventListener('submit', gestisciLogin);
+
+        supabaseClient.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_OUT') mostraSchermataLogin();
+        });
 
         const giaLoggato = await controllaSessioneEsistente();
         if (!giaLoggato) mostraSchermataLogin();
