@@ -222,6 +222,62 @@ html, body {
     border: 1px solid #ef6c00;
 }
 
+.rp-th-inner {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    max-width: 100%;
+    white-space: nowrap;
+}
+
+.rp-th-label-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+}
+
+.rp-sort-btn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 1px 2px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    line-height: 0;
+}
+
+.rp-sort-btn svg {
+    width: 10px;
+    height: 13px;
+    display: block;
+}
+
+.rp-sort-up,
+.rp-sort-down {
+    fill: rgba(0, 0, 0, 0.28);
+}
+
+.rp-table thead th.is-sort-asc .rp-sort-up,
+.rp-table thead th.is-sort-desc .rp-sort-down {
+    fill: #111;
+}
+
+.rp-sort-btn:hover .rp-sort-up,
+.rp-sort-btn:hover .rp-sort-down {
+    fill: #111;
+}
+
+.rp-table thead th[data-sort] {
+    cursor: pointer;
+    user-select: none;
+}
+
 .rp-table tbody td {
     border: 1px solid #cfd8dc;
     padding: 4px 5px;

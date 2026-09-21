@@ -47,12 +47,8 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Nuova versione v1.0.11:
-            - Nuovo servizio: popup con gli ultimi servizi verso lo stesso luogo di destinazione
-            - Il numero di righe del popup si imposta da Impostazioni (ULTIMI SERVIZI NEL POPUP)
-            - Tabella con data prelievo, comune e luogo di partenza, trasportato e donazione
-            - Avviso chilometri dell'operatore nel mese su nuovo servizio, ripetizioni e modifica
-            - Tratta fuori Asti: i km si recuperano anche dal campo km andata/ritorno
+            Nuova versione v1.0.12:
+            - Riepilogo Pagamenti: ordinamento A-Z / Z-A su ogni colonna con icona a doppia freccia
 
             Gli utenti con l'app già installata riceveranno un avviso all'avvio
             e potranno aggiornare con un clic.

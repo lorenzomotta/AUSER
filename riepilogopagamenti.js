@@ -17,6 +17,8 @@ let invoke;
 let tuttiServizi = [];
 let serviziFiltrati = [];
 let filtriAttivi = false;
+/** { campo: string|null, direzione: 'asc'|'desc' } — null = ordine predefinito (data più recente) */
+let ordinamento = { campo: null, direzione: 'asc' };
 
 async function initTauri() {
     try {
@@ -232,12 +234,107 @@ function filtraServizi() {
         return true;
     });
 
+    applicaOrdinamento();
+}
+
+function valoreOrdinamento(servizio, campo) {
+    switch (campo) {
+        case 'stato':
+            return statoNorm(servizio);
+        case 'richiedente':
+            return normalizza(servizio.richiedente);
+        case 'data': {
+            const d = parseDataServizio(servizio.data_prelievo);
+            return d ? d.getTime() : null;
+        }
+        case 'nominativo':
+            return normalizza(servizio.socio_trasportato);
+        case 'comune_prelievo':
+            return normalizza(servizio.comune_prelievo);
+        case 'prelievo':
+            return normalizza(servizio.luogo_prelievo);
+        case 'comune_destinazione':
+            return normalizza(servizio.comune_destinazione);
+        case 'destinazione':
+            return normalizza(servizio.luogo_destinazione);
+        case 'donazione':
+            return parseEuro(servizio.pagamento);
+        case 'tipo_pagam':
+            return normalizza(servizio.tipo_pagamento);
+        case 'data_incasso': {
+            const d = parseDataServizio(dataIncasso(servizio));
+            return d ? d.getTime() : null;
+        }
+        default:
+            return '';
+    }
+}
+
+function confrontaVuotiPerUltimi(va, vb) {
+    const aVuoto = va === null || va === undefined || va === '';
+    const bVuoto = vb === null || vb === undefined || vb === '';
+    if (aVuoto && bVuoto) return 0;
+    if (aVuoto) return 1;
+    if (bVuoto) return -1;
+    return null;
+}
+
+function applicaOrdinamento() {
+    if (!ordinamento.campo) {
+        serviziFiltrati.sort((x, y) => {
+            const dx = parseDataServizio(x.data_prelievo)?.getTime() || 0;
+            const dy = parseDataServizio(y.data_prelievo)?.getTime() || 0;
+            if (dx !== dy) return dy - dx;
+            return String(y.id).localeCompare(String(x.id), undefined, { numeric: true });
+        });
+        return;
+    }
+
+    const dir = ordinamento.direzione === 'desc' ? -1 : 1;
     serviziFiltrati.sort((x, y) => {
-        const dx = String(x.data_prelievo || '');
-        const dy = String(y.data_prelievo || '');
-        if (dx !== dy) return dy.localeCompare(dx);
+        const va = valoreOrdinamento(x, ordinamento.campo);
+        const vb = valoreOrdinamento(y, ordinamento.campo);
+        const vuoti = confrontaVuotiPerUltimi(va, vb);
+        if (vuoti !== null) return vuoti;
+        let cmp;
+        if (typeof va === 'number' && typeof vb === 'number') {
+            cmp = va - vb;
+        } else {
+            cmp = String(va).localeCompare(String(vb), 'it', {
+                numeric: true,
+                sensitivity: 'base'
+            });
+        }
+        if (cmp !== 0) return cmp * dir;
         return String(y.id).localeCompare(String(x.id), undefined, { numeric: true });
     });
+}
+
+function aggiornaIconeSort() {
+    document.querySelectorAll('.rp-table thead th[data-sort]').forEach((th) => {
+        const campo = th.getAttribute('data-sort');
+        th.classList.toggle('is-sort-asc', ordinamento.campo === campo && ordinamento.direzione === 'asc');
+        th.classList.toggle('is-sort-desc', ordinamento.campo === campo && ordinamento.direzione === 'desc');
+        const btn = th.querySelector('.rp-sort-btn');
+        if (btn) {
+            const verso = ordinamento.campo === campo
+                ? (ordinamento.direzione === 'asc' ? 'A-Z' : 'Z-A')
+                : 'A-Z';
+            btn.title = `Ordina ${verso}`;
+        }
+    });
+}
+
+function onClickOrdinaColonna(campo) {
+    if (!campo) return;
+    if (ordinamento.campo === campo) {
+        ordinamento.direzione = ordinamento.direzione === 'asc' ? 'desc' : 'asc';
+    } else {
+        ordinamento.campo = campo;
+        ordinamento.direzione = 'asc';
+    }
+    applicaOrdinamento();
+    renderTabella();
 }
 
 function classeRiga(servizio) {
@@ -274,6 +371,7 @@ function renderTabella() {
         if (vuoto) vuoto.hidden = false;
         if (footer) footer.hidden = false;
         aggiornaTotali([]);
+        aggiornaIconeSort();
         return;
     }
 
@@ -308,6 +406,7 @@ function renderTabella() {
     }
 
     aggiornaTotali(serviziFiltrati);
+    aggiornaIconeSort();
 }
 
 function aggiornaTotali(lista) {
@@ -529,6 +628,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.preventDefault();
             applicaFiltriERender();
         }
+    });
+
+    document.querySelector('.rp-table thead')?.addEventListener('click', (e) => {
+        const th = e.target.closest('th[data-sort]');
+        if (!th) return;
+        e.preventDefault();
+        onClickOrdinaColonna(th.getAttribute('data-sort'));
     });
 
     document.getElementById('rp-tbody')?.addEventListener('click', (e) => {

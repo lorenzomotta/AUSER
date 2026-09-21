@@ -92,17 +92,94 @@
             <table class="rp-table">
                 <thead>
                     <tr>
-                        <th class="col-stato"></th>
-                        <th>RICHIEDENTE</th>
-                        <th>DATA</th>
-                        <th>Nominativo</th>
-                        <th></th>
-                        <th>PRELIEVO</th>
-                        <th></th>
-                        <th>DESTINAZIONE</th>
-                        <th>DONAZIONE</th>
-                        <th>TIPO PAGAM</th>
-                        <th>DATA INCASSO</th>
+                        <th class="col-stato" data-sort="stato">
+                            <span class="rp-th-inner">
+                                <span class="rp-th-label rp-th-label-sr">Stato incasso</span>
+                                <button type="button" class="rp-sort-btn" data-sort="stato" title="Ordina" aria-label="Ordina stato incasso">
+                                    <svg viewBox="0 0 12 16" aria-hidden="true"><path class="rp-sort-up" d="M6 2l4 5H2z"/><path class="rp-sort-down" d="M6 14L2 9h8z"/></svg>
+                                </button>
+                            </span>
+                        </th>
+                        <th data-sort="richiedente">
+                            <span class="rp-th-inner">
+                                <span class="rp-th-label">RICHIEDENTE</span>
+                                <button type="button" class="rp-sort-btn" data-sort="richiedente" title="Ordina" aria-label="Ordina richiedente">
+                                    <svg viewBox="0 0 12 16" aria-hidden="true"><path class="rp-sort-up" d="M6 2l4 5H2z"/><path class="rp-sort-down" d="M6 14L2 9h8z"/></svg>
+                                </button>
+                            </span>
+                        </th>
+                        <th data-sort="data">
+                            <span class="rp-th-inner">
+                                <span class="rp-th-label">DATA</span>
+                                <button type="button" class="rp-sort-btn" data-sort="data" title="Ordina" aria-label="Ordina data">
+                                    <svg viewBox="0 0 12 16" aria-hidden="true"><path class="rp-sort-up" d="M6 2l4 5H2z"/><path class="rp-sort-down" d="M6 14L2 9h8z"/></svg>
+                                </button>
+                            </span>
+                        </th>
+                        <th data-sort="nominativo">
+                            <span class="rp-th-inner">
+                                <span class="rp-th-label">Nominativo</span>
+                                <button type="button" class="rp-sort-btn" data-sort="nominativo" title="Ordina" aria-label="Ordina nominativo">
+                                    <svg viewBox="0 0 12 16" aria-hidden="true"><path class="rp-sort-up" d="M6 2l4 5H2z"/><path class="rp-sort-down" d="M6 14L2 9h8z"/></svg>
+                                </button>
+                            </span>
+                        </th>
+                        <th data-sort="comune_prelievo">
+                            <span class="rp-th-inner">
+                                <span class="rp-th-label rp-th-label-sr">Comune prelievo</span>
+                                <button type="button" class="rp-sort-btn" data-sort="comune_prelievo" title="Ordina comune prelievo" aria-label="Ordina comune prelievo">
+                                    <svg viewBox="0 0 12 16" aria-hidden="true"><path class="rp-sort-up" d="M6 2l4 5H2z"/><path class="rp-sort-down" d="M6 14L2 9h8z"/></svg>
+                                </button>
+                            </span>
+                        </th>
+                        <th data-sort="prelievo">
+                            <span class="rp-th-inner">
+                                <span class="rp-th-label">PRELIEVO</span>
+                                <button type="button" class="rp-sort-btn" data-sort="prelievo" title="Ordina" aria-label="Ordina prelievo">
+                                    <svg viewBox="0 0 12 16" aria-hidden="true"><path class="rp-sort-up" d="M6 2l4 5H2z"/><path class="rp-sort-down" d="M6 14L2 9h8z"/></svg>
+                                </button>
+                            </span>
+                        </th>
+                        <th data-sort="comune_destinazione">
+                            <span class="rp-th-inner">
+                                <span class="rp-th-label rp-th-label-sr">Comune destinazione</span>
+                                <button type="button" class="rp-sort-btn" data-sort="comune_destinazione" title="Ordina comune destinazione" aria-label="Ordina comune destinazione">
+                                    <svg viewBox="0 0 12 16" aria-hidden="true"><path class="rp-sort-up" d="M6 2l4 5H2z"/><path class="rp-sort-down" d="M6 14L2 9h8z"/></svg>
+                                </button>
+                            </span>
+                        </th>
+                        <th data-sort="destinazione">
+                            <span class="rp-th-inner">
+                                <span class="rp-th-label">DESTINAZIONE</span>
+                                <button type="button" class="rp-sort-btn" data-sort="destinazione" title="Ordina" aria-label="Ordina destinazione">
+                                    <svg viewBox="0 0 12 16" aria-hidden="true"><path class="rp-sort-up" d="M6 2l4 5H2z"/><path class="rp-sort-down" d="M6 14L2 9h8z"/></svg>
+                                </button>
+                            </span>
+                        </th>
+                        <th data-sort="donazione">
+                            <span class="rp-th-inner">
+                                <span class="rp-th-label">DONAZIONE</span>
+                                <button type="button" class="rp-sort-btn" data-sort="donazione" title="Ordina" aria-label="Ordina donazione">
+                                    <svg viewBox="0 0 12 16" aria-hidden="true"><path class="rp-sort-up" d="M6 2l4 5H2z"/><path class="rp-sort-down" d="M6 14L2 9h8z"/></svg>
+                                </button>
+                            </span>
+                        </th>
+                        <th data-sort="tipo_pagam">
+                            <span class="rp-th-inner">
+                                <span class="rp-th-label">TIPO PAGAM</span>
+                                <button type="button" class="rp-sort-btn" data-sort="tipo_pagam" title="Ordina" aria-label="Ordina tipo pagamento">
+                                    <svg viewBox="0 0 12 16" aria-hidden="true"><path class="rp-sort-up" d="M6 2l4 5H2z"/><path class="rp-sort-down" d="M6 14L2 9h8z"/></svg>
+                                </button>
+                            </span>
+                        </th>
+                        <th data-sort="data_incasso">
+                            <span class="rp-th-inner">
+                                <span class="rp-th-label">DATA INCASSO</span>
+                                <button type="button" class="rp-sort-btn" data-sort="data_incasso" title="Ordina" aria-label="Ordina data incasso">
+                                    <svg viewBox="0 0 12 16" aria-hidden="true"><path class="rp-sort-up" d="M6 2l4 5H2z"/><path class="rp-sort-down" d="M6 14L2 9h8z"/></svg>
+                                </button>
+                            </span>
+                        </th>
                         <th class="col-azione"></th>
                     </tr>
                 </thead>
