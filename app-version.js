@@ -2,7 +2,7 @@
  * Versione app (da tauri.conf.json / Cargo.toml) — titolo finestra e UI.
  */
 
-const FALLBACK_VERSION = '1.0.12';
+const FALLBACK_VERSION = '1.0.13';
 
 export async function getAppVersion() {
     try {

@@ -47,8 +47,9 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Nuova versione v1.0.12:
-            - Riepilogo Pagamenti: ordinamento A-Z / Z-A su ogni colonna con icona a doppia freccia
+            Nuova versione v1.0.13:
+            - Calendario servizi: tornano le icone della carrozzina
+            - Calendario sul telefono: i servizi del giorno si vedono di nuovo
 
             Gli utenti con l'app già installata riceveranno un avviso all'avvio
             e potranno aggiornare con un clic.
