@@ -365,19 +365,25 @@ function jwtDaAuthorization(auth) {
 }
 
 /**
- * REST Supabase: apikey pubblica + Bearer JWT della sessione.
- * Non chiamare getSession() qui (su alcuni browser entra in loop e le query tornano vuote).
+ * Login (auth): apikey + Bearer della chiave pubblica.
+ * Dati (rest): apikey + Bearer JWT dell'operatore loggato.
+ * Non chiamare getSession() qui.
  */
 function creaFetchSupabase(apiKey) {
     return (input, init = {}) => {
+        const reqUrl = String(typeof input === 'string' ? input : (input && input.url) || '');
         const headers = copiaHeadersInOggetto(init.headers);
         headers.apikey = apiKey;
 
-        const jwt = jwtDaAuthorization(headers.Authorization || headers.authorization)
+        const userJwt = jwtDaAuthorization(headers.Authorization || headers.authorization)
             || (accessTokenCorrente.startsWith('eyJ') ? accessTokenCorrente : '');
         delete headers.authorization;
-        if (jwt) {
-            headers.Authorization = `Bearer ${jwt}`;
+
+        const isAuth = reqUrl.includes('/auth/v1/');
+        if (isAuth) {
+            headers.Authorization = `Bearer ${userJwt || apiKey}`;
+        } else if (userJwt) {
+            headers.Authorization = `Bearer ${userJwt}`;
         } else if (String(apiKey).startsWith('eyJ')) {
             headers.Authorization = `Bearer ${apiKey}`;
         } else {
@@ -398,29 +404,26 @@ async function caricaConfigPubblica() {
     }
     publicConfig = await risposta.json();
     const url = publicConfig?.supabase?.url?.trim();
-    const anonJwt = String(publicConfig?.supabase?.anon_key || '').trim();
     const publishable = String(publicConfig?.supabase?.publishable_key || '').trim();
-    // Preferisci la chiave anon JWT (eyJ...): PostgREST e il login funzionano senza hacks.
-    const key = (anonJwt.startsWith('eyJ') ? anonJwt : (publishable || anonJwt));
+    const anonJwt = String(publicConfig?.supabase?.anon_key || '').trim();
+    // Il login Auth accetta la chiave publishable; la JWT anon vecchia dà 401.
+    const key = publishable || anonJwt;
     if (!url || !key) {
         throw new Error(
-            'config.public.json incompleto: servono supabase.url e anon_key (JWT eyJ...)'
+            'config.public.json incompleto: servono supabase.url e publishable_key'
         );
     }
     if (typeof window.supabase?.createClient !== 'function') {
         throw new Error('Libreria Supabase non caricata');
     }
-    const opzioni = {
+    supabaseClient = window.supabase.createClient(url, key, {
         auth: {
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true
-        }
-    };
-    if (!key.startsWith('eyJ')) {
-        opzioni.global = { fetch: creaFetchSupabase(key) };
-    }
-    supabaseClient = window.supabase.createClient(url, key, opzioni);
+        },
+        global: { fetch: creaFetchSupabase(key) }
+    });
     supabaseClient.auth.onAuthStateChange((event, session) => {
         impostaAccessToken(session);
         if (event === 'SIGNED_OUT') mostraSchermataLogin();
