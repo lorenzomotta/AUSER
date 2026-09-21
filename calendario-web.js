@@ -335,6 +335,12 @@ function invalidaCacheServizi() {
 
 // ─── Config e Supabase ─────────────────────────────────────────────────────
 
+let accessTokenCorrente = '';
+
+function impostaAccessToken(session) {
+    accessTokenCorrente = String(session?.access_token || '').trim();
+}
+
 function copiaHeadersInOggetto(initHeaders) {
     const out = {};
     try {
@@ -359,25 +365,16 @@ function jwtDaAuthorization(auth) {
 }
 
 /**
- * Ogni richiesta REST deve avere:
- * - apikey = chiave pubblica
- * - Authorization Bearer = JWT sessione operatore (altrimenti RLS restituisce 0 righe)
- * Su iPhone Headers+fetch a volte perde Authorization: usiamo un oggetto semplice.
+ * REST Supabase: apikey pubblica + Bearer JWT della sessione.
+ * Non chiamare getSession() qui (su alcuni browser entra in loop e le query tornano vuote).
  */
 function creaFetchSupabase(apiKey) {
-    return async (input, init = {}) => {
+    return (input, init = {}) => {
         const headers = copiaHeadersInOggetto(init.headers);
         headers.apikey = apiKey;
 
-        let jwt = jwtDaAuthorization(headers.Authorization || headers.authorization);
-        if (!jwt && supabaseClient) {
-            try {
-                const { data } = await supabaseClient.auth.getSession();
-                jwt = data?.session?.access_token || '';
-            } catch (err) {
-                jwt = '';
-            }
-        }
+        const jwt = jwtDaAuthorization(headers.Authorization || headers.authorization)
+            || (accessTokenCorrente.startsWith('eyJ') ? accessTokenCorrente : '');
         delete headers.authorization;
         if (jwt) {
             headers.Authorization = `Bearer ${jwt}`;
@@ -415,7 +412,16 @@ async function caricaConfigPubblica() {
         throw new Error('Libreria Supabase non caricata');
     }
     supabaseClient = window.supabase.createClient(url, key, {
-        global: { fetch: creaFetchSupabase(key) },
+        auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true
+        },
+        global: { fetch: creaFetchSupabase(key) }
+    });
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+        impostaAccessToken(session);
+        if (event === 'SIGNED_OUT') mostraSchermataLogin();
     });
 }
 
@@ -535,6 +541,7 @@ async function gestisciLogin(event) {
     try {
         const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        impostaAccessToken(data.session);
 
         const ok = await verificaOperatore(data.user);
         if (!ok) {
@@ -552,6 +559,7 @@ async function gestisciLogin(event) {
 }
 
 async function gestisciLogout() {
+    accessTokenCorrente = '';
     await supabaseClient.auth.signOut();
     invalidaCacheServizi();
     serviziById.clear();
@@ -566,6 +574,7 @@ async function gestisciLogout() {
 
 async function controllaSessioneEsistente() {
     const { data: { session } } = await supabaseClient.auth.getSession();
+    impostaAccessToken(session);
     if (!session?.user) return false;
 
     const ok = await verificaOperatore(session.user);
@@ -1925,10 +1934,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         await caricaConfigPubblica();
         document.getElementById('web-login-form')?.addEventListener('submit', gestisciLogin);
-
-        supabaseClient.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'SIGNED_OUT') mostraSchermataLogin();
-        });
 
         const giaLoggato = await controllaSessioneEsistente();
         if (!giaLoggato) mostraSchermataLogin();
