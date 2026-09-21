@@ -82,7 +82,7 @@ function isVistaListaMobile(viewType) {
 
 function configuraVistaInizialeMobile() {
     if (isVistaMobileCalendario()) {
-        vistaCorrente = 'dayGridDay';
+        vistaCorrente = 'dayGridMonth';
     }
 }
 let loadRequestId = 0;
@@ -298,6 +298,12 @@ function dateToIsoGiorno(date) {
     return `${y}-${m}-${day}`;
 }
 
+function isoGiornoSuccessivo(isoGiorno) {
+    const [y, m, d] = String(isoGiorno || '').split('-').map(Number);
+    if (!y || !m || !d) return isoGiorno;
+    return dateToIsoGiorno(new Date(y, m - 1, d + 1));
+}
+
 /** FullCalendar usa activeEnd esclusivo: ultimo giorno visibile = end - 1 ms */
 function fineRangeInclusive(endEsclusivo) {
     const d = new Date(endEsclusivo);
@@ -329,22 +335,58 @@ function invalidaCacheServizi() {
 
 // ─── Config e Supabase ─────────────────────────────────────────────────────
 
-/** Chiavi sb_publishable_ vanno solo nell'header apikey, non in Authorization Bearer. */
+function copiaHeadersInOggetto(initHeaders) {
+    const out = {};
+    try {
+        new Headers(initHeaders || {}).forEach((value, key) => {
+            out[key] = value;
+        });
+    } catch (err) {
+        if (initHeaders && typeof initHeaders === 'object' && !Array.isArray(initHeaders)) {
+            Object.entries(initHeaders).forEach(([key, value]) => {
+                if (value != null) out[key] = String(value);
+            });
+        }
+    }
+    return out;
+}
+
+function jwtDaAuthorization(auth) {
+    const s = String(auth || '').trim();
+    const m = s.match(/^Bearer\s+(.+)$/i);
+    const token = m ? m[1].trim() : s;
+    return token.startsWith('eyJ') ? token : '';
+}
+
+/**
+ * Ogni richiesta REST deve avere:
+ * - apikey = chiave pubblica
+ * - Authorization Bearer = JWT sessione operatore (altrimenti RLS restituisce 0 righe)
+ * Su iPhone Headers+fetch a volte perde Authorization: usiamo un oggetto semplice.
+ */
 function creaFetchSupabase(apiKey) {
-    const isLegacyJwt = apiKey.startsWith('eyJ');
-    return (input, init = {}) => {
-        const headers = new Headers(init.headers || {});
-        headers.set('apikey', apiKey);
-        if (isLegacyJwt) {
-            if (!headers.has('Authorization')) {
-                headers.set('Authorization', `Bearer ${apiKey}`);
-            }
-        } else {
-            const auth = headers.get('Authorization');
-            if (auth === `Bearer ${apiKey}`) {
-                headers.delete('Authorization');
+    return async (input, init = {}) => {
+        const headers = copiaHeadersInOggetto(init.headers);
+        headers.apikey = apiKey;
+
+        let jwt = jwtDaAuthorization(headers.Authorization || headers.authorization);
+        if (!jwt && supabaseClient) {
+            try {
+                const { data } = await supabaseClient.auth.getSession();
+                jwt = data?.session?.access_token || '';
+            } catch (err) {
+                jwt = '';
             }
         }
+        delete headers.authorization;
+        if (jwt) {
+            headers.Authorization = `Bearer ${jwt}`;
+        } else if (String(apiKey).startsWith('eyJ')) {
+            headers.Authorization = `Bearer ${apiKey}`;
+        } else {
+            delete headers.Authorization;
+        }
+
         return fetch(input, { ...init, headers });
     };
 }
@@ -733,7 +775,7 @@ async function fetchServiziRange(start, endEsclusivo, forceRefresh = false) {
 
     const serviziTable = tabella('servizi');
     const inizio = dateToIsoGiorno(start);
-    const fine = fineRangeInclusive(endEsclusivo);
+    const fineEsclusa = isoGiornoSuccessivo(fineRangeInclusive(endEsclusivo));
 
     let data;
     try {
@@ -742,7 +784,7 @@ async function fetchServiziRange(start, endEsclusivo, forceRefresh = false) {
                 .from(serviziTable)
                 .select('*')
                 .gte('Prelievo_Data', inizio)
-                .lte('Prelievo_Data', fine)
+                .lt('Prelievo_Data', fineEsclusa)
                 .order('Prelievo_Data', { ascending: true })
                 .range(from, to)
         );
@@ -1868,8 +1910,10 @@ async function avviaCalendario(user, perm) {
     initCalendario();
     setupEventListenersCalendario();
     if (isVistaMobileCalendario() && calendar) {
-        impostaVista('dayGridDay');
+        impostaVista('dayGridMonth');
         calendar.today();
+        requestAnimationFrame(() => calendar.updateSize());
+        setTimeout(() => calendar.updateSize(), 250);
     }
     setLoading(true);
     if (calendar) await aggiornaEventiCalendario();
