@@ -2,6 +2,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use chrono::NaiveTime;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SupabaseTablesConfig {
@@ -50,6 +51,96 @@ impl SupabaseTablesConfig {
     }
 }
 
+fn parse_order_spec(order: &str) -> Option<(String, bool)> {
+    let first = order.split(',').next()?.trim();
+    let mut parts = first.split('.');
+    let col = parts.next()?.trim();
+    if col.is_empty() {
+        return None;
+    }
+    let dir = parts.next().unwrap_or("asc").trim().to_ascii_lowercase();
+    Some((col.to_string(), dir != "desc"))
+}
+
+fn json_simple(value: &Value) -> String {
+    match value {
+        Value::Null => String::new(),
+        Value::String(s) => s.trim().to_string(),
+        Value::Number(n) => n.to_string(),
+        Value::Bool(b) => b.to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn row_identity(row: &Value) -> String {
+    let Some(obj) = row.as_object() else {
+        return row.to_string();
+    };
+    for wanted in [
+        "idservizio",
+        "IdServizio",
+        "id",
+        "IdSocio",
+        "idsocio",
+        "IdTratta",
+        "idtratta",
+    ] {
+        let wanted_l = wanted.to_lowercase();
+        if let Some((_, val)) = obj.iter().find(|(k, _)| k.to_lowercase() == wanted_l) {
+            let s = json_simple(val);
+            if !s.is_empty() {
+                return format!("{}:{}", wanted_l, s);
+            }
+        }
+    }
+    row.to_string()
+}
+
+fn json_col_filter_value(row: &Value, col: &str) -> Option<String> {
+    let obj = row.as_object()?;
+    let col_l = col.to_lowercase();
+    let val = obj
+        .iter()
+        .find(|(k, _)| k.to_lowercase() == col_l)
+        .map(|(_, v)| v)?;
+    match val {
+        Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Some(i.to_string())
+            } else if let Some(u) = n.as_u64() {
+                Some(u.to_string())
+            } else {
+                n.as_f64().map(|f| {
+                    if f.fract() == 0.0 {
+                        (f as i64).to_string()
+                    } else {
+                        f.to_string()
+                    }
+                })
+            }
+        }
+        Value::String(s) => {
+            let t = s.trim();
+            if t.is_empty() {
+                return None;
+            }
+            if t.parse::<i64>().is_ok() {
+                Some(t.to_string())
+            } else {
+                Some(format!("\"{}\"", t.replace('"', "")))
+            }
+        }
+        _ => {
+            let s = json_simple(val);
+            if s.is_empty() {
+                None
+            } else {
+                Some(s)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SupabaseConfig {
     pub url: String,
@@ -87,6 +178,8 @@ impl SupabaseClient {
 
     /// Legge tutte le righe da una tabella Supabase, con paginazione automatica.
     /// PostgREST limita di default a 1000 righe per richiesta.
+    /// Con `order` usa keyset (`colonna=gt.ultimo`) perché alcuni server ignorano `offset`
+    /// e restituiscono sempre solo la prima pagina.
     pub async fn fetch_table(
         &self,
         table_type: &str,
@@ -105,33 +198,68 @@ impl SupabaseClient {
 
         let base = self.config.url.trim_end_matches('/');
         let select_cols = columns.unwrap_or("*");
+        let order_info = order.and_then(parse_order_spec);
 
         let mut all_rows: Vec<Value> = Vec::new();
+        let mut seen_ids: HashSet<String> = HashSet::new();
+        let mut keyset_cursor: Option<String> = None;
         let mut offset: usize = 0;
 
         for page in 1..=MAX_PAGES {
             let mut url = format!("{}/rest/v1/{}?select={}", base, table_name, select_cols);
 
-            if let Some(f) = filter {
-                url.push('&');
-                url.push_str(f);
+            let mut page_filter = filter.map(|s| s.to_string());
+            if let (Some((col, ascending)), Some(cursor)) =
+                (order_info.as_ref(), keyset_cursor.as_ref())
+            {
+                if !cursor.is_empty() {
+                    let op = if *ascending { "gt" } else { "lt" };
+                    let extra = format!("{}={}.{}", col, op, cursor);
+                    page_filter = Some(match page_filter {
+                        Some(f) if !f.is_empty() => format!("{}&{}", f, extra),
+                        _ => extra,
+                    });
+                }
+            }
+
+            if let Some(f) = page_filter.as_deref() {
+                if !f.is_empty() {
+                    url.push('&');
+                    url.push_str(f);
+                }
             }
             if let Some(o) = order {
                 url.push_str("&order=");
                 url.push_str(o);
             }
-            url.push_str(&format!("&limit={}&offset={}", PAGE_SIZE, offset));
+            url.push_str(&format!("&limit={}", PAGE_SIZE));
 
-            println!(
-                "📡 Supabase GET [{} → {}] pagina {} (offset {}): {}",
-                table_type, table_name, page, offset, url
-            );
-
-            let request = self
+            let mut request = self
                 .http
                 .get(&url)
                 .header("Content-Type", "application/json")
                 .header("Prefer", "count=exact");
+
+            if order_info.is_none() {
+                url.push_str(&format!("&offset={}", offset));
+                let range_end = offset + PAGE_SIZE - 1;
+                request = self
+                    .http
+                    .get(&url)
+                    .header("Content-Type", "application/json")
+                    .header("Prefer", "count=exact")
+                    .header("Range-Unit", "items")
+                    .header("Range", format!("{}-{}", offset, range_end));
+            }
+
+            println!(
+                "📡 Supabase GET [{} → {}] pagina {} (righe già {}): {}",
+                table_type,
+                table_name,
+                page,
+                all_rows.len(),
+                url
+            );
 
             let response = self
                 .apply_auth_headers(request)
@@ -157,20 +285,60 @@ impl SupabaseClient {
                 .map_err(|e| format!("Errore parsing risposta Supabase: {}", e))?;
 
             let batch_len = batch.len();
-            all_rows.extend(batch);
+            let last_order_value = batch.last().and_then(|row| {
+                order_info
+                    .as_ref()
+                    .and_then(|(col, _)| json_col_filter_value(row, col))
+            });
+
+            let mut new_in_page = 0usize;
+            for row in batch {
+                if seen_ids.insert(row_identity(&row)) {
+                    all_rows.push(row);
+                    new_in_page += 1;
+                }
+            }
 
             if batch_len < PAGE_SIZE {
                 break;
             }
 
-            if order.is_none() {
+            if order_info.is_none() {
                 println!(
                     "  ⚠️ Supabase [{}]: pagina piena senza order — rischio righe mancanti/duplicate",
                     table_type
                 );
+                offset += PAGE_SIZE;
+                if new_in_page == 0 {
+                    println!(
+                        "  ⚠️ Supabase [{}]: pagina {} solo duplicati, continuo con offset",
+                        table_type, page
+                    );
+                }
+                continue;
             }
 
-            offset += PAGE_SIZE;
+            let Some(v) = last_order_value else {
+                println!(
+                    "  ⚠️ Supabase [{}]: pagina piena ma colonna order non letta — stop",
+                    table_type
+                );
+                break;
+            };
+            if keyset_cursor.as_ref() == Some(&v) {
+                println!(
+                    "  ⚠️ Supabase [{}]: cursore keyset non avanzato ({}) — stop",
+                    table_type, v
+                );
+                break;
+            }
+            keyset_cursor = Some(v);
+            if new_in_page == 0 {
+                println!(
+                    "  ⚠️ Supabase [{}]: pagina {} solo duplicati, continuo con keyset",
+                    table_type, page
+                );
+            }
         }
 
         if all_rows.len() >= PAGE_SIZE * MAX_PAGES {
@@ -937,8 +1105,25 @@ impl SupabaseClient {
     }
 
     pub async fn fetch_servizi(&self, filter: Option<&str>) -> Result<Vec<Value>, String> {
-        self.fetch_table("servizi", filter, None, Some("idservizio.asc"))
+        match self
+            .fetch_table("servizi", filter, None, Some("idservizio.asc"))
             .await
+        {
+            Ok(rows) => Ok(rows),
+            Err(e) => {
+                let el = e.to_lowercase();
+                if el.contains("idservizio")
+                    || el.contains("42703")
+                    || el.contains("does not exist")
+                {
+                    println!("⚠️ order idservizio fallito, riprovo IdServizio: {}", e);
+                    self.fetch_table("servizi", filter, None, Some("IdServizio.asc"))
+                        .await
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 
     /// Servizi con una colonna che contiene il testo (ilike, una sola pagina).
@@ -1187,6 +1372,47 @@ impl SupabaseClient {
         }
 
         Err(format!("Errore Supabase PATCH HTTP {}: {}", status, err_body))
+    }
+
+    /// Aggiorna tutti i servizi che rispettano un filtro PostgREST (es. Oper=eq.NOME)
+    pub async fn patch_servizi_filtro(
+        &self,
+        filtro: &str,
+        body: &serde_json::Map<String, Value>,
+    ) -> Result<(), String> {
+        if body.is_empty() {
+            return Ok(());
+        }
+
+        let table_name = &self.config.tables.servizi;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/rest/v1/{}?{}", base, table_name, filtro);
+
+        println!("📡 Supabase PATCH [servizi → {}] filtro={}", table_name, filtro);
+
+        let request = self
+            .http
+            .patch(&url)
+            .header("Content-Type", "application/json")
+            .header("Prefer", "return=minimal")
+            .json(body);
+
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Supabase PATCH filtro: {}", e))?;
+
+        if response.status().is_success() {
+            return Ok(());
+        }
+
+        let status = response.status();
+        let err_body = response.text().await.unwrap_or_default();
+        Err(format!(
+            "Errore Supabase PATCH filtro HTTP {}: {}",
+            status, err_body
+        ))
     }
 
     /// Inserisce un nuovo servizio (POST PostgREST)

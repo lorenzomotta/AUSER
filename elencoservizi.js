@@ -107,6 +107,105 @@ function getOperatoreFromUrl() {
     return (params.get('operatore') || '').trim();
 }
 
+function normalizzaIdOperatore(value) {
+    const s = String(value ?? '').trim();
+    if (!s) return '';
+    const noDec = s.endsWith('.0') ? s.slice(0, -2) : s;
+    if (/^\d+$/.test(noDec)) return String(parseInt(noDec, 10));
+    return noDec;
+}
+
+function nomeChiaveOperatore(value) {
+    return String(value || '')
+        .trim()
+        .toUpperCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^A-Z0-9 ]/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean)
+        .sort()
+        .join(' ');
+}
+
+function trovaOperatoreAnagrafica(valore) {
+    const v = String(valore || '').trim();
+    const lista = [
+        ...(Array.isArray(allOperatori) ? allOperatori : []),
+        ...(Array.isArray(allTesserati) ? allTesserati : [])
+    ];
+    if (!v || !lista.length) return null;
+    const id = normalizzaIdOperatore(v);
+    const nome = nomeChiaveOperatore(v);
+    return lista.find((o) => {
+        if (id && normalizzaIdOperatore(o.idsocio) === id) return true;
+        if (id && normalizzaIdOperatore(o.id) === id) return true;
+        return nome && nomeChiaveOperatore(o.nominativo) === nome;
+    }) || null;
+}
+
+function raccogliIdsOperatore(valoreFiltro) {
+    const v = String(valoreFiltro || '').trim();
+    const ids = new Set();
+    const sel = document.getElementById('ricerca-operatore');
+    const opt = sel?.selectedOptions?.[0];
+    [v, opt?.dataset?.id, opt?.dataset?.idsocio].forEach((x) => {
+        const n = normalizzaIdOperatore(x);
+        if (n) ids.add(n);
+    });
+
+    const nomeOpt = (opt?.dataset?.nominativo || opt?.textContent || '').trim();
+    const t = trovaOperatoreAnagrafica(v) || (nomeOpt ? trovaOperatoreAnagrafica(nomeOpt) : null);
+    const nomeTarget = t?.nominativo || nomeOpt || (/^\d+$/.test(v) ? '' : v);
+    const nk = nomeChiaveOperatore(nomeTarget);
+
+    const lista = Array.isArray(allTesserati) && allTesserati.length ? allTesserati : allOperatori;
+    (lista || []).forEach((p) => {
+        const stessoNome = nk && nomeChiaveOperatore(p.nominativo) === nk;
+        const stessoId = ids.has(normalizzaIdOperatore(p.idsocio)) || ids.has(normalizzaIdOperatore(p.id));
+        if (!stessoNome && !stessoId) return;
+        [p.idsocio, p.id].forEach((x) => {
+            const n = normalizzaIdOperatore(x);
+            if (n) ids.add(n);
+        });
+    });
+
+    return { ids: [...ids], nomeTarget, nk };
+}
+
+function servizioMatchaOperatore(servizio, valoreFiltro) {
+    const v = String(valoreFiltro || '').trim();
+    if (!v) return true;
+    const { ids, nk, nomeTarget } = raccogliIdsOperatore(v);
+
+    const idsServizio = [servizio.id_operatore, servizio.id_operatore_2]
+        .concat(
+            [servizio.operatore, servizio.operatore_2, servizio.operatore_testo].filter((x) =>
+                /^\d+$/.test(normalizzaIdOperatore(x))
+            )
+        )
+        .map(normalizzaIdOperatore)
+        .filter(Boolean);
+    if (ids.some((id) => idsServizio.includes(id))) return true;
+
+    if (nk && [servizio.operatore, servizio.operatore_2, servizio.operatore_testo].some((ns) => nomeChiaveOperatore(ns) === nk)) {
+        return true;
+    }
+
+    const parti = String(nomeTarget || '')
+        .trim()
+        .toUpperCase()
+        .split(/\s+/)
+        .filter((p) => p.length >= 3);
+    if (parti.length >= 2) {
+        return [servizio.operatore, servizio.operatore_2, servizio.operatore_testo].some((ns) => {
+            const s = String(ns || '').toUpperCase();
+            return parti.every((p) => s.includes(p));
+        });
+    }
+    return false;
+}
+
 async function caricaTuttiAnniSeFiltroUrl() {
     if (filtroAnnoModo === 'tutti') return;
     applicaFiltroArchiviaIniziale = false;
@@ -1045,7 +1144,13 @@ function renderServiziView(resetPage = false) {
     updateServiziCount();
 
     if (totalItems === 0) {
-        containerBody.innerHTML = '<div class="servizi-lista-empty">Nessun servizio trovato</div>';
+        let msg = 'Nessun servizio trovato';
+        if (filtriRicerca.operatore) {
+            const opt = document.getElementById('ricerca-operatore')?.selectedOptions?.[0];
+            const nome = opt?.dataset?.nominativo || opt?.textContent || filtriRicerca.operatore;
+            msg = `Nessun servizio collegato a ${nome} (IdSocio ${opt?.dataset?.idsocio || filtriRicerca.operatore}, id ${opt?.dataset?.id || '—'}). In tabella i servizi hanno altri IdOperatore.`;
+        }
+        containerBody.innerHTML = `<div class="servizi-lista-empty">${msg}</div>`;
         updatePaginationBar(0, 1, 1);
         return;
     }
@@ -1368,10 +1473,9 @@ function applyAllFilters() {
     
     // Applica filtro OPERATORE se attivo
     if (filtroOperatoreAttivo && valoreFiltroOperatore) {
-        serviziFiltrati = serviziFiltrati.filter(servizio => {
-            const operatore = servizio.operatore || '';
-            return operatore.trim() === valoreFiltroOperatore.trim();
-        });
+        serviziFiltrati = serviziFiltrati.filter(servizio =>
+            servizioMatchaOperatore(servizio, valoreFiltroOperatore)
+        );
     }
     
     // Applica filtro STATO DEL SERVIZIO se attivo
@@ -1495,10 +1599,9 @@ function applyAllFilters() {
     }
     
     if (filtriRicerca.operatore) {
-        serviziFiltrati = serviziFiltrati.filter(servizio => {
-            const operatore = (servizio.operatore || '').trim();
-            return operatore === filtriRicerca.operatore.trim();
-        });
+        serviziFiltrati = serviziFiltrati.filter(servizio =>
+            servizioMatchaOperatore(servizio, filtriRicerca.operatore)
+        );
     }
     
     console.log(`✓ Servizi filtrati: ${serviziFiltrati.length} di ${serviziOriginali.length}`);
@@ -1521,11 +1624,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Chiusura con X → torna a Elenco Soci / Operatori (finestra aperta da pulsante SERVIZI)
     await setupChiusuraRitornoFinestraOrigine();
     
+    // Operatori (IdSocio) servono al filtro ricerca e al filtro da URL
+    await caricaDatiPerDropdown();
+
     // Carica gli automezzi prima di caricare i servizi
     await caricaAutomezzi();
     
     // Carica tutti i servizi e popola la lista
     await loadAllServizi();
+    popolaDropdownOperatori();
 
     // Filtro da URL (apertura da Elenco Soci → SERVIZI)
     await applicaFiltroInizialeDaUrl();
@@ -1605,9 +1712,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             apriModaleRicerca();
         });
     }
-    
-    // Carica tesserati e operatori per i dropdown
-    await caricaDatiPerDropdown();
 
     initCompletaServizio({
         getInvoke: () => invoke,
@@ -1779,8 +1883,11 @@ async function caricaDatiPerDropdown() {
         // Filtra solo gli operatori
         allOperatori = allTesserati.filter(t => {
             const op = (t.operatore || '').toString().trim().toUpperCase();
-            return op === 'SI' || op === 'TRUE' || op === '1';
+            return op === 'SI' || op === 'SÌ' || op === 'TRUE' || op === '1' || op === 'S' || op === 'YES';
         });
+        allOperatori.sort((a, b) =>
+            (a.nominativo || '').localeCompare(b.nominativo || '', 'it', { sensitivity: 'base' })
+        );
         
         console.log(`✓ Caricati ${allTesserati.length} tesserati, ${allOperatori.length} operatori`);
         
@@ -1822,6 +1929,25 @@ function popolaDropdownDaServizi() {
     }
 }
 
+function nomiOperatoreSoloSuiServizi() {
+    const inElenco = new Set(
+        (allOperatori || []).map((o) => nomeChiaveOperatore(o.nominativo)).filter(Boolean)
+    );
+    const extra = new Map();
+    (serviziOriginali || []).forEach((s) => {
+        [s.operatore, s.operatore_2, s.operatore_testo].forEach((n) => {
+            const t = String(n || '').trim();
+            if (!t || /^\d+$/.test(t)) return;
+            const k = nomeChiaveOperatore(t);
+            if (!k || inElenco.has(k)) return;
+            if (!extra.has(k)) extra.set(k, t);
+        });
+    });
+    return [...extra.values()].sort((a, b) =>
+        a.localeCompare(b, 'it', { sensitivity: 'base' })
+    );
+}
+
 // Popola dropdown operatori
 function popolaDropdownOperatori() {
     const selectOperatore = document.getElementById('ricerca-operatore');
@@ -1832,8 +1958,21 @@ function popolaDropdownOperatori() {
     
     allOperatori.forEach(operatore => {
         const option = document.createElement('option');
-        option.value = operatore.nominativo || '';
-        option.textContent = operatore.nominativo || '';
+        option.value = operatore.idsocio || String(operatore.id || '') || operatore.nominativo || '';
+        option.textContent = operatore.nominativo || option.value;
+        option.dataset.idsocio = operatore.idsocio == null ? '' : String(operatore.idsocio);
+        option.dataset.id = operatore.id == null ? '' : String(operatore.id);
+        option.dataset.nominativo = operatore.nominativo || '';
+        selectOperatore.appendChild(option);
+    });
+
+    nomiOperatoreSoloSuiServizi().forEach((nome) => {
+        const option = document.createElement('option');
+        option.value = nome;
+        option.textContent = `${nome} (da servizi)`;
+        option.dataset.idsocio = '';
+        option.dataset.id = '';
+        option.dataset.nominativo = nome;
         selectOperatore.appendChild(option);
     });
     
@@ -1950,7 +2089,7 @@ function resetFormRicerca() {
 }
 
 // Applica filtri ricerca
-function applicaFiltriRicerca() {
+async function applicaFiltriRicerca() {
     // Leggi valori dal form
     filtriRicerca = {
         idservizio: document.getElementById('ricerca-idservizio').value.trim() || null,
@@ -1966,10 +2105,52 @@ function applicaFiltriRicerca() {
         operatore: document.getElementById('ricerca-operatore').value || null
     };
     
-    console.log('Applicazione filtri ricerca:', filtriRicerca);
-    
-    // Applica tutti i filtri (inclusi quelli ricerca)
+    console.log('Applicazione filtri ricerca:', JSON.stringify(filtriRicerca));
+    if (filtriRicerca.operatore) {
+        const sel = document.getElementById('ricerca-operatore');
+        const opt = sel?.selectedOptions?.[0];
+        const raccolti = raccogliIdsOperatore(filtriRicerca.operatore);
+        const t555 = (allTesserati || []).find((t) =>
+            normalizzaIdOperatore(t.idsocio) === normalizzaIdOperatore(filtriRicerca.operatore)
+            || normalizzaIdOperatore(t.id) === normalizzaIdOperatore(filtriRicerca.operatore)
+        );
+        const nomiConti = [...new Set(
+            (serviziOriginali || [])
+                .filter((s) =>
+                    /CONTI/i.test(String(s.operatore || ''))
+                    || /CONTI/i.test(String(s.operatore_2 || ''))
+                    || /CONTI/i.test(String(s.operatore_testo || ''))
+                )
+                .map((s) => `${s.operatore || ''} | testo:${s.operatore_testo || ''} | id:${s.id_operatore || ''}`)
+        )].slice(0, 15);
+        const matchId = (serviziOriginali || []).filter((s) =>
+            raccolti.ids.includes(normalizzaIdOperatore(s.id_operatore))
+            || raccolti.ids.includes(normalizzaIdOperatore(s.id_operatore_2))
+        ).length;
+        console.log('Filtro operatore:', JSON.stringify({
+            value: filtriRicerca.operatore,
+            testo: opt?.textContent || '',
+            idRiga: opt?.dataset?.id || '',
+            idsocio: opt?.dataset?.idsocio || '',
+            idsCollegati: raccolti.ids,
+            nome: raccolti.nomeTarget,
+            tesserato: t555 ? { id: t555.id, idsocio: t555.idsocio, nominativo: t555.nominativo } : null,
+            primoServizio: serviziOriginali[0] ? {
+                operatore: serviziOriginali[0].operatore,
+                id_operatore: serviziOriginali[0].id_operatore
+            } : null,
+            serviziConQuegliId: matchId,
+            nomiConCONTI: nomiConti,
+            primoOperTesto: serviziOriginali[0] ? serviziOriginali[0].operatore_testo : null
+        }));
+    }
+
     applyAllFilters();
+
+    if (filtriRicerca.operatore && serviziCache.length === 0 && filtroAnnoModo !== 'tutti') {
+        console.log('Nessun servizio nell\'anno corrente: riprovo su TUTTI GLI ANNI');
+        await switchAnnoModo('tutti');
+    }
     
     // Aggiorna warning e conteggio
     updateFilterWarning();

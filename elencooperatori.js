@@ -289,14 +289,7 @@ async function openChilometraggioTotali() {
 
         const existing = WebviewWindow.getByLabel(label);
         if (existing) {
-            try {
-                await existing.show();
-                await existing.setFocus();
-                return;
-            } catch (err) {
-                console.warn('Finestra chilometri totali non riutilizzabile:', err);
-                try { await existing.close(); } catch (_) { /* ignore */ }
-            }
+            try { await existing.close(); } catch (_) { /* ignore */ }
         }
 
         const webview = new WebviewWindow(label, {

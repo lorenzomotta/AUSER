@@ -86,8 +86,14 @@ function leggiParametriUrl() {
 
     const oggi = new Date();
     annoRif = oggi.getFullYear();
-    meseDa = oggi.getMonth();
-    meseA = oggi.getMonth();
+    // Chilometri totali = da gennaio a oggi; singolo operatore = mese corrente
+    if (modalitaTutti) {
+        meseDa = 0;
+        meseA = oggi.getMonth();
+    } else {
+        meseDa = oggi.getMonth();
+        meseA = oggi.getMonth();
+    }
 
     const anno = parseInt(params.get('anno') || '', 10);
     const mese = parseInt(params.get('mese') || '', 10);
@@ -196,15 +202,72 @@ function normalizzaNome(value) {
         .replace(/\s+/g, ' ');
 }
 
-function servizioDellOperatore(servizio, nomeTarget = operatoreNome) {
-    const target = normalizzaNome(nomeTarget);
-    if (!target) return false;
+function chiaveNome(value) {
+    return normalizzaNome(value)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^A-Z0-9 ]/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean)
+        .sort()
+        .join(' ');
+}
 
-    const op = normalizzaNome(servizio.operatore);
-    if (op === target) return true;
+function nomiCorrispondono(a, b) {
+    const na = normalizzaNome(a);
+    const nb = normalizzaNome(b);
+    if (!na || !nb) return false;
+    if (na === nb) return true;
+    const ca = chiaveNome(a);
+    const cb = chiaveNome(b);
+    return !!ca && ca === cb;
+}
 
-    const op2 = normalizzaNome(servizio.operatore_2);
-    if (op2 === target) return true;
+function normalizzaId(value) {
+    const s = String(value ?? '').trim();
+    if (!s) return '';
+    const noDec = s.endsWith('.0') ? s.slice(0, -2) : s;
+    if (/^\d+$/.test(noDec)) return String(parseInt(noDec, 10));
+    return noDec;
+}
+
+function targetOperatore(nomeOTarget, idsocio) {
+    if (nomeOTarget && typeof nomeOTarget === 'object') {
+        const ids = [
+            ...(Array.isArray(nomeOTarget.ids) ? nomeOTarget.ids : []),
+            nomeOTarget.idsocio,
+            nomeOTarget.id
+        ].map(normalizzaId).filter(Boolean);
+        return {
+            nome: normalizzaNome(nomeOTarget.nome || nomeOTarget.nominativo || ''),
+            ids: [...new Set(ids)]
+        };
+    }
+    const ids = [idsocio, operatoreIdsocio].map(normalizzaId).filter(Boolean);
+    return {
+        nome: normalizzaNome(nomeOTarget || operatoreNome),
+        ids: [...new Set(ids)]
+    };
+}
+
+function servizioDellOperatore(servizio, nomeOTarget = operatoreNome, idsocio = operatoreIdsocio) {
+    const target = targetOperatore(nomeOTarget, idsocio);
+    const idsServizio = [servizio.id_operatore, servizio.id_operatore_2]
+        .concat(
+            [servizio.operatore, servizio.operatore_2, servizio.operatore_testo].filter((x) =>
+                /^\d+$/.test(normalizzaId(x))
+            )
+        )
+        .map(normalizzaId)
+        .filter(Boolean);
+
+    if (target.ids.some((id) => idsServizio.includes(id))) return true;
+
+    if (target.nome) {
+        if (nomiCorrispondono(servizio.operatore, target.nome)) return true;
+        if (nomiCorrispondono(servizio.operatore_2, target.nome)) return true;
+        if (nomiCorrispondono(servizio.operatore_testo, target.nome)) return true;
+    }
 
     return false;
 }
@@ -228,7 +291,80 @@ function servizioEseguito(servizio) {
     const stato = String(servizio?.stato_servizio || '')
         .trim()
         .toUpperCase();
-    return stato === 'ESEGUITO';
+    if (stato.includes('ANNULL')) return false;
+    if (stato.includes('DA ESEGUIRE')) return false;
+    if (stato.includes('ESEGUIT') || stato.includes('COMPLETAT')) return true;
+    // Import senza stato, o codice numerico della tabella lookup
+    if (!stato || /^\d+$/.test(stato)) return parseKm(servizio.km) > 0;
+    return false;
+}
+
+function isOperatoreFlag(tesserato) {
+    if (!tesserato) return false;
+    if (typeof tesserato.operatore === 'boolean') return tesserato.operatore;
+    if (typeof tesserato.operatore === 'number') return tesserato.operatore !== 0;
+    const s = String(tesserato.operatore || '').trim().toUpperCase();
+    if (!s || s === 'FALSE' || s === 'NO' || s === '0') return false;
+    return s === 'TRUE' || s === 'SI' || s === 'SÌ' || s === 'S' || s === '1' ||
+        s === 'YES' || s === 'Y';
+}
+
+async function fetchOperatoriAnagrafica() {
+    if (!invoke) return [];
+    try {
+        const tesserati = await invoke('get_all_tesserati');
+        if (!Array.isArray(tesserati)) return [];
+        const idsPerNome = new Map();
+        tesserati.forEach((t) => {
+            const nk = chiaveNome(t.nominativo);
+            if (!nk) return;
+            if (!idsPerNome.has(nk)) idsPerNome.set(nk, new Set());
+            const set = idsPerNome.get(nk);
+            [t.idsocio, t.id].forEach((x) => {
+                const n = normalizzaId(x);
+                if (n) set.add(n);
+            });
+        });
+        const map = new Map();
+        tesserati.filter(isOperatoreFlag).forEach((t) => {
+            const nominativo = String(t.nominativo || '').trim();
+            const idsocio = String(t.idsocio || '').trim();
+            if (!nominativo && !idsocio) return;
+            const key = normalizzaId(idsocio) || normalizzaNome(nominativo);
+            if (!map.has(key)) {
+                const nk = chiaveNome(nominativo);
+                const ids = new Set(idsPerNome.get(nk) || []);
+                [idsocio, t.id].forEach((x) => {
+                    const n = normalizzaId(x);
+                    if (n) ids.add(n);
+                });
+                map.set(key, {
+                    nominativo,
+                    idsocio,
+                    id: t.id != null ? String(t.id) : '',
+                    ids: [...ids]
+                });
+            }
+        });
+        return [...map.values()].sort((a, b) =>
+            a.nominativo.localeCompare(b.nominativo, 'it', { sensitivity: 'base' })
+        );
+    } catch (err) {
+        console.warn('Anagrafica operatori non disponibile per il report km:', err);
+        return [];
+    }
+}
+
+function aggiornaConteggio(testo) {
+    const el = document.getElementById('rc-conteggio');
+    if (!el) return;
+    if (!testo) {
+        el.hidden = true;
+        el.textContent = '';
+        return;
+    }
+    el.hidden = false;
+    el.textContent = testo;
 }
 
 function nelPeriodo(servizio) {
@@ -250,30 +386,13 @@ function ordinaServizi(servizi) {
     });
 }
 
-function filtraServiziPeriodo(servizi, nomeOp = operatoreNome) {
+function filtraServiziPeriodo(servizi, nomeOTarget = operatoreNome, idsocio = operatoreIdsocio) {
     return ordinaServizi(
         servizi.filter((s) => {
-            if (!servizioDellOperatore(s, nomeOp)) return false;
+            if (!servizioDellOperatore(s, nomeOTarget, idsocio)) return false;
             if (!servizioEseguito(s)) return false;
             return nelPeriodo(s);
         })
-    );
-}
-
-/** Nomi operatori con almeno un servizio eseguito nel periodo (A→Z) */
-function elencoOperatoriDalPeriodo(servizi) {
-    const map = new Map();
-    servizi.forEach((s) => {
-        if (!servizioEseguito(s) || !nelPeriodo(s)) return;
-        [s.operatore, s.operatore_2].forEach((nome) => {
-            const display = String(nome || '').trim();
-            if (!display) return;
-            const key = normalizzaNome(display);
-            if (!map.has(key)) map.set(key, display);
-        });
-    });
-    return [...map.values()].sort((a, b) =>
-        a.localeCompare(b, 'it', { sensitivity: 'base' })
     );
 }
 
@@ -402,6 +521,19 @@ function calcolaERenderGruppi(container, servizi) {
     return { numRimb, kmRimb, numNon, kmNon };
 }
 
+function renderBloccoOperatoreVuoto(container, nomeOp) {
+    const blocco = document.createElement('div');
+    blocco.className = 'rc-operatore-blocco rc-operatore-vuoto';
+    blocco.innerHTML = `
+        <section class="rc-operatore-riga rc-operatore-riga-interna">
+            <span class="rc-label">OPERATORE</span>
+            <div class="rc-operatore-nome">${escapeHtml(nomeOp)}</div>
+            <span class="rc-vuoto-km">0 servizi · 0 km</span>
+        </section>
+    `;
+    container.appendChild(blocco);
+}
+
 function renderBloccoOperatore(container, nomeOp, servizi) {
     const blocco = document.createElement('div');
     blocco.className = 'rc-operatore-blocco';
@@ -464,6 +596,7 @@ async function caricaERender() {
     }
     if (errore) errore.hidden = true;
     if (contenuto) contenuto.hidden = true;
+    aggiornaConteggio('');
 
     try {
         if (!invoke) await initTauri();
@@ -476,29 +609,59 @@ async function caricaERender() {
             if (tableHeadFisso) tableHeadFisso.hidden = true;
             assicuraTitoloTotaliGenerali(true);
 
-            const nomi = elencoOperatoriDalPeriodo(serviziAnno);
-            let totNumRimb = 0;
-            let totKmRimb = 0;
-            let totNumNon = 0;
-            let totKmNon = 0;
+            const operatori = await fetchOperatoriAnagrafica();
+            const eseguitiPeriodo = serviziAnno.filter(
+                (s) => servizioEseguito(s) && nelPeriodo(s)
+            );
+            let conKm = 0;
+            const usati = new Set();
 
-            if (!nomi.length) {
+            if (!operatori.length) {
                 const vuoto = document.createElement('div');
                 vuoto.className = 'rc-gruppo-vuoto';
-                vuoto.textContent = 'Nessun servizio eseguito nel periodo selezionato.';
+                vuoto.textContent = 'Nessun operatore trovato.';
                 gruppiEl.appendChild(vuoto);
             } else {
-                nomi.forEach((nome) => {
-                    const delPeriodo = filtraServiziPeriodo(serviziAnno, nome);
-                    if (!delPeriodo.length) return;
-                    renderBloccoOperatore(gruppiEl, nome, delPeriodo);
+                operatori.forEach((op) => {
+                    const delPeriodo = filtraServiziPeriodo(serviziAnno, op);
+                    delPeriodo.forEach((s) => usati.add(s.id));
+                    if (!delPeriodo.length) {
+                        renderBloccoOperatoreVuoto(gruppiEl, op.nominativo || op.idsocio);
+                        return;
+                    }
+                    conKm += 1;
+                    renderBloccoOperatore(gruppiEl, op.nominativo || op.idsocio, delPeriodo);
                 });
             }
 
-            // Totale generale: ogni servizio del periodo contato una sola volta
-            const tuttiPeriodo = ordinaServizi(
-                serviziAnno.filter((s) => servizioEseguito(s) && nelPeriodo(s))
+            const altri = eseguitiPeriodo.filter((s) => !usati.has(s.id));
+            const nomiAltri = [...new Set(
+                altri.flatMap((s) => [s.operatore, s.operatore_2, s.operatore_testo].filter(Boolean))
+            )].sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
+
+            aggiornaConteggio(
+                `${operatori.length} operatori in elenco · ${conKm} con km · ` +
+                `${serviziAnno.length} servizi caricati per il ${annoRif}` +
+                (nomiAltri.length
+                    ? ` · ${altri.length} servizi di altri nominativi`
+                    : '')
             );
+
+            if (nomiAltri.length) {
+                const nota = document.createElement('div');
+                nota.className = 'rc-nota-altri';
+                nota.textContent =
+                    'Questi nomi sono sui servizi ma non risultano ancora tra gli operatori in anagrafica (tesserati da aggiornare):';
+                gruppiEl.appendChild(nota);
+                nomiAltri.forEach((nome) => {
+                    const delPeriodo = filtraServiziPeriodo(altri, { nominativo: nome });
+                    if (!delPeriodo.length) return;
+                    renderBloccoOperatore(gruppiEl, `${nome} (non in elenco operatori)`, delPeriodo);
+                });
+            }
+
+            // Totale generale: tutti i servizi eseguiti del periodo, una volta ciascuno
+            const tuttiPeriodo = ordinaServizi(eseguitiPeriodo);
             const statsGenerali = {
                 numRimb: 0,
                 kmRimb: 0,
@@ -517,13 +680,14 @@ async function caricaERender() {
                     statsGenerali.kmNon += km;
                 }
             });
-            totNumRimb = statsGenerali.numRimb;
-            totKmRimb = statsGenerali.kmRimb;
-            totNumNon = statsGenerali.numNon;
-            totKmNon = statsGenerali.kmNon;
-
-            aggiornaTotaliPagina(totNumRimb, totKmRimb, totNumNon, totKmNon);
+            aggiornaTotaliPagina(
+                statsGenerali.numRimb,
+                statsGenerali.kmRimb,
+                statsGenerali.numNon,
+                statsGenerali.kmNon
+            );
         } else {
+            aggiornaConteggio('');
             if (tableHeadFisso) tableHeadFisso.hidden = false;
             assicuraTitoloTotaliGenerali(false);
 

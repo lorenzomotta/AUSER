@@ -909,6 +909,13 @@ struct ServizioCompleto {
     stato_incasso: String,
     operatore: String,
     operatore_2: String,
+    #[serde(default)]
+    id_operatore: String,
+    #[serde(default)]
+    id_operatore_2: String,
+    /// Testo originale colonna Oper (anche se IdOperatore punta altrove)
+    #[serde(default)]
+    operatore_testo: String,
     mezzo_usato: String,
     mezzo: String, // Campo MEZZO che contiene il riferimento NR_AUTOMEZZO
     tempo: String,
@@ -1771,18 +1778,46 @@ async fn fetch_idsocio_nominativo_map() -> HashMap<String, String> {
     }
     let guard = get_supabase_client().lock().await;
     if let Some(client) = guard.as_ref() {
-        if let Ok(rows) = client
-            .fetch_tesserati(None, Some("IdSocio,NominativoSocio"))
+        let rows = match client
+            .fetch_tesserati(None, Some("id,IdSocio,NominativoSocio"))
             .await
         {
-            for row in rows {
-                let id = get_field(&row, "IdSocio");
-                let nom = get_field(&row, "NominativoSocio");
-                if !id.is_empty() && !nom.is_empty() {
-                    map.insert(id, nom);
+            Ok(r) if !r.is_empty() => r,
+            _ => client
+                .fetch_tesserati(None, None)
+                .await
+                .unwrap_or_default(),
+        };
+        for row in rows {
+            let nom = get_field_any(
+                &row,
+                &[
+                    "NominativoSocio",
+                    "NOMINATIVOSOCIO",
+                    "Nominativo",
+                    "nominativo_socio",
+                ],
+            );
+            if nom.is_empty() {
+                continue;
+            }
+            let id_socio = get_field_any(&row, &["IdSocio", "IDSOCIO", "idsocio"]);
+            let id_riga = get_field_any(&row, &["id", "Id", "ID"]);
+            for key in [id_socio, id_riga] {
+                if key.is_empty() {
+                    continue;
+                }
+                map.insert(key.clone(), nom.clone());
+                let norm = normalize_idsocio_key(&key);
+                if !norm.is_empty() && norm != key {
+                    map.insert(norm, nom.clone());
                 }
             }
         }
+        println!(
+            "✓ Mappa nominativi operatori: {} chiavi (IdSocio + id riga)",
+            map.len()
+        );
     }
 
     let mut cache = nominativi_cache().lock().await;
@@ -1827,14 +1862,322 @@ fn lookup_nominativo_by_idsocio(
     None
 }
 
+fn nome_operatore_chiave(s: &str) -> String {
+    let upper = s.trim().to_uppercase();
+    let mut cleaned = String::new();
+    for ch in upper.chars() {
+        let mapped = match ch {
+            'À' | 'Á' | 'Â' | 'Ä' => 'A',
+            'È' | 'É' | 'Ê' | 'Ë' => 'E',
+            'Ì' | 'Í' | 'Î' | 'Ï' => 'I',
+            'Ò' | 'Ó' | 'Ô' | 'Ö' => 'O',
+            'Ù' | 'Ú' | 'Û' | 'Ü' => 'U',
+            '\'' | '`' | '.' | ',' | '-' | '/' => ' ',
+            c if c.is_alphanumeric() || c.is_whitespace() => c,
+            _ => ' ',
+        };
+        cleaned.push(mapped);
+    }
+    let mut tokens: Vec<&str> = cleaned.split_whitespace().collect();
+    tokens.sort_unstable();
+    tokens.join(" ")
+}
+
+fn flag_vero(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "true" | "t" | "1" | "si" | "sì" | "s" | "yes" | "y"
+    )
+}
+
+fn find_colonna_esatta(row: &serde_json::Value, names: &[&str]) -> Option<String> {
+    let obj = row.as_object()?;
+    for name in names {
+        if obj.contains_key(*name) {
+            return Some((*name).to_string());
+        }
+    }
+    for name in names {
+        let lower = name.to_lowercase();
+        for key in obj.keys() {
+            if key.to_lowercase() == lower {
+                return Some(key.clone());
+            }
+        }
+    }
+    None
+}
+
+fn allineamento_id_operatore_eseguito() -> &'static Mutex<bool> {
+    static CELL: OnceLock<Mutex<bool>> = OnceLock::new();
+    CELL.get_or_init(|| Mutex::new(false))
+}
+
+fn tesserati_firma_allineamento() -> &'static Mutex<(usize, usize)> {
+    static CELL: OnceLock<Mutex<(usize, usize)>> = OnceLock::new();
+    CELL.get_or_init(|| Mutex::new((0, 0)))
+}
+
+struct CandidatoOperatore {
+    idsocio: String,
+    is_operatore: bool,
+    nominativo: String,
+}
+
+fn scegli_idsocio_da_nome(
+    chiave: &str,
+    mappa: &HashMap<String, Vec<CandidatoOperatore>>,
+) -> Option<CandidatoOperatore> {
+    let candidati = mappa.get(chiave)?;
+    if candidati.is_empty() {
+        return None;
+    }
+    let operatori: Vec<&CandidatoOperatore> = candidati.iter().filter(|c| c.is_operatore).collect();
+    if operatori.len() == 1 {
+        return Some(CandidatoOperatore {
+            idsocio: operatori[0].idsocio.clone(),
+            is_operatore: true,
+            nominativo: operatori[0].nominativo.clone(),
+        });
+    }
+    if operatori.len() > 1 {
+        return None;
+    }
+    if candidati.len() == 1 {
+        return Some(CandidatoOperatore {
+            idsocio: candidati[0].idsocio.clone(),
+            is_operatore: candidati[0].is_operatore,
+            nominativo: candidati[0].nominativo.clone(),
+        });
+    }
+    None
+}
+
+fn postgrest_eq_filtro(colonna: &str, valore: &str) -> String {
+    let escaped = valore.replace('\\', "\\\\").replace('"', "\\\"");
+    let quoted = format!("eq.\"{}\"", escaped);
+    format!("{}={}", colonna, urlencoding::encode(&quoted))
+}
+
+async fn allinea_id_operatore_da_oper_una_volta() -> Result<(), String> {
+    {
+        let mut fatto = allineamento_id_operatore_eseguito().lock().await;
+        if *fatto {
+            return Ok(());
+        }
+        *fatto = true;
+    }
+
+    let risultato = allinea_id_operatore_da_oper_interno().await;
+    if let Err(ref e) = risultato {
+        println!("⚠️ Allineamento IdOperatore da Oper: {}", e);
+        let mut fatto = allineamento_id_operatore_eseguito().lock().await;
+        *fatto = false;
+    }
+    risultato
+}
+
+async fn allinea_id_operatore_da_oper_interno() -> Result<(), String> {
+    println!("=== Allineamento IdOperatore da colonna Oper ===");
+    ensure_supabase_client().await?;
+
+    let tesserati = {
+        let guard = get_supabase_client().lock().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+        client
+            .fetch_tesserati(None, Some("id,IdSocio,NominativoSocio,Operatore"))
+            .await
+            .map_err(|e| format_supabase_error(&e))?
+    };
+
+    let mut mappa: HashMap<String, Vec<CandidatoOperatore>> = HashMap::new();
+    for row in &tesserati {
+        let nominativo = get_field_any(
+            row,
+            &[
+                "NominativoSocio",
+                "NOMINATIVOSOCIO",
+                "Nominativo",
+                "nominativo_socio",
+            ],
+        );
+        let chiave = nome_operatore_chiave(&nominativo);
+        if chiave.is_empty() {
+            continue;
+        }
+        let idsocio = normalize_idsocio_key(&get_field_any(row, &["IdSocio", "IDSOCIO", "idsocio"]));
+        if idsocio.is_empty() {
+            continue;
+        }
+        let is_operatore = flag_vero(&get_bool_field(
+            row,
+            &["Operatore", "OPERATORE", "operatore"],
+        ));
+        mappa.entry(chiave).or_default().push(CandidatoOperatore {
+            idsocio,
+            is_operatore,
+            nominativo,
+        });
+    }
+
+    let servizi = fetch_servizi_supabase(None).await?;
+    if servizi.is_empty() {
+        println!("⚠️ Allineamento: nessun servizio trovato");
+        return Ok(());
+    }
+
+    let col_oper = find_colonna_esatta(&servizi[0], &["Oper", "OPER", "oper"]);
+    let col_id = find_colonna_esatta(
+        &servizi[0],
+        &["IdOperatore", "IDOPERATORE", "Id_Operatore", "idoperatore"],
+    );
+    let mut keys: Vec<&String> = servizi[0]
+        .as_object()
+        .map(|o| o.keys().collect())
+        .unwrap_or_default();
+    keys.sort();
+    println!(
+        "  colonne servizi: {} — Oper={:?} IdOperatore={:?}",
+        keys.len(),
+        col_oper,
+        col_id
+    );
+
+    let Some(col_oper) = col_oper else {
+        println!("⚠️ Colonna Oper non trovata dopo il reimport. Colonne: {:?}", keys);
+        let mut fatto = allineamento_id_operatore_eseguito().lock().await;
+        *fatto = false;
+        return Ok(());
+    };
+    let col_id = col_id.unwrap_or_else(|| "IdOperatore".to_string());
+
+    let mut con_oper = 0usize;
+    let mut gia_ok = 0usize;
+    let mut da_aggiornare: HashMap<String, (String, String, usize)> = HashMap::new();
+    let mut non_trovati: HashMap<String, usize> = HashMap::new();
+    let mut esempi: Vec<String> = Vec::new();
+
+    for row in &servizi {
+        let oper = get_field_any(row, &["Oper", "OPER", "oper"]);
+        let trimmed = oper.trim();
+        if trimmed.is_empty() || trimmed.parse::<i64>().is_ok() {
+            continue;
+        }
+        con_oper += 1;
+        if esempi.len() < 8 {
+            esempi.push(format!(
+                "Oper='{}' IdOperatore='{}'",
+                trimmed,
+                get_field_any(row, &["IdOperatore", "IDOPERATORE", "Id_Operatore"])
+            ));
+        }
+        let chiave = nome_operatore_chiave(trimmed);
+        let Some(candidato) = scegli_idsocio_da_nome(&chiave, &mappa) else {
+            *non_trovati.entry(trimmed.to_string()).or_insert(0) += 1;
+            continue;
+        };
+        let id_attuale = normalize_idsocio_key(&get_field_any(
+            row,
+            &["IdOperatore", "IDOPERATORE", "Id_Operatore"],
+        ));
+        if id_attuale == candidato.idsocio {
+            gia_ok += 1;
+            continue;
+        }
+        let entry = da_aggiornare
+            .entry(trimmed.to_string())
+            .or_insert((candidato.idsocio.clone(), candidato.nominativo.clone(), 0));
+        entry.2 += 1;
+    }
+
+    println!(
+        "  servizi con nome in Oper: {} / {} — già allineati: {} — da aggiornare: {} nomi",
+        con_oper,
+        servizi.len(),
+        gia_ok,
+        da_aggiornare.len()
+    );
+    for es in &esempi {
+        println!("    es. {}", es);
+    }
+
+    let mut aggiornati = 0usize;
+    let mut errori = 0usize;
+    for (oper_nome, (idsocio, nominativo, quanti)) in &da_aggiornare {
+        let id_num: i64 = match idsocio.parse() {
+            Ok(n) => n,
+            Err(_) => {
+                println!("  ⚠️ IdSocio non numerico per '{}': {}", oper_nome, idsocio);
+                errori += 1;
+                continue;
+            }
+        };
+        let mut body = serde_json::Map::new();
+        body.insert(col_id.clone(), serde_json::json!(id_num));
+        let filtro = postgrest_eq_filtro(&col_oper, oper_nome);
+        let patch_ok = {
+            let guard = get_supabase_client().lock().await;
+            match guard.as_ref() {
+                Some(client) => client.patch_servizi_filtro(&filtro, &body).await,
+                None => Err("Client Supabase non disponibile".to_string()),
+            }
+        };
+        match patch_ok {
+            Ok(()) => {
+                aggiornati += *quanti;
+                println!(
+                    "  ✓ {} servizi: Oper='{}' → IdOperatore={} ({})",
+                    quanti, oper_nome, idsocio, nominativo
+                );
+            }
+            Err(e) => {
+                errori += 1;
+                println!("  ❌ PATCH Oper='{}': {}", oper_nome, e);
+            }
+        }
+    }
+
+    let mut non_trovati_list: Vec<(String, usize)> = non_trovati.into_iter().collect();
+    non_trovati_list.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    if !non_trovati_list.is_empty() {
+        println!(
+            "  ℹ️ {} nomi in Oper non ancora in anagrafica tesserati (si allineeranno dopo l'aggiornamento):",
+            non_trovati_list.len()
+        );
+        for (nome, n) in non_trovati_list.iter().take(15) {
+            println!("    - '{}' ({} servizi)", nome, n);
+        }
+    }
+
+    println!(
+        "✓ Allineamento IdOperatore terminato: {} servizi aggiornati, {} già ok, {} errori",
+        aggiornati, gia_ok, errori
+    );
+
+    if errori > 0 {
+        let mut fatto = allineamento_id_operatore_eseguito().lock().await;
+        *fatto = false;
+    }
+    Ok(())
+}
+
 fn resolve_operatore_nome(row: &serde_json::Value, nominativi: &HashMap<String, String>) -> String {
+    // Il nome in Oper è la fonte più affidabile dopo un reimport:
+    // IdOperatore può ancora puntare a un id vecchio (es. 44 → altra persona).
+    let oper_text = get_field_any(row, &["Oper", "OPER", "Operatore"]);
+    let trimmed = oper_text.trim();
+    if !trimmed.is_empty() && trimmed.parse::<i64>().is_err() {
+        return oper_text;
+    }
     let id_op = get_field_any(row, &["IdOperatore", "IDOPERATORE", "Id_Operatore"]);
     if !id_op.is_empty() {
         if let Some(nom) = lookup_nominativo_by_idsocio(nominativi, &id_op) {
             return nom;
         }
     }
-    get_field_any(row, &["Oper", "OPER", "Operatore"])
+    oper_text
 }
 
 fn resolve_trasportato_nome(row: &serde_json::Value, nominativi: &HashMap<String, String>) -> String {
@@ -2005,7 +2348,31 @@ fn supabase_row_to_servizio_completo(
             incassato
         },
         operatore: resolve_operatore_nome(row, nominativi),
-        operatore_2: get_field_any(row, &["Oper2", "OPER2"]),
+        operatore_2: {
+            let raw = get_field_any(row, &["Oper2", "OPER2", "operatore_2", "IdOperatore2"]);
+            if raw.is_empty() {
+                String::new()
+            } else if let Some(nom) = lookup_nominativo_by_idsocio(nominativi, &raw) {
+                nom
+            } else {
+                raw
+            }
+        },
+        id_operatore: get_field_any(row, &["IdOperatore", "IDOPERATORE", "Id_Operatore"]),
+        id_operatore_2: {
+            let id2 = get_field_any(row, &["IdOperatore2", "IDOPERATORE2", "Id_Operatore_2"]);
+            if !id2.is_empty() {
+                id2
+            } else {
+                let raw = get_field_any(row, &["Oper2", "OPER2"]);
+                if raw.trim().parse::<u64>().is_ok() {
+                    raw
+                } else {
+                    String::new()
+                }
+            }
+        },
+        operatore_testo: get_field_any(row, &["Oper", "OPER", "Operatore"]),
         mezzo_usato: String::new(),
         mezzo: get_field_any(row, &["Mezzo", "MEZZO"]),
         tempo: build_tempo_row(row),
@@ -2050,7 +2417,18 @@ fn supabase_row_to_servizio_completo(
                 "ricevuta_numero",
             ],
         ),
-        stato_servizio: get_field_any(row, &["StatoServizio", "STATOSERVIZIO"]),
+        stato_servizio: get_field_any(
+            row,
+            &[
+                "StatoServizio",
+                "STATOSERVIZIO",
+                "stato_servizio",
+                "Stato_Servizio",
+                "STATO_SERVIZIO",
+                "Stato_Del_Servizio",
+                "StatoDelServizio",
+            ],
+        ),
         note_prelievo: get_field_any(row, &["Prelievo_Note", "PRELIEVO_NOTE"]),
         note_arrivo: get_field_any(row, &["Destinazione_Note", "DESTINAZIONE_NOTE"]),
         note_fine_servizio: get_field_any(
@@ -2172,6 +2550,9 @@ fn sort_servizi_completi(servizi: &mut [ServizioCompleto]) {
 #[tauri::command]
 async fn get_servizi_giorno() -> Result<Vec<Servizio>, String> {
     println!("=== get_servizi_giorno chiamato (Supabase, solo oggi) ===");
+    if let Err(e) = allinea_id_operatore_da_oper_una_volta().await {
+        println!("⚠️ Allineamento IdOperatore da Oper: {}", e);
+    }
 
     let filter = servizi_filter_solo_oggi();
     let rows = fetch_servizi_home(&filter).await?;
@@ -2546,8 +2927,9 @@ async fn get_all_tesserati() -> Result<Vec<Tesserato>, String> {
     ensure_supabase_client().await?;
 
     let client_guard = get_supabase_client().lock().await;
+    let mut riallinea_oper = false;
 
-    if let Some(client) = client_guard.as_ref() {
+    let result = if let Some(client) = client_guard.as_ref() {
         let rows = client
             .fetch_tesserati(None, None)
             .await
@@ -2629,10 +3011,29 @@ async fn get_all_tesserati() -> Result<Vec<Tesserato>, String> {
             archiviati_count
         );
 
+        let firma_nuova = (tesserati.len(), operatore_count);
+        riallinea_oper = {
+            let mut firma = tesserati_firma_allineamento().lock().await;
+            let changed = *firma != (0, 0) && *firma != firma_nuova;
+            *firma = firma_nuova;
+            changed
+        };
+
         Ok(tesserati)
     } else {
         Err("Client Supabase non disponibile".to_string())
+    };
+    drop(client_guard);
+
+    if riallinea_oper {
+        println!(
+            "ℹ️ Anagrafica tesserati aggiornata: al prossimo caricamento servizi riallineo Oper → IdOperatore"
+        );
+        *allineamento_id_operatore_eseguito().lock().await = false;
+        *nominativi_cache().lock().await = None;
     }
+
+    result
 }
 
 // Anagrafica completa di un socio (dati + storico tesseramenti)
@@ -5152,6 +5553,10 @@ async fn get_all_servizi_completi(
     anno: Option<u32>,
     tutti_anni: Option<bool>,
 ) -> Result<Vec<ServizioCompleto>, String> {
+    if let Err(e) = allinea_id_operatore_da_oper_una_volta().await {
+        println!("⚠️ Allineamento IdOperatore da Oper: {}", e);
+    }
+
     let nominativi = fetch_idsocio_nominativo_map().await;
 
     if tutti_anni.unwrap_or(false) {
@@ -5163,6 +5568,12 @@ async fn get_all_servizi_completi(
             .collect();
         sort_servizi_completi(&mut servizi);
         println!("✓ Convertiti {} servizi completi da Supabase", servizi.len());
+        if let Some(s) = servizi.first() {
+            println!(
+                "  esempio: id={} data='{}' operatore='{}' id_operatore='{}' stato='{}'",
+                s.id, s.data_prelievo, s.operatore, s.id_operatore, s.stato_servizio
+            );
+        }
         return Ok(servizi);
     }
 
@@ -5220,6 +5631,26 @@ async fn get_all_servizi_completi(
     }
 
     println!("✓ Convertiti {} servizi completi da Supabase", servizi.len());
+    if let Some(s) = servizi.first() {
+        println!(
+            "  esempio: id={} data='{}' operatore='{}' id_operatore='{}' stato='{}'",
+            s.id, s.data_prelievo, s.operatore, s.id_operatore, s.stato_servizio
+        );
+    }
+    let con_nome = servizi
+        .iter()
+        .filter(|s| !s.operatore.trim().is_empty())
+        .count();
+    let con_id = servizi
+        .iter()
+        .filter(|s| !s.id_operatore.trim().is_empty())
+        .count();
+    println!(
+        "  operatori: {} con nominativo, {} con IdOperatore (su {})",
+        con_nome,
+        con_id,
+        servizi.len()
+    );
     Ok(servizi)
 }
 
@@ -6636,6 +7067,11 @@ async fn init_sharepoint_from_config() -> Result<(), String> {
 async fn init_supabase_from_config() -> Result<(), String> {
     let config = load_app_config_from_file().await?;
     setup_supabase_from_config(&config).await;
+    tauri::async_runtime::spawn(async {
+        if let Err(e) = allinea_id_operatore_da_oper_una_volta().await {
+            println!("⚠️ Allineamento IdOperatore da Oper: {}", e);
+        }
+    });
     Ok(())
 }
 

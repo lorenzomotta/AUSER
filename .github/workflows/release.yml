@@ -47,9 +47,10 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Nuova versione v1.0.13:
-            - Calendario servizi: tornano le icone della carrozzina
-            - Calendario sul telefono: i servizi del giorno si vedono di nuovo
+            Nuova versione v1.0.14:
+            - Chilometri totali: elenco completo dei 53 operatori con i km corretti
+            - Elenco servizi: la ricerca per operatore torna a trovare i servizi
+            - Dopo il reimport, il nome in Oper riallinea IdOperatore
 
             Gli utenti con l'app già installata riceveranno un avviso all'avvio
             e potranno aggiornare con un clic.
