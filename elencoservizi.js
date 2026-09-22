@@ -12,6 +12,7 @@ import {
 } from './completa-servizio.js';
 import { testoNoteFineVisibile, parseTrattaDaNote, htmlContenutoRiepilogoTratta, normalizzaPayloadTratta } from './tratta-riepilogo.js';
 import { parseTariffaDaNote, htmlContenutoRiepilogoTariffa } from './calcola-tariffa.js';
+import { initStampaPdfElencoServizi } from './elencoservizi-pdf.js';
 
 function escapeHtmlElenco(str) {
     if (str === undefined || str === null) return '';
@@ -1744,6 +1745,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Setup modale ricerca
     setupModaleRicerca();
+
+    initStampaPdfElencoServizi({
+        getServiziFiltrati: () => serviziCache,
+        getServiziPagina: () => {
+            const start = (currentPage - 1) * PAGE_SIZE;
+            return serviziCache.slice(start, start + PAGE_SIZE);
+        },
+        getTitolo: () => {
+            const el = document.getElementById('servizi-title-text');
+            return (el && el.textContent.trim()) || 'ELENCO SERVIZI';
+        },
+        formatMezzo: costruisciStringaMezzo
+    });
     
     // Event listener per i pulsanti FILTRA usando event delegation
     const containerBody = document.getElementById('servizi-container-body');

@@ -47,10 +47,10 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Nuova versione v1.0.14:
-            - Chilometri totali: elenco completo dei 53 operatori con i km corretti
-            - Elenco servizi: la ricerca per operatore torna a trovare i servizi
-            - Dopo il reimport, il nome in Oper riallinea IdOperatore
+            Nuova versione v1.0.15:
+            - Elenco servizi: stampa in PDF i servizi visualizzati
+            - Nel popup si scelgono i campi da includere nel PDF
+            - Si può ordinare il PDF per uno o due dei campi scelti
 
             Gli utenti con l'app già installata riceveranno un avviso all'avvio
             e potranno aggiornare con un clic.

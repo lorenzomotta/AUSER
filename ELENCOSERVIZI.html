@@ -7,6 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="responsive-app.css">
     <link rel="stylesheet" href="elencoservizi.css">
+    <link rel="stylesheet" href="elencoservizi-pdf.css">
     <link rel="stylesheet" href="nuovoservizio.css">
     <link rel="stylesheet" href="modifica-servizio.css">
     <link rel="stylesheet" href="completa-servizio.css">
@@ -34,6 +35,7 @@
                 </div>
             </div>
             <div class="header-right">
+                <button type="button" class="btn btn-stampa-pdf-header" id="btn-stampa-pdf-elenco">STAMPA PDF</button>
                 <button class="btn btn-ricerca-header" id="btn-ricerca">RICERCA</button>
             </div>
         </div>
@@ -132,6 +134,61 @@
         </div>
     </div>
     
+    <div class="es-pdf-overlay" id="modal-stampa-pdf-servizi" hidden>
+        <div class="es-pdf-dialog" role="dialog" aria-labelledby="modal-stampa-pdf-servizi-title" aria-modal="true">
+            <div class="es-pdf-header">
+                <h2 id="modal-stampa-pdf-servizi-title">Stampa elenco servizi</h2>
+                <button type="button" class="es-pdf-close" id="btn-stampa-pdf-servizi-chiudi" title="Chiudi" aria-label="Chiudi">&#10005;</button>
+            </div>
+            <div class="es-pdf-scroll">
+            <p class="es-pdf-intro">
+                Verranno stampati <strong id="pdf-servizi-count">0</strong> servizi.
+                Scegli quali informazioni mettere nel PDF.
+            </p>
+            <div class="es-pdf-ambito">
+                <label>
+                    <input type="radio" name="pdf-servizi-ambito" id="pdf-servizi-tutti-filtri" value="filtri" checked>
+                    <span>Tutti i servizi dei filtri attuali (anno, ricerca, stato, richiedente…)</span>
+                </label>
+                <label>
+                    <input type="radio" name="pdf-servizi-ambito" id="pdf-servizi-solo-pagina" value="pagina">
+                    <span>Solo i servizi di questa pagina</span>
+                </label>
+            </div>
+            <div class="es-pdf-scelte">
+                <button type="button" id="btn-pdf-campi-principali">Solo i principali</button>
+                <button type="button" id="btn-pdf-campi-tutti">Seleziona tutti</button>
+                <button type="button" id="btn-pdf-campi-nessuno">Nessuno</button>
+            </div>
+            <div id="es-pdf-campi"></div>
+            <div class="es-pdf-ordine">
+                <label class="es-pdf-ordine-toggle">
+                    <input type="checkbox" id="pdf-servizi-ordina">
+                    <span>Ordina i servizi in base ai campi scelti</span>
+                </label>
+                <div class="es-pdf-ordine-dettagli" id="pdf-servizi-ordine-dettagli" hidden>
+                    <div class="es-pdf-ordine-riga">
+                        <label for="pdf-ordina-campo-1">Prima per</label>
+                        <select id="pdf-ordina-campo-1"></select>
+                        <select id="pdf-ordina-verso-1"></select>
+                    </div>
+                    <div class="es-pdf-ordine-riga">
+                        <label for="pdf-ordina-campo-2">Poi per</label>
+                        <select id="pdf-ordina-campo-2"></select>
+                        <select id="pdf-ordina-verso-2"></select>
+                    </div>
+                    <p class="es-pdf-ordine-aiuto">L’elenco a tendina mostra solo i campi che hai spuntato. Se in «Poi per» lasci «Nessun altro campo», l’ordine usa un campo solo.</p>
+                </div>
+            </div>
+            <p id="pdf-servizi-errore" class="es-pdf-errore" role="alert" hidden></p>
+            </div>
+            <div class="es-pdf-actions">
+                <button type="button" class="btn btn-stampa-pdf-servizi-annulla" id="btn-stampa-pdf-servizi-annulla">ANNULLA</button>
+                <button type="button" class="btn btn-stampa-pdf-servizi-genera" id="btn-stampa-pdf-servizi-genera">GENERA PDF</button>
+            </div>
+        </div>
+    </div>
+
     <footer class="servizi-footer">
         <div class="footer-buttons-container">
             <div class="footer-buttons-left">
