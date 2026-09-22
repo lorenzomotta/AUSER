@@ -3290,12 +3290,23 @@ fn build_socio_anagrafica_body(
         "Residenza_Civico",
         serde_json::json!(anagrafica.residenza_civico),
     );
+    // Residenza_Cap in Supabase è numerico. "" provoca
+    // 22P02 invalid input syntax for type numeric (es. socio senza CAP).
+    // Il vuoto va inviato come NULL; un CAP presente come numero.
+    let cap_testo = anagrafica.residenza_cap.trim();
+    let cap_json = if cap_testo.is_empty() {
+        serde_json::Value::Null
+    } else if let Ok(n) = cap_testo.parse::<i64>() {
+        serde_json::json!(n)
+    } else {
+        serde_json::json!(cap_testo)
+    };
     put_field(
         &mut body,
         row,
         &["CAP", "Residenza_CAP", "RESIDENZA_CAP", "CapResidenza"],
         "Residenza_CAP",
-        serde_json::json!(anagrafica.residenza_cap),
+        cap_json,
     );
     put_field(
         &mut body,

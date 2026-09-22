@@ -47,10 +47,9 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Nuova versione v1.0.15:
-            - Elenco servizi: stampa in PDF i servizi visualizzati
-            - Nel popup si scelgono i campi da includere nel PDF
-            - Si può ordinare il PDF per uno o due dei campi scelti
+            Nuova versione v1.0.16:
+            - Anagrafica soci: il salvataggio funziona anche se il CAP è vuoto
+            - Prima compariva un errore sui soci senza CAP (es. spuntando Autista e salvando)
 
             Gli utenti con l'app già installata riceveranno un avviso all'avvio
             e potranno aggiornare con un clic.
