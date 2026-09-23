@@ -1,6 +1,7 @@
 // Import Tauri API
 import { richiediSessione } from './auth-session.js';
 import { puoVedereSidebar } from './sidebar-permessi.js';
+import { opzioniFinestraAnagrafica, preparaFinestraAnagraficaEsistente } from './anagrafica-finestra.js';
 
 let invoke, appWindow;
 
@@ -78,8 +79,7 @@ async function openAnagraficaSocio(idsocio, nominativo) {
         const existing = WebviewWindow.getByLabel(label);
         if (existing) {
             try {
-                await existing.show();
-                await existing.setFocus();
+                await preparaFinestraAnagraficaEsistente(existing);
                 return;
             } catch (err) {
                 console.warn('Finestra anagrafica esistente non riutilizzabile, ne creo una nuova:', err);
@@ -89,16 +89,7 @@ async function openAnagraficaSocio(idsocio, nominativo) {
             }
         }
 
-        const webview = new WebviewWindow(label, {
-            url,
-            title,
-            width: 1100,
-            height: 680,
-            resizable: true,
-            maximized: false,
-            decorations: true,
-            center: true
-        });
+        const webview = new WebviewWindow(label, opzioniFinestraAnagrafica({ url, title }));
 
         webview.setFocus().catch((err) => {
             console.warn('setFocus anagrafica:', err);

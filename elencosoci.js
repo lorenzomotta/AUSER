@@ -2,6 +2,7 @@
 let invoke, appWindow;
 
 import { initExportElencoSoci } from './elencosoci-export.js';
+import { opzioniFinestraAnagrafica, preparaFinestraAnagraficaEsistente } from './anagrafica-finestra.js';
 
 // Funzione per inizializzare le API Tauri
 async function initTauri() {
@@ -96,8 +97,7 @@ async function openNuovoSocioAnagrafica() {
         const existing = WebviewWindow.getByLabel(label);
         if (existing) {
             try {
-                await existing.show();
-                await existing.setFocus();
+                await preparaFinestraAnagraficaEsistente(existing);
                 return;
             } catch (err) {
                 console.warn('Finestra nuovo socio non riutilizzabile, ne creo una nuova:', err);
@@ -107,16 +107,7 @@ async function openNuovoSocioAnagrafica() {
             }
         }
 
-        const webview = new WebviewWindow(label, {
-            url,
-            title,
-            width: 1100,
-            height: 680,
-            resizable: true,
-            maximized: false,
-            decorations: true,
-            center: true
-        });
+        const webview = new WebviewWindow(label, opzioniFinestraAnagrafica({ url, title }));
 
         webview.setFocus().catch((err) => {
             console.warn('setFocus nuovo socio:', err);
@@ -295,8 +286,7 @@ async function openAnagraficaSocio(idsocio, nominativo) {
         const existing = WebviewWindow.getByLabel(label);
         if (existing) {
             try {
-                await existing.show();
-                await existing.setFocus();
+                await preparaFinestraAnagraficaEsistente(existing);
                 return;
             } catch (err) {
                 console.warn('Finestra anagrafica esistente non riutilizzabile, ne creo una nuova:', err);
@@ -306,16 +296,7 @@ async function openAnagraficaSocio(idsocio, nominativo) {
             }
         }
 
-        const webview = new WebviewWindow(label, {
-            url,
-            title,
-            width: 1100,
-            height: 680,
-            resizable: true,
-            maximized: false,
-            decorations: true,
-            center: true
-        });
+        const webview = new WebviewWindow(label, opzioniFinestraAnagrafica({ url, title }));
 
         // setFocus può fallire anche se la finestra si è aperta correttamente
         webview.setFocus().catch((err) => {

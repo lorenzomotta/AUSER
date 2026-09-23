@@ -20,6 +20,7 @@ import {
     puoVedereSidebar
 } from './sidebar-permessi.js';
 import { applicaTitoloFinestra, mostraVersioneInElemento } from './app-version.js';
+import { opzioniFinestraAnagrafica } from './anagrafica-finestra.js';
 
 // Import Tauri API
 let invoke, appWindow;
@@ -513,16 +514,10 @@ async function apriAnagraficaSocioDaHome(idsocio, nominativo) {
     }
 
     try {
-        const webview = await apriFinestraPopup(`anagrafica-socio-${id}`, {
-            url,
-            title,
-            width: 1100,
-            height: 680,
-            resizable: true,
-            maximized: false,
-            decorations: true,
-            center: true
-        });
+        const webview = await apriFinestraPopup(
+            `anagrafica-socio-${id}`,
+            opzioniFinestraAnagrafica({ url, title })
+        );
 
         // Quando chiudi l'anagrafica, aggiorna TESSERE DA FARE
         if (webview?.once) {

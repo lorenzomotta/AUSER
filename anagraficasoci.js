@@ -1,4 +1,6 @@
 // Anagrafica Socio — logica maschera
+import { ANAGRAFICA_SCHERMO_INTERO } from './anagrafica-finestra.js';
+
 let invoke, appWindow;
 
 let currentIdsocio = '';
@@ -45,6 +47,19 @@ function isTauri() {
     return typeof window !== 'undefined' &&
         (window.__TAURI_INTERNALS__ !== undefined ||
             window.__TAURI_IPC__ !== undefined);
+}
+
+/** Ingrandisce finestra e testi. La ricerca soci resta nella finestra piccola. */
+async function applicaSchermoInteroAnagrafica() {
+    if (!ANAGRAFICA_SCHERMO_INTERO || isRicercaFromUrl()) return;
+    document.body.classList.add('schermo-intero');
+    if (!isTauri()) return;
+    try {
+        if (!appWindow) await initTauri();
+        if (appWindow?.maximize) await appWindow.maximize();
+    } catch (err) {
+        console.warn('Schermo intero anagrafica:', err);
+    }
 }
 
 function getIdsocioFromUrl() {
@@ -1921,6 +1936,8 @@ async function saveTesseramento(e) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    await applicaSchermoInteroAnagrafica();
+
     document.getElementById('field-operatore')?.addEventListener('change', syncOperatoreDisponibilitaFlags);
 
     document.getElementById('tess-anno')?.addEventListener('input', (e) => {

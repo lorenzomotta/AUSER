@@ -828,3 +828,210 @@ textarea.form-control {
         flex: 1;
     }
 }
+
+/*
+ * PROVA schermo intero.
+ * Si attiva solo se in anagrafica-finestra.js
+ * ANAGRAFICA_SCHERMO_INTERO è true.
+ * Per tornare al layout compatto di prima: metti quel valore a false.
+ * Stessi campi e stessi colori, solo più grandi e a tutta la finestra.
+ */
+body.schermo-intero {
+    font-size: 16px;
+    height: 100vh;
+    overflow: hidden;
+}
+
+body.schermo-intero .anagrafica-container {
+    max-width: none;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 28px 18px;
+}
+
+body.schermo-intero .anagrafica-header {
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+    gap: 12px;
+}
+
+body.schermo-intero .page-title {
+    font-size: 28px;
+}
+
+body.schermo-intero .socio-subtitle {
+    font-size: 16px;
+}
+
+body.schermo-intero .save-status {
+    font-size: 14px;
+}
+
+body.schermo-intero .btn {
+    padding: 8px 16px;
+    font-size: 14px;
+    border-radius: 4px;
+}
+
+body.schermo-intero .anagrafica-main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+body.schermo-intero .anagrafica-section {
+    padding: 14px 18px 16px;
+    margin-bottom: 14px;
+    border-radius: 6px;
+}
+
+body.schermo-intero .section-bar {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    gap: 10px 16px;
+}
+
+body.schermo-intero .section-title {
+    font-size: 18px;
+}
+
+body.schermo-intero .anagrafica-rows {
+    gap: 10px;
+}
+
+body.schermo-intero .form-row-line {
+    gap: 8px 14px;
+}
+
+body.schermo-intero .form-group label {
+    font-size: 12px;
+    margin-bottom: 3px;
+}
+
+body.schermo-intero .form-control {
+    font-size: 16px;
+    min-height: 36px;
+    padding: 6px 10px;
+    border-radius: 4px;
+}
+
+body.schermo-intero .field-data input[type="date"],
+body.schermo-intero #field-codicefiscale,
+body.schermo-intero .field-tipologia input,
+body.schermo-intero .field-tipologia select,
+body.schermo-intero .field-tess-tipologia input,
+body.schermo-intero .field-tess-tipologia select {
+    font-size: 15px;
+}
+
+body.schermo-intero .field-tipologia .tipologia-select,
+body.schermo-intero .field-tess-tipologia .tipologia-select {
+    height: 36px;
+}
+
+body.schermo-intero .row-anagrafica .field-xs,
+body.schermo-intero .row-residenza .field-xs {
+    flex: 0 1 78px;
+    min-width: 68px;
+    max-width: 96px;
+}
+
+body.schermo-intero .row-anagrafica .field-tipologia {
+    flex: 1 1 180px;
+    min-width: 150px;
+    max-width: 260px;
+}
+
+body.schermo-intero .row-anagrafica .field-cf {
+    flex: 0 1 210px;
+    min-width: 190px;
+    max-width: 230px;
+}
+
+body.schermo-intero .row-anagrafica .field-data {
+    flex: 0 1 158px;
+    min-width: 148px;
+    max-width: 176px;
+}
+
+body.schermo-intero .row-residenza .field-cap {
+    flex: 0 1 84px;
+    min-width: 72px;
+    max-width: 100px;
+}
+
+body.schermo-intero .nota-compact {
+    min-height: 44px;
+    max-height: 90px;
+}
+
+body.schermo-intero .inline-flags {
+    gap: 14px;
+}
+
+body.schermo-intero .flag-item {
+    font-size: 15px;
+    gap: 6px;
+}
+
+body.schermo-intero .flag-item input {
+    width: 18px;
+    height: 18px;
+}
+
+body.schermo-intero .contatti-subtitle,
+body.schermo-intero .grid-section-label,
+body.schermo-intero .editor-title {
+    font-size: 13px;
+}
+
+body.schermo-intero .btn-nuovo-contatto {
+    font-size: 13px;
+    padding: 4px 10px;
+    min-height: 28px;
+}
+
+body.schermo-intero .contatti-table-wrap {
+    max-height: 200px;
+}
+
+body.schermo-intero .section-tesseramenti {
+    flex: 1 1 auto;
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+}
+
+body.schermo-intero .tesseramenti-storico {
+    flex: 1;
+    max-height: none;
+    min-height: 140px;
+}
+
+body.schermo-intero .storico-vuoto {
+    font-size: 15px;
+}
+
+body.schermo-intero .storico-table {
+    font-size: 15px;
+}
+
+body.schermo-intero .storico-table th,
+body.schermo-intero .storico-table td {
+    padding: 8px 12px;
+}
+
+body.schermo-intero .storico-table th {
+    font-size: 13px;
+}
+
+body.schermo-intero .btn-modifica-contatto,
+body.schermo-intero .btn-elimina-contatto,
+body.schermo-intero .btn-modifica-tess {
+    font-size: 13px;
+    padding: 3px 8px;
+}
