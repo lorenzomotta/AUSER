@@ -324,22 +324,63 @@ function invalidaCacheServizi() {
 
 // ─── Config e Supabase ─────────────────────────────────────────────────────
 
-/** Chiavi sb_publishable_ vanno solo nell'header apikey, non in Authorization Bearer. */
-function creaFetchSupabase(apiKey) {
-    const isLegacyJwt = apiKey.startsWith('eyJ');
-    return (input, init = {}) => {
-        const headers = new Headers(init.headers || {});
-        headers.set('apikey', apiKey);
-        if (isLegacyJwt) {
-            if (!headers.has('Authorization')) {
-                headers.set('Authorization', `Bearer ${apiKey}`);
-            }
-        } else {
-            const auth = headers.get('Authorization');
-            if (auth === `Bearer ${apiKey}`) {
-                headers.delete('Authorization');
-            }
+/** JWT sessione operatore: su iPhone Headers+fetch a volte lo perde; lo teniamo qui. */
+let accessTokenCorrente = '';
+
+function impostaAccessToken(session) {
+    accessTokenCorrente = String(session?.access_token || '').trim();
+}
+
+function copiaHeadersInOggetto(initHeaders) {
+    const out = {};
+    try {
+        new Headers(initHeaders || {}).forEach((value, key) => {
+            out[key] = value;
+        });
+    } catch (err) {
+        if (initHeaders && typeof initHeaders === 'object' && !Array.isArray(initHeaders)) {
+            Object.entries(initHeaders).forEach(([key, value]) => {
+                if (value != null) out[key] = String(value);
+            });
         }
+    }
+    return out;
+}
+
+function jwtDaAuthorization(auth) {
+    const s = String(auth || '').trim();
+    const m = s.match(/^Bearer\s+(.+)$/i);
+    const token = m ? m[1].trim() : s;
+    return token.startsWith('eyJ') ? token : '';
+}
+
+/**
+ * Login (auth): apikey + Bearer della chiave pubblica.
+ * Dati (rest): apikey + Bearer JWT dell'operatore loggato.
+ * Senza JWT utente, UPDATE su Servizi_supa restituisce 0 righe (RLS).
+ * Non chiamare getSession() qui (su alcuni browser entra in loop).
+ */
+function creaFetchSupabase(apiKey) {
+    return (input, init = {}) => {
+        const reqUrl = String(typeof input === 'string' ? input : (input && input.url) || '');
+        const headers = copiaHeadersInOggetto(init.headers);
+        headers.apikey = apiKey;
+
+        const userJwt = jwtDaAuthorization(headers.Authorization || headers.authorization)
+            || (accessTokenCorrente.startsWith('eyJ') ? accessTokenCorrente : '');
+        delete headers.authorization;
+
+        const isAuth = reqUrl.includes('/auth/v1/');
+        if (isAuth) {
+            headers.Authorization = `Bearer ${userJwt || apiKey}`;
+        } else if (userJwt) {
+            headers.Authorization = `Bearer ${userJwt}`;
+        } else if (String(apiKey).startsWith('eyJ')) {
+            headers.Authorization = `Bearer ${apiKey}`;
+        } else {
+            delete headers.Authorization;
+        }
+
         return fetch(input, { ...init, headers });
     };
 }
@@ -354,11 +395,10 @@ async function caricaConfigPubblica() {
     }
     publicConfig = await risposta.json();
     const url = publicConfig?.supabase?.url?.trim();
-    const key = (
-        publicConfig?.supabase?.publishable_key ||
-        publicConfig?.supabase?.anon_key ||
-        ''
-    ).trim();
+    const publishable = String(publicConfig?.supabase?.publishable_key || '').trim();
+    const anonJwt = String(publicConfig?.supabase?.anon_key || '').trim();
+    // Il login Auth accetta la chiave publishable; la JWT anon vecchia dà 401.
+    const key = publishable || anonJwt;
     if (!url || !key) {
         throw new Error(
             'config.public.json incompleto: servono supabase.url e publishable_key (sb_publishable_...)'
@@ -368,7 +408,16 @@ async function caricaConfigPubblica() {
         throw new Error('Libreria Supabase non caricata');
     }
     supabaseClient = window.supabase.createClient(url, key, {
-        global: { fetch: creaFetchSupabase(key) },
+        auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true
+        },
+        global: { fetch: creaFetchSupabase(key) }
+    });
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+        impostaAccessToken(session);
+        if (event === 'SIGNED_OUT') mostraSchermataLogin();
     });
 }
 
@@ -488,6 +537,7 @@ async function gestisciLogin(event) {
     try {
         const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        impostaAccessToken(data.session);
 
         const ok = await verificaOperatore(data.user);
         if (!ok) {
@@ -505,6 +555,7 @@ async function gestisciLogin(event) {
 }
 
 async function gestisciLogout() {
+    accessTokenCorrente = '';
     await supabaseClient.auth.signOut();
     invalidaCacheServizi();
     serviziById.clear();
@@ -519,6 +570,7 @@ async function gestisciLogout() {
 
 async function controllaSessioneEsistente() {
     const { data: { session } } = await supabaseClient.auth.getSession();
+    impostaAccessToken(session);
     if (!session?.user) return false;
 
     const ok = await verificaOperatore(session.user);
@@ -1418,11 +1470,40 @@ async function renderModalServizio(servizio) {
     `;
 }
 
+async function assicuratiSessionePerSalvataggio() {
+    if (accessTokenCorrente.startsWith('eyJ')) return true;
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        impostaAccessToken(session);
+        return !!(session?.access_token);
+    } catch (err) {
+        console.warn('Sessione non recuperata prima del salvataggio:', err);
+        return false;
+    }
+}
+
 async function patchServizioCompletoSupabase(servizio, payloadConMeta) {
     const table = tabella('servizi');
     const payload = payloadSenzaMeta(payloadConMeta);
     const idCols = colonneIdFiltroSupabase(servizio);
     let ultimoErrore = null;
+    let rigaTrovataInLettura = false;
+
+    // Verifica che la riga esista in lettura con lo stesso filtro
+    for (const idCol of idCols) {
+        for (const idVal of valoriIdPerFiltro(servizio.id)) {
+            const { data: found, error: errFind } = await supabaseClient
+                .from(table)
+                .select('*')
+                .eq(idCol, idVal)
+                .limit(1);
+            if (!errFind && found?.length) {
+                rigaTrovataInLettura = true;
+                break;
+            }
+        }
+        if (rigaTrovataInLettura) break;
+    }
 
     for (const idCol of idCols) {
         for (const idVal of valoriIdPerFiltro(servizio.id)) {
@@ -1454,6 +1535,13 @@ async function patchServizioCompletoSupabase(servizio, payloadConMeta) {
     }
 
     if (ultimoErrore) throw ultimoErrore;
+    if (rigaTrovataInLettura) {
+        throw new Error(
+            'Il servizio esiste ma non è stato aggiornato.\n' +
+            'Di solito manca il permesso UPDATE su Supabase oppure la sessione non è valida.\n' +
+            'Prova a uscire e rientrare. Se continua, esegui su Supabase il file supabase-policy-update-servizi.sql.'
+        );
+    }
     throw new Error(
         'Nessuna riga aggiornata su Supabase. Controlla permessi UPDATE e idservizio.'
     );
@@ -1508,13 +1596,17 @@ async function salvaModificheServizioAdmin() {
         return;
     }
 
-    // Se manca _raw (riga grezza), ricarica prima del salvataggio
-    if (!servizioCorrente._raw) {
-        try {
-            servizioCorrente = await ricaricaServizioDaSupabase(servizioCorrente);
-        } catch (err) {
-            console.warn('Ricarica prima del salvataggio:', err);
-        }
+    const sessioneOk = await assicuratiSessionePerSalvataggio();
+    if (!sessioneOk) {
+        mostraErroreModaleServizio('Sessione scaduta. Esci e rientra, poi riprova a salvare.');
+        return;
+    }
+
+    // Ricarica sempre la riga grezza prima del salvataggio (nomi colonna reali)
+    try {
+        servizioCorrente = await ricaricaServizioDaSupabase(servizioCorrente);
+    } catch (err) {
+        console.warn('Ricarica prima del salvataggio:', err);
     }
 
     mostraErroreModaleServizio('');
@@ -1534,7 +1626,8 @@ async function salvaModificheServizioAdmin() {
         console.log('Salvataggio servizio', servizioCorrente.id, {
             note_prelievo: noteAttese,
             colNote: payload.__meta?.colNotePrelievo,
-            chiaviPayload: Object.keys(payloadSenzaMeta(payload))
+            chiaviPayload: Object.keys(payloadSenzaMeta(payload)),
+            haToken: accessTokenCorrente.startsWith('eyJ')
         });
 
         if (noteAttese && !payload.__meta?.colNotePrelievo) {
@@ -1875,10 +1968,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         await caricaConfigPubblica();
         document.getElementById('web-login-form')?.addEventListener('submit', gestisciLogin);
-
-        supabaseClient.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'SIGNED_OUT') mostraSchermataLogin();
-        });
 
         const giaLoggato = await controllaSessioneEsistente();
         if (!giaLoggato) mostraSchermataLogin();
