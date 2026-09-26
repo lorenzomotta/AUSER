@@ -16,25 +16,32 @@ TO authenticated
 USING (true);
 
 -- 2b) Servizi: operatori con permesso Calendario possono aggiornare
+GRANT SELECT, UPDATE ON TABLE public."Servizi_supa" TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.operatore_puo_aggiornare_servizi()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_permissions up
+    WHERE up.user_id = auth.uid()
+      AND (up.is_admin IS TRUE OR up."Calendario" IS TRUE)
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.operatore_puo_aggiornare_servizi() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.operatore_puo_aggiornare_servizi() TO authenticated;
+
 DROP POLICY IF EXISTS "operatori_aggiornano_servizi" ON public."Servizi_supa";
 CREATE POLICY "operatori_aggiornano_servizi"
 ON public."Servizi_supa"
 FOR UPDATE
 TO authenticated
-USING (
-  EXISTS (
-    SELECT 1 FROM public.user_permissions up
-    WHERE up.user_id = auth.uid()
-    AND (up.is_admin = true OR up."Calendario" = true)
-  )
-)
-WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM public.user_permissions up
-    WHERE up.user_id = auth.uid()
-    AND (up.is_admin = true OR up."Calendario" = true)
-  )
-);
+USING (public.operatore_puo_aggiornare_servizi())
+WITH CHECK (public.operatore_puo_aggiornare_servizi());
 
 -- 3) Automezzi: solo utenti autenticati
 DROP POLICY IF EXISTS "operatori_leggono_automezzi" ON public."Automezzi_Supa";

@@ -1243,8 +1243,10 @@ function buildPayloadFineServizio(servizio, km, kmUscita, kmRientro, tempoRaw, n
 
 function messaggioErroreSalvataggio(error) {
     const msg = error?.message || String(error);
+    // Messaggio già completo (con istruzioni SQL): non aggiungere altro
+    if (/SQL Editor|supabase-policy-update-servizi/i.test(msg)) return msg;
     if (/policy|permission|42501|403|JWT/i.test(msg)) {
-        return `${msg}\n\nVerifica di aver eseguito su Supabase la policy UPDATE (file supabase-calendario-web.sql).`;
+        return `${msg}\n\nVerifica di aver eseguito su Supabase la policy UPDATE (file supabase-policy-update-servizi.sql).`;
     }
     return msg;
 }
@@ -1537,9 +1539,11 @@ async function patchServizioCompletoSupabase(servizio, payloadConMeta) {
     if (ultimoErrore) throw ultimoErrore;
     if (rigaTrovataInLettura) {
         throw new Error(
-            'Il servizio esiste ma non è stato aggiornato.\n' +
-            'Di solito manca il permesso UPDATE su Supabase oppure la sessione non è valida.\n' +
-            'Prova a uscire e rientrare. Se continua, esegui su Supabase il file supabase-policy-update-servizi.sql.'
+            'Il servizio esiste ma non è stato aggiornato.\n\n' +
+            'Cosa fare (una sola volta):\n' +
+            '1) Apri Supabase → SQL Editor\n' +
+            '2) Incolla e premi Run il contenuto del file supabase-policy-update-servizi.sql\n' +
+            '3) Sul telefono: esci, rientra e riprova a salvare'
         );
     }
     throw new Error(
