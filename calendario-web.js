@@ -618,19 +618,45 @@ function trovaColonnaRow(row, candidates) {
     return candidates[0];
 }
 
-function colonneIdServizio() {
+/** Nomi possibili nella riga già scaricata (solo lettura in JavaScript). */
+function candidatiIdServizioInRiga() {
     return ['idservizio', 'IdServizio', 'Id_Servizio', 'IDSERVIZIO', 'id_servizio'];
 }
 
+/**
+ * Nomi colonna da usare nei filtri Supabase (.eq / .or / update).
+ * Importante: NON inventare varianti (es. IdServizio) — se la colonna
+ * non esiste PostgreSQL fallisce e (prima del fix) bloccava tutto il salvataggio.
+ */
+function colonneIdFiltroSupabase(servizio) {
+    const raw = servizio?._raw;
+    if (raw && typeof raw === 'object') {
+        const keys = Object.keys(raw);
+        const trovata = keys.find((k) =>
+            candidatiIdServizioInRiga().some((c) => c.toLowerCase() === k.toLowerCase())
+        );
+        if (trovata) return [trovata];
+    }
+    // Schema reale di Servizi_supa: idservizio (tutto minuscolo)
+    return ['idservizio'];
+}
+
+/** @deprecated usare colonneIdFiltroSupabase / candidatiIdServizioInRiga */
+function colonneIdServizio() {
+    return candidatiIdServizioInRiga();
+}
+
 function valoriIdPerFiltro(id) {
-    const vals = [String(id).trim()];
+    // Preferisci il numero: in Supabase idservizio è numerico
+    const vals = [];
     const n = parseInt(String(id), 10);
     if (!Number.isNaN(n)) vals.push(n);
+    vals.push(String(id).trim());
     return [...new Set(vals)];
 }
 
 function rowToServizioCompleto(row) {
-    const id = getFieldAny(row, colonneIdServizio());
+    const id = getFieldAny(row, candidatiIdServizioInRiga());
     if (!id) return null;
 
     const incassato = getFieldAny(row, ['Incassato', 'INCASSATO']);
@@ -638,7 +664,7 @@ function rowToServizioCompleto(row) {
 
     const base = {
         id: String(id),
-        idColonna: trovaColonnaRow(row, colonneIdServizio()),
+        idColonna: trovaColonnaRow(row, candidatiIdServizioInRiga()),
         _colKm: trovaColonnaRow(row, ['Km', 'KM']),
         _colTempo: trovaColonnaRow(row, ['Tempo', 'TEMPO', 'TEMPO_ORE']),
         _colNote: trovaColonnaRow(row, ['NoteFineServizio', 'NOTAFINESERVIZIO', 'NOTE_FINE_SERVIZIO']),
@@ -1105,36 +1131,8 @@ async function ricaricaServizioDaSupabase(servizio) {
         if (error) console.warn('Ricarica idservizio numerico:', error.message);
     }
 
-    const filtriOr = [
-        `idservizio.eq.${id}`,
-        `IdServizio.eq.${id}`
-    ];
-    if (!Number.isNaN(idNum)) {
-        filtriOr.push(`idservizio.eq.${idNum}`, `IdServizio.eq.${idNum}`);
-    }
-
-    const { data: righeOr, error: errOr } = await supabaseClient
-        .from(table)
-        .select('*')
-        .or([...new Set(filtriOr)].join(','))
-        .limit(1);
-
-    if (!errOr && righeOr?.length) {
-        const completo = rowToServizioCompleto(righeOr[0]);
-        if (completo) {
-            aggiornaServizioInCache(completo);
-            if (calendar) {
-                const ev = calendar.getEventById(String(completo.id));
-                if (ev) ev.setExtendedProp('servizio', completo);
-            }
-            return completo;
-        }
-    }
-
-    const idCols = [...new Set([
-        servizio.idColonna,
-        ...colonneIdServizio()
-    ].filter(Boolean))];
+    // Solo colonne davvero presenti nello schema (niente IdServizio fittizio nell'.or)
+    const idCols = colonneIdFiltroSupabase(servizio);
 
     for (const idCol of idCols) {
         for (const idVal of valoriIdPerFiltro(servizio.id)) {
@@ -1162,7 +1160,7 @@ async function ricaricaServizioDaSupabase(servizio) {
         }
     }
 
-    console.warn('Servizio non ricaricato da Supabase, id=', id, errOr?.message || '');
+    console.warn('Servizio non ricaricato da Supabase, id=', id);
     return servizio;
 }
 
@@ -1202,10 +1200,7 @@ function messaggioErroreSalvataggio(error) {
 async function patchFineServizioSupabase(servizio, km, kmUscita, kmRientro, tempoRaw, note) {
     const table = tabella('servizi');
     const payload = buildPayloadFineServizio(servizio, km, kmUscita, kmRientro, tempoRaw, note);
-    const idCols = [
-        servizio.idColonna,
-        ...colonneIdServizio().filter(c => c !== servizio.idColonna)
-    ].filter(Boolean);
+    const idCols = colonneIdFiltroSupabase(servizio);
 
     let ultimoErrore = null;
 
@@ -1426,7 +1421,7 @@ async function renderModalServizio(servizio) {
 async function patchServizioCompletoSupabase(servizio, payloadConMeta) {
     const table = tabella('servizi');
     const payload = payloadSenzaMeta(payloadConMeta);
-    const idCols = [...new Set([servizio.idColonna, ...colonneIdServizio()].filter(Boolean))];
+    const idCols = colonneIdFiltroSupabase(servizio);
     let ultimoErrore = null;
 
     for (const idCol of idCols) {
@@ -1440,7 +1435,12 @@ async function patchServizioCompletoSupabase(servizio, payloadConMeta) {
             if (error) {
                 ultimoErrore = error;
                 const msg = String(error.message || error);
-                // Errori di schema: non ha senso ritentare con lo stesso payload
+                // Se manca la colonna usata nel filtro, prova il nome successivo
+                const filtroAssente = new RegExp(
+                    '\\b' + idCol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b'
+                ).test(msg) && /does not exist|could not find/i.test(msg);
+                if (filtroAssente) continue;
+                // Errori di schema sul payload: non ha senso ritentare con lo stesso payload
                 if (/column|schema|PGRST204|Could not find|invalid input/i.test(msg)) {
                     throw error;
                 }
