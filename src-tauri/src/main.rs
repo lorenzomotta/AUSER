@@ -3377,15 +3377,16 @@ fn build_socio_anagrafica_body(
         anagrafica.archivia,
     );
 
-    if !anagrafica.disponibilita.is_empty() {
-        put_field(
-            &mut body,
-            row,
-            &["Disponibilita", "DISPONIBILITA", "disponibilita"],
-            "Disponibilita",
-            serde_json::json!(anagrafica.disponibilita),
-        );
-    }
+    // Sempre salva disponibilità (anche stringa vuota = nessuna spunta).
+    // Se in log vedi "PATCH skip ... Disponibilita", esegui su Supabase
+    // il file supabase-tesserati-disponibilita.sql (manca la colonna).
+    put_field(
+        &mut body,
+        row,
+        &["Disponibilita", "DISPONIBILITA", "disponibilita"],
+        "Disponibilita",
+        serde_json::json!(anagrafica.disponibilita),
+    );
 
     put_field(
         &mut body,

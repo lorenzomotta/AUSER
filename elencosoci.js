@@ -258,6 +258,8 @@ function matchesAdvancedFilter(tesserato, criteri) {
     const disp = String(tesserato.disponibilita || '').toUpperCase();
     if (criteri.disp_autista === true && !disp.includes('AUTISTA')) return false;
     if (criteri.disp_centralista === true && !disp.includes('CENTRALISTA')) return false;
+    if (criteri.disp_nonno_vigile === true && !disp.includes('NONNO_VIGILE')) return false;
+    if (criteri.disp_scuolabus === true && !disp.includes('SCUOLABUS')) return false;
 
     return true;
 }

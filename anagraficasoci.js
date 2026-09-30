@@ -27,7 +27,17 @@ const ANAGRAFICA_FLAG_IDS = [
     'field-attivo',
     'field-archivia',
     'field-disp-autista',
-    'field-disp-centralista'
+    'field-disp-centralista',
+    'field-disp-nonno-vigile',
+    'field-disp-scuolabus'
+];
+
+/** Spunte disponibilità (salvate nella colonna Disponibilita, separate da virgola). */
+const DISPONIBILITA_OPZIONI = [
+    { id: 'field-disp-autista', value: 'AUTISTA' },
+    { id: 'field-disp-centralista', value: 'CENTRALISTA' },
+    { id: 'field-disp-nonno-vigile', value: 'NONNO_VIGILE' },
+    { id: 'field-disp-scuolabus', value: 'SCUOLABUS' }
 ];
 
 async function initTauri() {
@@ -193,36 +203,36 @@ function parseDisponibilita(value) {
 
 function formatDisponibilita() {
     const values = [];
-    if (document.getElementById('field-disp-autista')?.checked) values.push('AUTISTA');
-    if (document.getElementById('field-disp-centralista')?.checked) values.push('CENTRALISTA');
+    DISPONIBILITA_OPZIONI.forEach(({ id, value }) => {
+        if (document.getElementById(id)?.checked) values.push(value);
+    });
     return values.join(',');
 }
 
 function setDisponibilitaCheckboxes(values) {
     const set = new Set(values.map(v => v.toUpperCase()));
-    const autista = document.getElementById('field-disp-autista');
-    const centralista = document.getElementById('field-disp-centralista');
-    if (autista) autista.checked = set.has('AUTISTA');
-    if (centralista) centralista.checked = set.has('CENTRALISTA');
+    DISPONIBILITA_OPZIONI.forEach(({ id, value }) => {
+        const el = document.getElementById(id);
+        if (el) el.checked = set.has(value);
+    });
     syncOperatoreDisponibilitaFlags();
 }
 
-/** Attivo, Autista e Centralista attivi solo se Operatore è spuntato (in modifica). */
+/** Attivo e disponibilità attivi solo se Operatore è spuntato (in modifica). */
 function syncOperatoreDisponibilitaFlags() {
     const operatore = document.getElementById('field-operatore');
     const attivo = document.getElementById('field-attivo');
-    const autista = document.getElementById('field-disp-autista');
-    const centralista = document.getElementById('field-disp-centralista');
-    if (!operatore || !attivo || !autista || !centralista) return;
+    const dispEls = DISPONIBILITA_OPZIONI.map(({ id }) => document.getElementById(id));
+    if (!operatore || !attivo || dispEls.some((el) => !el)) return;
 
     // In ricerca i flag sono indipendenti (ognuno è un criterio opzionale)
     if (isRicercaMode) {
         attivo.disabled = !isAnagraficaEditMode;
-        autista.disabled = !isAnagraficaEditMode;
-        centralista.disabled = !isAnagraficaEditMode;
         attivo.closest('.flag-item')?.classList.remove('flag-item-disabled');
-        autista.closest('.flag-item')?.classList.remove('flag-item-disabled');
-        centralista.closest('.flag-item')?.classList.remove('flag-item-disabled');
+        dispEls.forEach((el) => {
+            el.disabled = !isAnagraficaEditMode;
+            el.closest('.flag-item')?.classList.remove('flag-item-disabled');
+        });
         return;
     }
 
@@ -231,17 +241,15 @@ function syncOperatoreDisponibilitaFlags() {
 
     if (!isOperatore) {
         attivo.checked = false;
-        autista.checked = false;
-        centralista.checked = false;
+        dispEls.forEach((el) => { el.checked = false; });
     }
 
     attivo.disabled = !flagsEnabled;
-    autista.disabled = !flagsEnabled;
-    centralista.disabled = !flagsEnabled;
-
     attivo.closest('.flag-item')?.classList.toggle('flag-item-disabled', !flagsEnabled);
-    autista.closest('.flag-item')?.classList.toggle('flag-item-disabled', !flagsEnabled);
-    centralista.closest('.flag-item')?.classList.toggle('flag-item-disabled', !flagsEnabled);
+    dispEls.forEach((el) => {
+        el.disabled = !flagsEnabled;
+        el.closest('.flag-item')?.classList.toggle('flag-item-disabled', !flagsEnabled);
+    });
 }
 
 function normalizeSesso(value) {
@@ -1622,7 +1630,9 @@ function collectRicercaCriteri() {
         attivo: document.getElementById('field-attivo')?.checked === true,
         archivia: document.getElementById('field-archivia')?.checked === true,
         disp_autista: document.getElementById('field-disp-autista')?.checked === true,
-        disp_centralista: document.getElementById('field-disp-centralista')?.checked === true
+        disp_centralista: document.getElementById('field-disp-centralista')?.checked === true,
+        disp_nonno_vigile: document.getElementById('field-disp-nonno-vigile')?.checked === true,
+        disp_scuolabus: document.getElementById('field-disp-scuolabus')?.checked === true
     };
 
     // Rimuovi stringhe vuote dai criteri testo
@@ -1715,7 +1725,9 @@ async function loadRicercaMode() {
             archivia: !!stored.archivia,
             disponibilita: [
                 stored.disp_autista ? 'AUTISTA' : '',
-                stored.disp_centralista ? 'CENTRALISTA' : ''
+                stored.disp_centralista ? 'CENTRALISTA' : '',
+                stored.disp_nonno_vigile ? 'NONNO_VIGILE' : '',
+                stored.disp_scuolabus ? 'SCUOLABUS' : ''
             ].filter(Boolean).join(', '),
             notaaggiuntiva: stored.notaaggiuntiva || ''
         });
