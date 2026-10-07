@@ -381,6 +381,13 @@ body {
     text-align: center;
 }
 
+.section-count {
+    font-size: 0.68em;
+    font-weight: 600;
+    opacity: 0.9;
+    letter-spacing: 0;
+}
+
 /* Services Columns */
 .services-column {
     min-height: 0;

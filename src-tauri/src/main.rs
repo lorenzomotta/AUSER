@@ -1242,7 +1242,15 @@ fn supabase_row_to_tesseramento(row: &serde_json::Value) -> TesseramentoRecord {
             }),
         idsocio: get_field_any(row, &["IdSocio", "IDSOCIO"]),
         anno,
-        numero: get_field_any(row, &["Numero", "Tesseramento_Numero", "Numero_Tessera"]),
+        numero: get_field_any(
+            row,
+            &[
+                "Tessera_Numero",
+                "Numero",
+                "Tesseramento_Numero",
+                "Numero_Tessera",
+            ],
+        ),
         data: format_date_iso(&data_raw),
         scadenza,
         tipologia: get_field_any(row, &["TipologiaSocio", "Tipologia"]),
@@ -3527,7 +3535,8 @@ async fn save_tesseramento(tesseramento: TesseramentoRecord) -> Result<Tesserame
     ensure_supabase_client().await?;
 
     let mut body = serde_json::Map::new();
-    // Colonne reali di Tesseramenti_supa: IdSocio, Anno, DataTesseramento, TipologiaSocio
+    // Colonne reali di Tesseramenti_supa: IdSocio, Anno, DataTesseramento,
+    // TipologiaSocio, Tessera_Numero
     // IdSocio numerico come nel DB
     if let Ok(id_num) = tesseramento.idsocio.parse::<i64>() {
         body.insert("IdSocio".to_string(), serde_json::json!(id_num));
@@ -3557,6 +3566,15 @@ async fn save_tesseramento(tesseramento: TesseramentoRecord) -> Result<Tesserame
             serde_json::json!(tesseramento.tipologia),
         );
     }
+    let numero = tesseramento.numero.trim();
+    if numero.is_empty() {
+        body.insert("Tessera_Numero".to_string(), serde_json::Value::Null);
+    } else {
+        body.insert(
+            "Tessera_Numero".to_string(),
+            serde_json::json!(numero),
+        );
+    }
 
     let row_id = tesseramento
         .id
@@ -3572,7 +3590,7 @@ async fn save_tesseramento(tesseramento: TesseramentoRecord) -> Result<Tesserame
             .await
             .map_err(|e| format_supabase_error(&e))?;
         let mut saved = supabase_row_to_tesseramento(&saved_row);
-        // Numero/quota/note restano sul form locale (non esistono su Tesseramenti_supa)
+        // Quota e note non hanno una colonna dedicata su Tesseramenti_supa
         if saved.numero.is_empty() {
             saved.numero = tesseramento.numero.clone();
         }

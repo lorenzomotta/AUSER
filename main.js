@@ -145,6 +145,17 @@ function updateDateInfo() {
 }
 
 // Carica servizi del giorno
+function aggiornaConteggioSezione(elementId, count) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    if (count == null || count === '') {
+        el.textContent = '';
+        return;
+    }
+    const n = Number(count);
+    el.textContent = Number.isFinite(n) ? `(${n})` : '';
+}
+
 async function loadServiziGiorno() {
     console.log('=== loadServiziGiorno chiamato ===');
     const container = document.getElementById('servizi-giorno');
@@ -193,6 +204,7 @@ async function loadServiziGiorno() {
             const entry = createServiceEntry(servizio, true); // true = con pulsante COMPLETA
             container.appendChild(entry);
         });
+        aggiornaConteggioSezione('count-servizi-giorno', serviziEsempio.length);
         return;
     }
     
@@ -205,9 +217,11 @@ async function loadServiziGiorno() {
         console.log('Numero di servizi:', servizi ? servizi.length : 0);
         
         container.innerHTML = '';
+        const totale = Array.isArray(servizi) ? servizi.length : 0;
+        aggiornaConteggioSezione('count-servizi-giorno', totale);
         
-        if (servizi && servizi.length > 0) {
-            console.log('Mostro', servizi.length, 'servizi');
+        if (totale > 0) {
+            console.log('Mostro', totale, 'servizi');
             servizi.forEach(servizio => {
                 const entry = createServiceEntry(servizio, true); // true = con pulsante COMPLETA
                 container.appendChild(entry);
@@ -217,6 +231,7 @@ async function loadServiziGiorno() {
             container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Nessun servizio trovato</div>';
         }
     } catch (error) {
+        aggiornaConteggioSezione('count-servizi-giorno', null);
         console.error('✗ Errore nel caricamento servizi del giorno:', error);
         console.error('Dettagli errore:', error.message, error.stack);
         // Mostra un messaggio di errore visibile
@@ -268,6 +283,7 @@ async function loadProssimiServizi() {
             const entry = createServiceEntry(servizio, false); // false = senza pulsante COMPLETA
             container.appendChild(entry);
         });
+        aggiornaConteggioSezione('count-prossimi-servizi', serviziEsempio.length);
         return;
     }
     
@@ -275,8 +291,10 @@ async function loadProssimiServizi() {
         // Chiamata API per caricare prossimi servizi da SharePoint
         const servizi = await invoke('get_prossimi_servizi');
         container.innerHTML = '';
+        const totale = Array.isArray(servizi) ? servizi.length : 0;
+        aggiornaConteggioSezione('count-prossimi-servizi', totale);
         
-        if (servizi && servizi.length > 0) {
+        if (totale > 0) {
             servizi.forEach(servizio => {
                 const entry = createServiceEntry(servizio, false); // false = senza pulsante COMPLETA
                 container.appendChild(entry);
@@ -285,6 +303,7 @@ async function loadProssimiServizi() {
             container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Nessun servizio trovato</div>';
         }
     } catch (error) {
+        aggiornaConteggioSezione('count-prossimi-servizi', null);
         console.error('Errore nel caricamento prossimi servizi:', error);
         container.innerHTML = '<div style="padding: 20px; color: red;">Errore nel caricamento: ' + error.message + '</div>';
     }
@@ -324,6 +343,7 @@ async function loadServiziInseritiOggi() {
             const entry = createServiceEntry(servizio, false); // false = senza pulsante COMPLETA
             container.appendChild(entry);
         });
+        aggiornaConteggioSezione('count-servizi-inseriti-oggi', serviziEsempio.length);
         return;
     }
     
@@ -331,8 +351,10 @@ async function loadServiziInseritiOggi() {
         // Chiamata API per caricare servizi inseriti oggi da SharePoint
         const servizi = await invoke('get_servizi_inseriti_oggi');
         container.innerHTML = '';
+        const totale = Array.isArray(servizi) ? servizi.length : 0;
+        aggiornaConteggioSezione('count-servizi-inseriti-oggi', totale);
         
-        if (servizi && servizi.length > 0) {
+        if (totale > 0) {
             servizi.forEach(servizio => {
                 const entry = createServiceEntry(servizio, false); // false = senza pulsante COMPLETA
                 container.appendChild(entry);
@@ -341,6 +363,7 @@ async function loadServiziInseritiOggi() {
             container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Nessun servizio trovato</div>';
         }
     } catch (error) {
+        aggiornaConteggioSezione('count-servizi-inseriti-oggi', null);
         console.error('Errore nel caricamento servizi inseriti oggi:', error);
         container.innerHTML = '<div style="padding: 20px; color: red;">Errore nel caricamento: ' + error.message + '</div>';
     }
@@ -358,6 +381,7 @@ async function loadTessereDaFare() {
     if (!isTauri() || !invoke) {
         console.log('Modalità demo: invoke non disponibile per tessere da fare');
         container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Modalità demo - tessere non disponibili</div>';
+        aggiornaConteggioSezione('count-tessere-da-fare', null);
         return;
     }
     
@@ -368,9 +392,11 @@ async function loadTessereDaFare() {
         console.log('Numero di tessere:', tessere ? tessere.length : 0);
         
         container.innerHTML = '';
+        const totale = Array.isArray(tessere) ? tessere.length : 0;
+        aggiornaConteggioSezione('count-tessere-da-fare', totale);
         
-        if (tessere && Array.isArray(tessere) && tessere.length > 0) {
-            console.log('Mostro', tessere.length, 'tessere');
+        if (totale > 0) {
+            console.log('Mostro', totale, 'tessere');
             tessere.forEach(tessera => {
                 const entry = createCardEntry(tessera);
                 container.appendChild(entry);
@@ -380,6 +406,7 @@ async function loadTessereDaFare() {
             container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Nessuna tessera da fare</div>';
         }
     } catch (error) {
+        aggiornaConteggioSezione('count-tessere-da-fare', null);
         console.error('✗ Errore nel caricamento tessere da fare:', error);
         console.error('Dettagli errore:', error.message, error.stack);
         // Mostra un messaggio di errore visibile con più dettagli

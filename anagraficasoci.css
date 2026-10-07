@@ -659,6 +659,15 @@ textarea.form-control {
     margin: 0;
 }
 
+/* Casella spuntata: lo sfondo della label diventa verde.
+   opacity: 1 tiene il verde pieno anche in sola lettura, dove alcune caselle sono disabilitate. */
+.flag-item:has(input:checked) {
+    background-color: #8fd19a;
+    border-radius: 4px;
+    padding: 2px 7px;
+    opacity: 1;
+}
+
 .flag-item-disabled {
     opacity: 0.45;
     cursor: not-allowed;
