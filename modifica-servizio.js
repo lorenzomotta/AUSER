@@ -14,10 +14,12 @@ import {
     rimuoviTrattaDalForm,
     messaggioAvvisoDopoRimozioneTratta
 } from './tratta-riepilogo.js';
-import { formatoAccountSessione, soloUsernameAccount } from './auth-session.js';
+import { formatoAccountSessione, risolviAccountCollegato, soloUsernameAccount } from './auth-session.js';
 import { isServizioSerieAggiuntivo, isServizioSeriePrincipale, idPrincipaleDaServizioAggiuntivo, numeroRicevutaDaServizio } from './nuovoservizio-ripeti.js';
 import { apriCalcolaTariffa, ensureCalcolaTariffaMarkup, formatEuroCalcolaTariffa, applicaRiepilogoTariffaNelDom, rimuoviRiepilogoTariffaDalForm, htmlBloccoRiepilogoTariffa, parseTariffaDaNote, mergeTariffaInNote, leggiTariffaDalDom } from './calcola-tariffa.js';
 import { collegaHintKmOperatore, avvisaSeLimiteKmOperatore, aggiornaHintKmOperatore } from './operatore-km-mese.js';
+import { etichettaMezzo, idMezzo, trovaAutomezzo, testoMezzoServizio } from './mezzo-etichetta.js';
+import { ensureTariffeDonazione, getTariffeDonazione, testoPulsanteTariffa } from './tariffe-donazione.js';
 
 let getInvokeFn = () => null;
 let isTauriEnv = () => false;
@@ -245,17 +247,30 @@ function formatTimestampAudit(value) {
 }
 
 function timestampCreazioneServizio(servizio) {
-    return formatTimestampAudit(
+    const daColonna = formatTimestampAudit(
         servizio?.created_at
-        || servizio?.created
+        || servizio?.Created_At
         || servizio?.Created
+        || servizio?.created
         || ''
     );
+    if (daColonna) return daColonna;
+    // Vecchi record Access: data/ora era salvata in CreatoDa
+    const legacy = String(servizio?.creato_da || '').trim();
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(legacy) || /^\d{4}-\d{2}-\d{2}/.test(legacy)) {
+        return formatTimestampAudit(legacy);
+    }
+    return '';
 }
 
 function timestampModificaServizio(servizio) {
     return formatTimestampAudit(
-        servizio?.updated_at
+        servizio?.update_at
+        || servizio?.updated_at
+        || servizio?.Update_At
+        || servizio?.Updated_At
+        || servizio?.Updated
+        || servizio?.updated
         || servizio?.modificated
         || servizio?.Modificated
         || servizio?.modified
@@ -275,10 +290,9 @@ function escapeHtmlAudit(text) {
 export function aggiornaEtichetteAudit(prefix, servizio) {
     const creatoEl = document.getElementById(`${prefix}-audit-creato`);
     const modEl = document.getElementById(`${prefix}-audit-modificato`);
-    const creato = soloUsernameAccount(servizio?.creato_da)
-        || String(servizio?.creato_da || '').trim();
-    const modificato = soloUsernameAccount(servizio?.modificato_da)
-        || String(servizio?.modificato_da || '').trim();
+    // soloUsernameAccount: se CreatoDa è una vecchia data Access, restituisce ''
+    const creato = soloUsernameAccount(servizio?.creato_da);
+    const modificato = soloUsernameAccount(servizio?.modificato_da);
     const quandoCreato = timestampCreazioneServizio(servizio);
     const quandoModificato = timestampModificaServizio(servizio);
 
@@ -347,22 +361,7 @@ function normalizzaNumero(numStrOrNum) {
 }
 
 function costruisciStringaMezzo(servizio) {
-    const nrAutomezzo = servizio.mezzo || '';
-    if (!nrAutomezzo || (typeof nrAutomezzo === 'string' && nrAutomezzo.trim() === '')) {
-        return servizio.mezzo_usato || '';
-    }
-    const nrNormalizzato = normalizzaNumero(nrAutomezzo);
-    if (!allAutomezzi.length) return servizio.mezzo_usato || '';
-    const automezzo = allAutomezzi.find(a => {
-        if (!a?.nr_automezzo) return false;
-        return normalizzaNumero(a.nr_automezzo) === nrNormalizzato;
-    });
-    if (!automezzo) return servizio.mezzo_usato || '';
-    const marca = (automezzo.marca || '').trim();
-    const modello = (automezzo.modello || '').trim();
-    const nr = normalizzaNumero(automezzo.nr_automezzo) || '';
-    const parti = [marca, modello, nr ? `(${nr})` : ''].filter(Boolean);
-    return parti.join(' - ');
+    return testoMezzoServizio(servizio, allAutomezzi);
 }
 
 function getStatiServizioOptions() {
@@ -412,10 +411,8 @@ function resolveStatoServizioSelezionato(valoreCorrente) {
     return match || opzioni[0] || '';
 }
 
-function trovaAutomezzoModifica(nrMezzo) {
-    const nr = normalizzaNumero(nrMezzo || '');
-    if (!nr || !allAutomezzi.length) return null;
-    return allAutomezzi.find(a => normalizzaNumero(a.nr_automezzo) === nr) || null;
+function trovaAutomezzoModifica(idSalvato) {
+    return trovaAutomezzo(allAutomezzi, idSalvato);
 }
 
 function risolviDotazioneDaMezzo(nrMezzo) {
@@ -861,6 +858,7 @@ export async function ensureDatiFormServizioCaricati() {
     if (!allOperatori.length || !allAutomezzi.length || !allRichiedenti.length || !allTipiPagamento.length) {
         await caricaDatiModificaServizio();
     }
+    await ensureTariffeDonazione(getInvokeFn());
 }
 
 function costruisciFormModifica(servizio) {
@@ -889,11 +887,13 @@ export function costruisciFormServizio(
     }
 
     const mezziOpts = [{ value: '', label: '— Nessuno —' }].concat(
-        allAutomezzi.map(m => {
-            const nr = normalizzaNumero(m.nr_automezzo);
-            const label = [m.marca, m.modello].filter(Boolean).join(' - ') + (nr ? ` (${nr})` : '');
-            return { value: nr, label: label || nr };
-        })
+        allAutomezzi
+            .map(m => {
+                const id = idMezzo(m);
+                if (!id) return null;
+                return { value: id, label: etichettaMezzo(m) };
+            })
+            .filter(Boolean)
     );
     const mezzoCorrente = normalizzaNumero(servizio.mezzo || '');
     if (mezzoCorrente && !mezziOpts.some(o => o.value === mezzoCorrente)) {
@@ -1009,8 +1009,8 @@ export function costruisciFormServizio(
                     <h2 class="ns-section-title ns-pagamento-title">${num}. Pagamento e incasso</h2>
                     <div class="ns-pagamento-quick-btns" aria-label="Importi rapidi donazione">
                         <button type="button" class="ns-btn-importo" data-serv-importo="${p}" data-importo="GRATIS">GRATIS</button>
-                        <button type="button" class="ns-btn-importo" data-serv-importo="${p}" data-importo="10">10 €.</button>
-                        <button type="button" class="ns-btn-importo" data-serv-importo="${p}" data-importo="15">15 €.</button>
+                        <button type="button" class="ns-btn-importo" data-serv-importo="${p}" data-importo="tariffa1">${escapeHtmlModifica(testoPulsanteTariffa(getTariffeDonazione().tariffa1))}</button>
+                        <button type="button" class="ns-btn-importo" data-serv-importo="${p}" data-importo="tariffa2">${escapeHtmlModifica(testoPulsanteTariffa(getTariffeDonazione().tariffa2))}</button>
                         <button type="button" class="ns-btn-importo" data-serv-importo="${p}" data-importo="LIBERO">LIBERO</button>
                     </div>
                     <div class="ns-pagamento-azioni-destra">
@@ -1205,12 +1205,12 @@ export function setupFormServizioListeners(idPrefix = 'mod') {
                 campo.value = '0,00 €';
                 if (statoIncasso) statoIncasso.value = 'GRATIS';
                 campo.readOnly = true;
-            } else if (tipo === '10') {
-                campo.value = '10,00 €';
+            } else if (tipo === 'tariffa1' || tipo === '10') {
+                campo.value = formatEuroItalianoModifica(getTariffeDonazione().tariffa1);
                 if (statoIncasso) statoIncasso.value = 'DA INCASSARE';
                 campo.readOnly = true;
-            } else if (tipo === '15') {
-                campo.value = '15,00 €';
+            } else if (tipo === 'tariffa2' || tipo === '15') {
+                campo.value = formatEuroItalianoModifica(getTariffeDonazione().tariffa2);
                 if (statoIncasso) statoIncasso.value = 'DA INCASSARE';
                 campo.readOnly = true;
             } else if (tipo === 'LIBERO') {
@@ -1555,7 +1555,17 @@ function raccogliPayloadModifica() {
     };
 }
 
-export async function caricaDatiModificaServizio() {
+let caricaDatiInCorso = null;
+
+export function caricaDatiModificaServizio() {
+    if (caricaDatiInCorso) return caricaDatiInCorso;
+    caricaDatiInCorso = eseguiCaricaDatiModificaServizio().finally(() => {
+        caricaDatiInCorso = null;
+    });
+    return caricaDatiInCorso;
+}
+
+async function eseguiCaricaDatiModificaServizio() {
     const invoke = getInvokeFn();
     if (!isTauriEnv() || !invoke) return;
 
@@ -1767,6 +1777,7 @@ export async function apriModalModifica(servizioId, options = {}) {
             : `MODIFICA SERVIZIO ${servizio.id || ''}`;
     }
     aggiornaEtichetteAudit('mod', servizio);
+    await ensureTariffeDonazione(invoke);
     body.innerHTML = costruisciFormModifica(servizio);
     setupFormModificaListeners();
     applicaModalitaSolaLettura(solaLettura);
@@ -1855,10 +1866,11 @@ async function duplicaServizioModifica() {
         const invoke = getInvokeFn();
         if (isTauriEnv() && invoke) {
             await invoke('init_supabase_from_config').catch(() => {});
+            const creatoDa = await risolviAccountCollegato(invoke);
             const nuovoId = await invoke('duplicate_servizio', {
                 servizioId: id,
                 opzioni,
-                creatoDa: formatoAccountSessione() || null
+                creatoDa: creatoDa || null
             });
             const nuovoServizio = await invoke('get_servizio_completo', { servizioId: nuovoId });
             await onSaveSuccess(nuovoServizio);
@@ -1892,6 +1904,8 @@ async function salvaModificaServizio() {
         const invoke = getInvokeFn();
         if (isTauriEnv() && invoke) {
             await invoke('init_supabase_from_config').catch(() => {});
+            const account = await risolviAccountCollegato(invoke);
+            if (account) payload.modificato_da = account;
             await invoke('update_servizio_completo', { payload });
             const extraSerie = await propagaIncassoSerieDaPayload(payload, servizioInModifica);
             const aggiornato = await invoke('get_servizio_completo', { servizioId: payload.id });

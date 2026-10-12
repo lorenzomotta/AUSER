@@ -1,6 +1,6 @@
 {
   "name": "auser-tauri-app",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "AUSER Asti - Gestione Operativa",
   "type": "module",
   "scripts": {

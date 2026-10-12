@@ -47,9 +47,14 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Nuova versione v1.0.17:
-            - Anagrafica socio: la scheda si apre a tutto schermo, con testi e campi più grandi
-            - La ricerca soci resta nella finestra piccola di prima
+            Nuova versione v1.0.20:
+            - Agenda: aggiungi e cerca accanto alla data, con testo contenuto o esatto
+            - Il login resta valido finché usi il programma
+            - Elenco soci e nuovo servizio non scaricano i soci archiviati all'apertura
+            - Elenco servizi scarica solo la pagina visibile; l'anno corrente esclude gli archiviati
+            - Anagrafica: elimina un tesseramento; la tipologia del tesseramento aggiorna l'anagrafica
+            - Gli amministratori possono eliminare un socio solo se non ha servizi collegati
+            - PDF elenco soci con il numero di pagine giusto; stampa chilometri senza sfondi colorati
 
             Gli utenti con l'app già installata riceveranno un avviso all'avvio
             e potranno aggiornare con un clic.

@@ -233,7 +233,7 @@ function setupEventListeners() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const sessione = richiediSessione();
+    const sessione = await richiediSessione();
     if (!sessione) return;
     if (!puoVedereSidebar('riepilogo_incassi', sessione)) {
         alert('Non hai il permesso per questa pagina.');

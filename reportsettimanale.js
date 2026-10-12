@@ -12,8 +12,9 @@ const GIORNI = [
 ];
 
 let lunediSettimana = null;
-const serviziAnnoCache = {};
+const serviziSettimanaCache = {};
 let rubricaTelefoniCache = null;
+let richiestaReport = 0;
 
 async function initTauri() {
     try {
@@ -99,16 +100,19 @@ function minutiDaOra(oraStr) {
     return h * 60 + m;
 }
 
-async function fetchServiziAnno(anno) {
-    if (serviziAnnoCache[anno]) return serviziAnnoCache[anno];
+async function fetchServiziSettimana(giorni) {
+    const dal = giorni[0].dataStr;
+    const al = giorni[6].dataStr;
+    const chiave = `${dal}|${al}`;
+    if (serviziSettimanaCache[chiave]) return serviziSettimanaCache[chiave];
     if (!isTauri() || !invoke) {
-        serviziAnnoCache[anno] = [];
+        serviziSettimanaCache[chiave] = [];
         return [];
     }
     await invoke('init_supabase_from_config').catch(() => {});
-    const servizi = await invoke('get_all_servizi_completi', { anno, tuttiAnni: false });
-    serviziAnnoCache[anno] = Array.isArray(servizi) ? servizi : [];
-    return serviziAnnoCache[anno];
+    const servizi = await invoke('get_servizi_report_settimana', { dal, al });
+    serviziSettimanaCache[chiave] = Array.isArray(servizi) ? servizi : [];
+    return serviziSettimanaCache[chiave];
 }
 
 function normNomeSemplice(nome) {
@@ -152,11 +156,7 @@ async function fetchRubricaTelefoni() {
 }
 
 async function caricaServiziSettimana(giorni) {
-    const dateSet = new Set(giorni.map(g => g.dataStr));
-    const anni = [...new Set(giorni.map(g => g.data.getFullYear()))];
-    const risultati = await Promise.all(anni.map(a => fetchServiziAnno(a)));
-    const tutti = risultati.flat();
-    return tutti.filter(s => dateSet.has((s.data_prelievo || '').trim()));
+    return fetchServiziSettimana(giorni);
 }
 
 function indiceGiornoDaData(dataStr, giorni) {
@@ -265,25 +265,32 @@ async function caricaReport() {
 
     const giorni = getGiorniSettimana(lunediSettimana);
     const numeroSettimana = getNumeroSettimanaISO(giorni[3].data);
+    const richiesta = ++richiestaReport;
 
     setLoading(true);
     aggiornaRangeStampa(giorni);
+    renderIntestazione(giorni, numeroSettimana);
 
     try {
-        const [servizi, rubrica] = await Promise.all([
-            caricaServiziSettimana(giorni),
-            fetchRubricaTelefoni()
-        ]);
-        const righe = costruisciGriglia(servizi, giorni, rubrica);
-        renderIntestazione(giorni, numeroSettimana);
-        renderCorpo(righe);
+        const servizi = await caricaServiziSettimana(giorni);
+        if (richiesta !== richiestaReport) return;
+        const rubrica = rubricaTelefoniCache || [];
+        renderCorpo(costruisciGriglia(servizi, giorni, rubrica));
+        setLoading(false);
+
+        if (!rubricaTelefoniCache) {
+            fetchRubricaTelefoni().then((rubricaAgg) => {
+                if (richiesta !== richiestaReport) return;
+                renderCorpo(costruisciGriglia(servizi, giorni, rubricaAgg));
+            }).catch((error) => console.warn('Rubrica telefoni:', error));
+        }
     } catch (error) {
+        if (richiesta !== richiestaReport) return;
         console.error(error);
         const tbody = document.getElementById('report-tbody');
         if (tbody) {
             tbody.innerHTML = `<tr><td colspan="8" style="padding:20px;color:red;">Errore: ${escapeHtml(error.message || error)}</td></tr>`;
         }
-    } finally {
         setLoading(false);
     }
 }

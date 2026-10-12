@@ -1,5 +1,6 @@
 // Anagrafica Socio — logica maschera
 import { ANAGRAFICA_SCHERMO_INTERO } from './anagrafica-finestra.js';
+import { isAdmin } from './auth-session.js';
 
 let invoke, appWindow;
 
@@ -25,20 +26,21 @@ const RICERCA_FILTRO_STORAGE_KEY = 'auser-ricerca-filtro-criteri';
 const ANAGRAFICA_FLAG_IDS = [
     'field-operatore',
     'field-attivo',
-    'field-archivia',
-    'field-disp-autista',
-    'field-disp-centralista',
-    'field-disp-nonno-vigile',
-    'field-disp-scuolabus'
+    'field-archivia'
 ];
 
-/** Spunte disponibilità (salvate nella colonna Disponibilita, separate da virgola). */
-const DISPONIBILITA_OPZIONI = [
-    { id: 'field-disp-autista', value: 'AUTISTA' },
-    { id: 'field-disp-centralista', value: 'CENTRALISTA' },
-    { id: 'field-disp-nonno-vigile', value: 'NONNO_VIGILE' },
-    { id: 'field-disp-scuolabus', value: 'SCUOLABUS' }
+/** Usate se la tabella Mansioni_supa non è raggiungibile. */
+const MANSIONI_PREDEFINITE = [
+    { mansione: 'Autista', codice: 'AUTISTA' },
+    { mansione: 'Centralista', codice: 'CENTRALISTA' },
+    { mansione: 'Nonno Vigile', codice: 'NONNO_VIGILE' },
+    { mansione: 'Scuolabus', codice: 'SCUOLABUS' }
 ];
+
+/** Spunte mansioni (salvate nella colonna Disponibilita, separate da virgola). */
+let mansioniAttive = MANSIONI_PREDEFINITE;
+/** Codici salvati sul socio che non hanno una casella (mansione eliminata o disattivata). */
+let disponibilitaSenzaCasella = [];
 
 async function initTauri() {
     try {
@@ -201,29 +203,83 @@ function parseDisponibilita(value) {
     return String(value).split(/[,;]/).map(s => s.trim().toUpperCase()).filter(Boolean);
 }
 
+function getDisponibilitaCheckboxes() {
+    return [...document.querySelectorAll('#disponibilita-flags input[type="checkbox"]')];
+}
+
+function codiciDisponibilitaSpuntati() {
+    return getDisponibilitaCheckboxes()
+        .filter((el) => el.checked)
+        .map((el) => el.value);
+}
+
 function formatDisponibilita() {
-    const values = [];
-    DISPONIBILITA_OPZIONI.forEach(({ id, value }) => {
-        if (document.getElementById(id)?.checked) values.push(value);
+    if (!document.getElementById('field-operatore')?.checked) return '';
+    const values = codiciDisponibilitaSpuntati();
+    disponibilitaSenzaCasella.forEach((codice) => {
+        if (!values.includes(codice)) values.push(codice);
     });
     return values.join(',');
 }
 
 function setDisponibilitaCheckboxes(values) {
     const set = new Set(values.map(v => v.toUpperCase()));
-    DISPONIBILITA_OPZIONI.forEach(({ id, value }) => {
-        const el = document.getElementById(id);
-        if (el) el.checked = set.has(value);
+    const conCasella = new Set();
+    getDisponibilitaCheckboxes().forEach((el) => {
+        el.checked = set.has(el.value);
+        conCasella.add(el.value);
     });
+    disponibilitaSenzaCasella = [...set].filter((codice) => !conCasella.has(codice));
     syncOperatoreDisponibilitaFlags();
+}
+
+/** Codici mansione da un filtro salvato (anche vecchio formato disp_autista, …). */
+function codiciDisponibilitaDaCriteri(criteri) {
+    const codici = Array.isArray(criteri?.disponibilita)
+        ? criteri.disponibilita.map((c) => String(c).toUpperCase())
+        : [];
+    Object.keys(criteri || {}).forEach((key) => {
+        if (key.startsWith('disp_') && criteri[key] === true) {
+            const codice = key.slice(5).toUpperCase();
+            if (!codici.includes(codice)) codici.push(codice);
+        }
+    });
+    return codici;
+}
+
+function renderDisponibilitaFlags() {
+    const container = document.getElementById('disponibilita-flags');
+    if (!container) return;
+    const spuntati = new Set(codiciDisponibilitaSpuntati());
+    container.innerHTML = mansioniAttive.map(({ mansione, codice }) => `
+        <label class="flag-item"><input type="checkbox" value="${escapeHtml(codice)}"${spuntati.has(codice) ? ' checked' : ''}><span>${escapeHtml(mansione)}</span></label>
+    `).join('');
+    syncOperatoreDisponibilitaFlags();
+}
+
+async function loadMansioni() {
+    if (invoke) {
+        try {
+            await initSupabase();
+            const list = await invoke('get_mansioni');
+            const attive = (Array.isArray(list) ? list : [])
+                .filter((m) => m && m.attiva !== false && m.codice && m.mansione)
+                .map((m) => ({ mansione: m.mansione, codice: String(m.codice).toUpperCase() }));
+            mansioniAttive = attive.length ? attive : MANSIONI_PREDEFINITE;
+        } catch (error) {
+            console.error('Errore caricamento mansioni:', error);
+            mansioniAttive = MANSIONI_PREDEFINITE;
+        }
+    }
+    renderDisponibilitaFlags();
 }
 
 /** Attivo e disponibilità attivi solo se Operatore è spuntato (in modifica). */
 function syncOperatoreDisponibilitaFlags() {
     const operatore = document.getElementById('field-operatore');
     const attivo = document.getElementById('field-attivo');
-    const dispEls = DISPONIBILITA_OPZIONI.map(({ id }) => document.getElementById(id));
-    if (!operatore || !attivo || dispEls.some((el) => !el)) return;
+    const dispEls = getDisponibilitaCheckboxes();
+    if (!operatore || !attivo) return;
 
     // In ricerca i flag sono indipendenti (ognuno è un criterio opzionale)
     if (isRicercaMode) {
@@ -567,6 +623,19 @@ function setAnagraficaEditMode(editing) {
             comuneInput.classList.add('ricerca-comune-input-hidden');
         }
     }
+
+    aggiornaPulsanteEliminaSocio();
+}
+
+function aggiornaPulsanteEliminaSocio() {
+    const btn = document.getElementById('btn-elimina-socio');
+    if (!btn) return;
+    const visibile = isAdmin()
+        && isAnagraficaEditMode
+        && !isRicercaMode
+        && !isNuovoSocioMode
+        && String(currentIdsocio || '').trim() !== '';
+    btn.hidden = !visibile;
 }
 
 function enableAnagraficaEdit() {
@@ -1243,6 +1312,9 @@ function openTesseramentoEditor(index, isNew) {
         document.getElementById('tess-anno').readOnly = true;
     }
 
+    const btnElimina = document.getElementById('btn-elimina-tess');
+    if (btnElimina) btnElimina.hidden = isNew;
+
     document.getElementById('tesseramento-editor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     setupTipologiaTessField(true);
 }
@@ -1307,6 +1379,7 @@ async function loadNuovoSocio() {
     try {
         await initSupabase();
         await loadTipologieSocio();
+        await loadMansioni();
 
         let nextId = '1';
         if (invoke) {
@@ -1374,6 +1447,7 @@ async function loadSocioData() {
     try {
         await initSupabase();
         await loadTipologieSocio();
+        await loadMansioni();
         const result = await invoke('get_socio_anagrafica', { idsocio: currentIdsocio });
         populateAnagrafica(result.anagrafica);
         tesseramentiList = result.tesseramenti || [];
@@ -1629,11 +1703,9 @@ function collectRicercaCriteri() {
         operatore: document.getElementById('field-operatore')?.checked === true,
         attivo: document.getElementById('field-attivo')?.checked === true,
         archivia: document.getElementById('field-archivia')?.checked === true,
-        disp_autista: document.getElementById('field-disp-autista')?.checked === true,
-        disp_centralista: document.getElementById('field-disp-centralista')?.checked === true,
-        disp_nonno_vigile: document.getElementById('field-disp-nonno-vigile')?.checked === true,
-        disp_scuolabus: document.getElementById('field-disp-scuolabus')?.checked === true
+        disponibilita: codiciDisponibilitaSpuntati()
     };
+    if (!criteri.disponibilita.length) delete criteri.disponibilita;
 
     // Rimuovi stringhe vuote dai criteri testo
     Object.keys(criteri).forEach((key) => {
@@ -1697,6 +1769,7 @@ async function loadRicercaMode() {
     try {
         await initSupabase();
         await loadTipologieSocio();
+        await loadMansioni();
         await loadComuniResidenza();
     } catch (err) {
         console.warn('Init ricerca (opzionale):', err);
@@ -1723,12 +1796,7 @@ async function loadRicercaMode() {
             operatore: !!stored.operatore,
             attivo: !!stored.attivo,
             archivia: !!stored.archivia,
-            disponibilita: [
-                stored.disp_autista ? 'AUTISTA' : '',
-                stored.disp_centralista ? 'CENTRALISTA' : '',
-                stored.disp_nonno_vigile ? 'NONNO_VIGILE' : '',
-                stored.disp_scuolabus ? 'SCUOLABUS' : ''
-            ].filter(Boolean).join(', '),
+            disponibilita: codiciDisponibilitaDaCriteri(stored).join(', '),
             notaaggiuntiva: stored.notaaggiuntiva || ''
         });
         if (subtitle) {
@@ -1886,6 +1954,33 @@ async function notifySocioAnagraficaSaved(payload) {
     }
 }
 
+function tesseramentoPiuRecente() {
+    let migliore = null;
+    tesseramentiList.forEach((tess) => {
+        const anno = parseInt(String(tess?.anno || '').trim(), 10);
+        if (!Number.isFinite(anno)) return;
+        if (!migliore || anno >= migliore.anno) {
+            migliore = { anno, tipologia: tess.tipologia || '' };
+        }
+    });
+    return migliore;
+}
+
+function allineaTipologiaAnagraficaAlTesseramento() {
+    const recente = tesseramentoPiuRecente();
+    const tipologia = normalizeTipologiaValue(recente?.tipologia);
+    if (!tipologia) return;
+
+    const input = document.getElementById('field-tipologiasocio');
+    if (input) input.value = tipologia;
+    if (anagraficaEditSnapshot) {
+        anagraficaEditSnapshot.tipologiasocio = tipologia;
+    }
+    if (isAnagraficaEditMode) {
+        setupTipologiaField(TIPOLOGIA_FIELD_ANAGRAFICA, true);
+    }
+}
+
 async function saveTesseramento(e) {
     if (e) e.preventDefault();
     if (!isAnagraficaEditMode) return;
@@ -1920,6 +2015,7 @@ async function saveTesseramento(e) {
             }
             renderStoricoTesseramenti();
             hideTesseramentoEditor();
+            allineaTipologiaAnagraficaAlTesseramento();
             setSaveStatus(`Tesseramento ${payload.anno} aggiunto`);
             return;
         }
@@ -1938,10 +2034,196 @@ async function saveTesseramento(e) {
         }
         renderStoricoTesseramenti();
         hideTesseramentoEditor();
+        allineaTipologiaAnagraficaAlTesseramento();
         setSaveStatus(`Tesseramento ${payload.anno} salvato`);
+        await notifySocioAnagraficaSaved(collectAnagraficaPayload());
     } catch (error) {
         console.error('Errore salvataggio tesseramento:', error);
         setSaveStatus(`Errore: ${error}`, true);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+function chiediConfermaEliminazione(messaggio) {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById('anag-dialog-elimina');
+        const msgEl = document.getElementById('anag-dialog-elimina-messaggio');
+        const btnSi = document.getElementById('anag-dialog-elimina-si');
+        const btnNo = document.getElementById('anag-dialog-elimina-no');
+        if (!overlay || !msgEl || !btnSi || !btnNo) {
+            resolve(false);
+            return;
+        }
+
+        msgEl.textContent = messaggio;
+        overlay.hidden = false;
+        overlay.setAttribute('aria-hidden', 'false');
+        btnNo.focus();
+
+        const chiudi = (risposta) => {
+            overlay.hidden = true;
+            overlay.setAttribute('aria-hidden', 'true');
+            btnSi.removeEventListener('click', onSi);
+            btnNo.removeEventListener('click', onNo);
+            overlay.removeEventListener('click', onOverlay);
+            document.removeEventListener('keydown', onKey);
+            resolve(risposta);
+        };
+        const onSi = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            chiudi(true);
+        };
+        const onNo = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            chiudi(false);
+        };
+        const onOverlay = (e) => {
+            if (e.target === overlay) chiudi(false);
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape') chiudi(false);
+        };
+
+        btnSi.addEventListener('click', onSi);
+        btnNo.addEventListener('click', onNo);
+        overlay.addEventListener('click', onOverlay);
+        document.addEventListener('keydown', onKey);
+    });
+}
+
+function mostraAvvisoAnagrafica(messaggio) {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById('anag-dialog-avviso');
+        const msgEl = document.getElementById('anag-dialog-avviso-messaggio');
+        const btnOk = document.getElementById('anag-dialog-avviso-ok');
+        if (!overlay || !msgEl || !btnOk) {
+            resolve();
+            return;
+        }
+        msgEl.textContent = messaggio;
+        overlay.hidden = false;
+        overlay.setAttribute('aria-hidden', 'false');
+        btnOk.focus();
+
+        const chiudi = () => {
+            overlay.hidden = true;
+            overlay.setAttribute('aria-hidden', 'true');
+            btnOk.removeEventListener('click', onOk);
+            overlay.removeEventListener('click', onOverlay);
+            document.removeEventListener('keydown', onKey);
+            resolve();
+        };
+        const onOk = (e) => {
+            e.preventDefault();
+            chiudi();
+        };
+        const onOverlay = (e) => {
+            if (e.target === overlay) chiudi();
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape' || e.key === 'Enter') chiudi();
+        };
+        btnOk.addEventListener('click', onOk);
+        overlay.addEventListener('click', onOverlay);
+        document.addEventListener('keydown', onKey);
+    });
+}
+
+async function eliminaSocioAnagrafica() {
+    if (!isAdmin() || !isAnagraficaEditMode || isNuovoSocioMode || isRicercaMode) return;
+    const idsocio = String(currentIdsocio || '').trim();
+    if (!idsocio) return;
+
+    const nome = document.getElementById('field-nominativo')?.value?.trim() || idsocio;
+    const conferma = await chiediConfermaEliminazione(
+        `Eliminare il socio ${nome} (ID ${idsocio})?\n\nQuesta operazione non si può annullare.`
+    );
+    if (!conferma) return;
+
+    const btn = document.getElementById('btn-elimina-socio');
+    if (btn) btn.disabled = true;
+    try {
+        if (!invoke) {
+            setSaveStatus('Database non disponibile', true);
+            return;
+        }
+        await initSupabase();
+        const esito = await invoke('delete_socio_anagrafica', { idsocio });
+        if (esito?.ha_servizi) {
+            await mostraAvvisoAnagrafica(
+                "NON PUOI ELIMINARE IL SOCIO PERCHE' HA SERVIZI COLLEGATI, PUOI SOLO ARCHIVIARLO"
+            );
+            return;
+        }
+        if (!esito?.eliminato) {
+            setSaveStatus('Il socio non è stato eliminato', true);
+            return;
+        }
+        if (isTauri()) {
+            try {
+                const { emit } = await import('@tauri-apps/api/event');
+                await emit('socio-anagrafica-deleted', { idsocio });
+            } catch (err) {
+                console.warn('Notifica eliminazione socio:', err);
+            }
+        }
+        await closeAnagraficaWindow();
+    } catch (error) {
+        console.error('Errore eliminazione socio:', error);
+        setSaveStatus(`Errore eliminazione: ${error}`, true);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function deleteTesseramento() {
+    if (!isAnagraficaEditMode || isNewTesseramento || isRicercaMode) return;
+    const index = editingTesseramentoIndex;
+    const tess = tesseramentiList[index];
+    if (!tess) return;
+
+    const anno = tess.anno || document.getElementById('tess-anno')?.value || '';
+    const conferma = await chiediConfermaEliminazione(
+        `Eliminare il tesseramento dell'anno ${anno}?\n\nQuesta operazione non si può annullare.`
+    );
+    if (!conferma) return;
+
+    const btn = document.getElementById('btn-elimina-tess');
+    if (btn) btn.disabled = true;
+
+    try {
+        if (!isNuovoSocioMode) {
+            if (!invoke) {
+                setSaveStatus('Database non disponibile', true);
+                return;
+            }
+            await initSupabase();
+            await invoke('delete_tesseramento', {
+                tesseramento: {
+                    id: tess.id || null,
+                    idsocio: currentIdsocio || tess.idsocio || '',
+                    anno: tess.anno || '',
+                    numero: tess.numero || '',
+                    data: tess.data || '',
+                    scadenza: tess.scadenza || '',
+                    tipologia: tess.tipologia || '',
+                    quota: tess.quota || '',
+                    note: tess.note || ''
+                }
+            });
+        }
+
+        tesseramentiList.splice(index, 1);
+        renderStoricoTesseramenti();
+        hideTesseramentoEditor();
+        allineaTipologiaAnagraficaAlTesseramento();
+        setSaveStatus(`Tesseramento ${anno} eliminato`);
+    } catch (error) {
+        console.error('Errore eliminazione tesseramento:', error);
+        setSaveStatus(`Errore eliminazione: ${error}`, true);
     } finally {
         if (btn) btn.disabled = false;
     }
@@ -1960,6 +2242,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-modifica-anagrafica')?.addEventListener('click', enableAnagraficaEdit);
     document.getElementById('btn-salva-anagrafica')?.addEventListener('click', saveAnagrafica);
     document.getElementById('btn-annulla-anagrafica')?.addEventListener('click', cancelAnagraficaEdit);
+    document.getElementById('btn-elimina-socio')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        eliminaSocioAnagrafica();
+    });
     document.getElementById('btn-cerca-filtro')?.addEventListener('click', applyRicercaFiltro);
     document.getElementById('btn-azzera-filtro')?.addEventListener('click', () => {
         clearRicercaForm();
@@ -1967,6 +2253,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('field-nominativo')?.focus();
     });
     document.getElementById('form-tesseramento')?.addEventListener('submit', saveTesseramento);
+    document.getElementById('btn-elimina-tess')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        deleteTesseramento();
+    });
 
     document.getElementById('btn-nuovo-tesseramento')?.addEventListener('click', () => {
         if (!isAnagraficaEditMode || isRicercaMode) return;

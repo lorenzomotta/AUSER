@@ -32,6 +32,8 @@ let currentPage = 1;
 let searchDebounceTimer = null;
 let filterScaduteOnly = false;
 let showArchiviatiOnly = false;
+/** I soci archiviati si scaricano solo quando l'utente chiede di vederli. */
+let archiviatiCaricati = false;
 /** Criteri ricerca avanzata (anagrafica). null = nessun filtro avanzato */
 let advancedFilterCriteria = null;
 const RICERCA_FILTRO_STORAGE_KEY = 'auser-ricerca-filtro-criteri';
@@ -187,7 +189,7 @@ function clearAdvancedFilter() {
     renderSociView();
 }
 
-function applyAdvancedFilterCriteria(criteri) {
+async function applyAdvancedFilterCriteria(criteri) {
     if (!criteri || typeof criteri !== 'object' || Object.keys(criteri).length === 0) {
         clearAdvancedFilter();
         return;
@@ -196,6 +198,9 @@ function applyAdvancedFilterCriteria(criteri) {
     try {
         localStorage.setItem(RICERCA_FILTRO_STORAGE_KEY, JSON.stringify(advancedFilterCriteria));
     } catch (_) { /* ignore */ }
+    if (criteri.archivia === true) {
+        await caricaArchiviati();
+    }
     updateRicercaAvanzataUI();
     currentPage = 1;
     renderSociView();
@@ -255,11 +260,21 @@ function matchesAdvancedFilter(tesserato, criteri) {
     if (criteri.attivo === true && !isTruthyFlag(tesserato.attivo)) return false;
     if (criteri.archivia === true && !isArchiviato(tesserato)) return false;
 
-    const disp = String(tesserato.disponibilita || '').toUpperCase();
-    if (criteri.disp_autista === true && !disp.includes('AUTISTA')) return false;
-    if (criteri.disp_centralista === true && !disp.includes('CENTRALISTA')) return false;
-    if (criteri.disp_nonno_vigile === true && !disp.includes('NONNO_VIGILE')) return false;
-    if (criteri.disp_scuolabus === true && !disp.includes('SCUOLABUS')) return false;
+    const disp = new Set(
+        String(tesserato.disponibilita || '')
+            .split(/[,;]/)
+            .map((s) => s.trim().toUpperCase())
+            .filter(Boolean)
+    );
+    const richieste = Array.isArray(criteri.disponibilita)
+        ? criteri.disponibilita.map((c) => String(c).toUpperCase())
+        : [];
+    Object.keys(criteri).forEach((key) => {
+        if (key.startsWith('disp_') && criteri[key] === true) {
+            richieste.push(key.slice(5).toUpperCase());
+        }
+    });
+    if (richieste.some((codice) => !disp.has(codice))) return false;
 
     return true;
 }
@@ -509,22 +524,29 @@ async function loadAllTesserati() {
         } catch (initErr) {
             console.warn('Init Supabase:', initErr);
         }
-        const tesserati = await invoke('get_all_tesserati');
+        const tesserati = await invoke('get_all_tesserati', { escludiArchiviati: true });
         console.log('Risposta ricevuta:', tesserati);
         console.log(`Tipo: ${typeof tesserati}, È array: ${Array.isArray(tesserati)}`);
         console.log(`Numero tesserati: ${tesserati ? tesserati.length : 'null/undefined'}`);
         
-        if (!tesserati || !Array.isArray(tesserati) || tesserati.length === 0) {
-            console.warn('Nessun tesserato trovato o array vuoto');
+        if (!tesserati || !Array.isArray(tesserati)) {
+            console.warn('Risposta tesserati non valida');
             containerBody.innerHTML = '<div class="soci-lista-empty">Nessun tesserato trovato</div>';
             return;
         }
-        
+
         allTesserati = sortByNominativo(tesserati.map(normalizeTesseratoFlags));
+        if (advancedFilterCriteria?.archivia === true) {
+            await caricaArchiviati();
+        }
         updateArchiviatiButtonUI();
         updateTessereScaduteUI();
         updateSociCount(getSociNonArchiviati().length);
         currentPage = 1;
+        if (!allTesserati.length) {
+            containerBody.innerHTML = '<div class="soci-lista-empty">Nessun socio attivo. Usa «Mostra Archiviati» per gli altri.</div>';
+            return;
+        }
         renderSociView();
     } catch (error) {
         console.error('Errore nel caricamento tesserati:', error);
@@ -580,12 +602,42 @@ function updateArchiviatiButtonUI() {
     btn.disabled = false;
     btn.title = showArchiviatiOnly
         ? 'Torna ai soci non archiviati'
-        : archiviatiCount === 0
-            ? 'Nessun socio archiviato nel database'
-            : `Mostra ${archiviatiCount} soci archiviati`;
+        : !archiviatiCaricati
+            ? 'Scarica e mostra i soci archiviati'
+            : archiviatiCount === 0
+                ? 'Nessun socio archiviato nel database'
+                : `Mostra ${archiviatiCount} soci archiviati`;
 }
 
-function toggleMostraArchiviati() {
+async function caricaArchiviati() {
+    if (archiviatiCaricati || !invoke) return;
+    const btn = document.getElementById('btn-mostra-archiviati');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Caricamento...';
+    }
+    try {
+        const extra = await invoke('get_all_tesserati', { soloArchiviati: true });
+        const gia = new Set(allTesserati.map((t) => String(t.idsocio || '')));
+        const nuovi = (Array.isArray(extra) ? extra : [])
+            .map(normalizeTesseratoFlags)
+            .filter((t) => !gia.has(String(t.idsocio || '')));
+        if (nuovi.length) {
+            allTesserati = sortByNominativo([...allTesserati, ...nuovi]);
+        }
+        archiviatiCaricati = true;
+    } catch (error) {
+        console.error('Errore caricamento soci archiviati:', error);
+        alert(`Impossibile caricare i soci archiviati:\n${error?.message || error}`);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function toggleMostraArchiviati() {
+    if (!showArchiviatiOnly) {
+        await caricaArchiviati();
+    }
     showArchiviatiOnly = !showArchiviatiOnly;
     if (showArchiviatiOnly) {
         filterScaduteOnly = false;
@@ -1021,6 +1073,15 @@ async function setupSocioAnagraficaListener() {
         const { listen } = await import('@tauri-apps/api/event');
         await listen('socio-anagrafica-saved', (event) => {
             applySocioUpdateFromAnagrafica(event.payload);
+        });
+        await listen('socio-anagrafica-deleted', (event) => {
+            const idsocio = String(event.payload?.idsocio || '').trim();
+            if (!idsocio) return;
+            allTesserati = allTesserati.filter((t) => String(t.idsocio) !== idsocio);
+            updateArchiviatiButtonUI();
+            updateTessereScaduteUI();
+            updateSociCount(getSociNonArchiviati().length);
+            renderSociView();
         });
         await listen('socio-ricerca-filtro', (event) => {
             applyAdvancedFilterCriteria(event.payload || {});

@@ -14,18 +14,26 @@ export const SIDEBAR_VOCI = [
     { key: 'elenco_mezzi', btnId: 'btn-elenco-mezzi', label: 'ELENCO MEZZI' },
     { key: 'riepilogo_incassi', btnId: 'btn-riepilogo-incassi', label: 'INCASSI GIORNALIERI' },
     { key: 'elenco_operatori', btnId: 'btn-elenco-operatori', label: 'ELENCO OPERATORI' },
-    { key: 'riepilogo_pagamenti', btnId: 'btn-riepilogo-pagamenti', label: 'RIEPILOGO PAGAMENTI' }
+    { key: 'riepilogo_pagamenti', btnId: 'btn-riepilogo-pagamenti', label: 'RIEPILOGO PAGAMENTI' },
+    { key: 'verifica_tesseramenti', btnId: 'btn-verifica-tesseramenti', label: 'VERIFICA TESSERAMENTI' },
+    { key: 'appunti', btnId: 'btn-appunti', label: 'AGENDA' }
 ];
 
 /** Alias per UI (stesso elenco) */
 export const SIDEBAR_VOCI_UI = SIDEBAR_VOCI;
 
-/** Default: tutte le voci classiche ON; le 3 ex-admin OFF (come prima per non-admin). */
+/** Default: voci classiche ON; voci riservate OFF (si abilitano in Gestione utenti). */
 export function defaultSidebarMenu() {
     const menu = {};
     for (const v of SIDEBAR_VOCI_UI) {
-        const exAdmin = ['riepilogo_incassi', 'elenco_operatori', 'riepilogo_pagamenti'].includes(v.key);
-        menu[v.key] = !exAdmin;
+        const riservate = [
+            'riepilogo_incassi',
+            'elenco_operatori',
+            'riepilogo_pagamenti',
+            'verifica_tesseramenti',
+            'appunti'
+        ].includes(v.key);
+        menu[v.key] = !riservate;
     }
     return menu;
 }

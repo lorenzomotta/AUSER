@@ -714,6 +714,12 @@ async function setupSocioAnagraficaListener() {
         await listen('socio-anagrafica-saved', (event) => {
             applyOperatoreUpdateFromAnagrafica(event.payload);
         });
+        await listen('socio-anagrafica-deleted', (event) => {
+            const idsocio = String(event.payload?.idsocio || '').trim();
+            if (!idsocio) return;
+            allOperatori = allOperatori.filter((o) => String(o.idsocio) !== idsocio);
+            refreshOperatoriView();
+        });
     } catch (err) {
         console.warn('Listener aggiornamento anagrafica:', err);
     }
@@ -723,7 +729,7 @@ async function setupSocioAnagraficaListener() {
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('=== ELENCOOPERATORI.html caricato ===');
 
-    const sessione = richiediSessione();
+    const sessione = await richiediSessione();
     if (!sessione) return;
     if (!puoVedereSidebar('elenco_operatori', sessione)) {
         alert('Non hai il permesso per questa pagina.');

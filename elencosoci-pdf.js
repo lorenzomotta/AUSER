@@ -73,20 +73,24 @@ export function generaPdfElencoSoci(soci, options = {}) {
         alternateRowStyles: {
             fillColor: [245, 248, 245]
         },
-        columnStyles,
-        didDrawPage: () => {
-            const pageCount = doc.getNumberOfPages();
-            const pageCurrent = doc.getCurrentPageInfo().pageNumber;
-            doc.setFontSize(8);
-            doc.setTextColor(120, 120, 120);
-            doc.text(
-                `Pagina ${pageCurrent} di ${pageCount}`,
-                doc.internal.pageSize.getWidth() - 10,
-                doc.internal.pageSize.getHeight() - 6,
-                { align: 'right' }
-            );
-        }
+        columnStyles
     });
+
+    // Il totale pagine si conosce solo a tabella finita.
+    // Scriverlo durante la stampa darebbe "1 di 1", "2 di 2", ecc.
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i += 1) {
+        doc.setPage(i);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(120, 120, 120);
+        doc.text(
+            `Pagina ${i} di ${pageCount}`,
+            doc.internal.pageSize.getWidth() - 10,
+            doc.internal.pageSize.getHeight() - 6,
+            { align: 'right' }
+        );
+    }
 
     const fileName = `elenco-soci-${now.toISOString().slice(0, 10)}.pdf`;
     doc.save(fileName);

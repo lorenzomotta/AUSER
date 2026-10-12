@@ -24,6 +24,14 @@ pub struct SupabaseTablesConfig {
     pub user_permissions: String,
     /// Storico annuale tesseramenti (più righe per IdSocio)
     pub tesseramenti: String,
+    /// Mansioni operatore (caselle in anagrafica socio)
+    pub mansioni: String,
+    /// Appunti personali agenda (per user_id)
+    pub appunti: String,
+    /// Destinatari appunti condivisi
+    pub appunti_destinatari: String,
+    /// Risposte / chat sugli appunti
+    pub appunti_risposte: String,
 }
 
 impl SupabaseTablesConfig {
@@ -46,9 +54,23 @@ impl SupabaseTablesConfig {
             "tratte" => Some(&self.tratte),
             "user_permissions" => Some(&self.user_permissions),
             "tesseramenti" => Some(&self.tesseramenti),
+            "mansioni" => Some(&self.mansioni),
+            "appunti" => Some(&self.appunti),
+            "appunti_destinatari" => Some(&self.appunti_destinatari),
+            "appunti_risposte" => Some(&self.appunti_risposte),
             _ => None,
         }
     }
+}
+
+fn totale_da_content_range(header: &str, righe: usize, offset: usize) -> u64 {
+    if let Some(slash) = header.rfind('/') {
+        let dopo = header[slash + 1..].trim();
+        if let Ok(n) = dopo.parse::<u64>() {
+            return n;
+        }
+    }
+    (offset + righe) as u64
 }
 
 fn parse_order_spec(order: &str) -> Option<(String, bool)> {
@@ -234,11 +256,7 @@ impl SupabaseClient {
             }
             url.push_str(&format!("&limit={}", PAGE_SIZE));
 
-            let mut request = self
-                .http
-                .get(&url)
-                .header("Content-Type", "application/json")
-                .header("Prefer", "count=exact");
+            let mut request = self.http.get(&url).header("Content-Type", "application/json");
 
             if order_info.is_none() {
                 url.push_str(&format!("&offset={}", offset));
@@ -247,7 +265,6 @@ impl SupabaseClient {
                     .http
                     .get(&url)
                     .header("Content-Type", "application/json")
-                    .header("Prefer", "count=exact")
                     .header("Range-Unit", "items")
                     .header("Range", format!("{}-{}", offset, range_end));
             }
@@ -906,6 +923,22 @@ impl SupabaseClient {
             .await
     }
 
+    pub async fn fetch_mansioni(&self, filter: Option<&str>) -> Result<Vec<Value>, String> {
+        self.fetch_table("mansioni", filter, None, None).await
+    }
+
+    /// Inserisce una riga completa in Mansioni_supa (Mansione, Codice, Ordine)
+    pub async fn insert_mansione(
+        &self,
+        body: &serde_json::Map<String, Value>,
+    ) -> Result<(), String> {
+        let table_name = &self.config.tables.mansioni;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/rest/v1/{}", base, table_name);
+        println!("📡 Supabase POST [mansioni → {}] body={:?}", table_name, body);
+        self.post_lookup_row(&url, body, "mansioni").await
+    }
+
     pub async fn fetch_stati_del_servizio(&self, filter: Option<&str>) -> Result<Vec<Value>, String> {
         self.fetch_table("stato_del_servizio", filter, None, Some("id.asc"))
             .await
@@ -1124,6 +1157,124 @@ impl SupabaseClient {
                 }
             }
         }
+    }
+
+    /// Una sola richiesta, con tetto di righe. `colonne` è l'elenco select (es. "idservizio,Prelievo_Data").
+    pub async fn fetch_servizi_limit(
+        &self,
+        filter: &str,
+        order: &str,
+        limit: usize,
+        colonne: &str,
+    ) -> Result<Vec<Value>, String> {
+        let table_name = self
+            .config
+            .tables
+            .table_name("servizi")
+            .ok_or_else(|| "Tipo tabella Supabase sconosciuto: servizi".to_string())?;
+        let base = self.config.url.trim_end_matches('/');
+        let limit = limit.clamp(1, 300);
+        let select_cols = if colonne.trim().is_empty() { "*" } else { colonne };
+        let url = format!(
+            "{}/rest/v1/{}?select={}&{}&order={}&limit={}",
+            base, table_name, select_cols, filter, order, limit
+        );
+        println!("📡 Supabase GET servizi anteprima (limit {}): {}", limit, url);
+
+        let request = self
+            .http
+            .get(&url)
+            .header("Content-Type", "application/json");
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Supabase: {}", e))?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(format!("Errore Supabase HTTP {}: {}", status, body));
+        }
+        response
+            .json()
+            .await
+            .map_err(|e| format!("Errore parsing risposta Supabase: {}", e))
+    }
+
+    /// Una pagina di servizi più il totale (Content-Range), senza scaricare le altre.
+    pub async fn fetch_servizi_pagina(
+        &self,
+        filtri: &[(String, String)],
+        colonne: &str,
+        order: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<(Vec<Value>, u64), String> {
+        let table_name = self
+            .config
+            .tables
+            .table_name("servizi")
+            .ok_or_else(|| "Tipo tabella Supabase sconosciuto: servizi".to_string())?;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/rest/v1/{}", base, table_name);
+        let limit = limit.clamp(1, 300);
+        let fine = offset.saturating_add(limit.saturating_sub(1));
+        let range = format!("{}-{}", offset, fine);
+        let select_cols = if colonne.trim().is_empty() { "*" } else { colonne };
+
+        let mut query: Vec<(&str, &str)> = Vec::with_capacity(filtri.len() + 2);
+        query.push(("select", select_cols));
+        query.push(("order", order));
+        for (chiave, valore) in filtri {
+            query.push((chiave.as_str(), valore.as_str()));
+        }
+
+        println!(
+            "📡 Supabase GET servizi pagina offset {} limit {} filtri {}",
+            offset,
+            limit,
+            filtri.len()
+        );
+
+        let request = self
+            .http
+            .get(&url)
+            .header("Content-Type", "application/json")
+            .header("Prefer", "count=exact")
+            .header("Range", &range)
+            .header("Range-Unit", "items")
+            .query(&query);
+
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Supabase: {}", e))?;
+
+        let status = response.status();
+        let content_range = response
+            .headers()
+            .get("content-range")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string();
+
+        if status.as_u16() == 416 {
+            let totale = totale_da_content_range(&content_range, 0, offset);
+            return Ok((Vec::new(), totale));
+        }
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(format!("Errore Supabase HTTP {}: {}", status, body));
+        }
+
+        let rows: Vec<Value> = response
+            .json()
+            .await
+            .map_err(|e| format!("Errore parsing risposta Supabase: {}", e))?;
+        let totale = totale_da_content_range(&content_range, rows.len(), offset);
+        println!("  → pagina {} righe, totale {}", rows.len(), totale);
+        Ok((rows, totale))
     }
 
     /// Servizi con una colonna che contiene il testo (ilike, una sola pagina).
@@ -1512,6 +1663,460 @@ impl SupabaseClient {
             Some("Anno.desc.nullslast,DataTesseramento.desc.nullslast"),
         )
             .await
+    }
+
+    /// Appunti di un autore per una data.
+    pub async fn fetch_appunti_by_owner_day(
+        &self,
+        user_id: &str,
+        data: &str,
+    ) -> Result<Vec<Value>, String> {
+        let uid = user_id.trim();
+        let day = data.trim();
+        if uid.is_empty() || day.is_empty() {
+            return Err("user_id e data obbligatori per gli appunti".to_string());
+        }
+        let filter = format!(
+            "user_id=eq.{}&data=eq.{}",
+            encode_query_value(uid),
+            encode_query_value(day)
+        );
+        self.fetch_table(
+            "appunti",
+            Some(&filter),
+            None,
+            Some("ordine.asc.nullslast,created_at.asc.nullslast"),
+        )
+        .await
+    }
+
+    /// Appunti pubblici (visibilita=tutti) per una data.
+    pub async fn fetch_appunti_tutti_day(&self, data: &str) -> Result<Vec<Value>, String> {
+        let day = data.trim();
+        if day.is_empty() {
+            return Err("data obbligatoria".to_string());
+        }
+        let filter = format!(
+            "visibilita=eq.tutti&data=eq.{}",
+            encode_query_value(day)
+        );
+        self.fetch_table(
+            "appunti",
+            Some(&filter),
+            None,
+            Some("ordine.asc.nullslast,created_at.asc.nullslast"),
+        )
+        .await
+    }
+
+    /// Appunti il cui testo è uguale (esatto) oppure contiene la frase cercata.
+    pub async fn fetch_appunti_testo(
+        &self,
+        filtro_extra: &str,
+        testo: &str,
+        esatto: bool,
+    ) -> Result<Vec<Value>, String> {
+        let extra = filtro_extra.trim();
+        let q = testo.trim();
+        if extra.is_empty() || q.is_empty() {
+            return Err("Filtro e testo obbligatori".to_string());
+        }
+        let filter = format!(
+            "{}&testo=ilike.{}",
+            extra,
+            if esatto {
+                encode_query_value(q)
+            } else {
+                format!("*{}*", encode_query_value(q))
+            }
+        );
+        self.fetch_table(
+            "appunti",
+            Some(&filter),
+            None,
+            Some("data.desc.nullslast,created_at.desc.nullslast"),
+        )
+        .await
+    }
+
+    /// Appunti per elenco id (uuid).
+    pub async fn fetch_appunti_by_ids(&self, ids: &[String]) -> Result<Vec<Value>, String> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+        let mut parts = Vec::new();
+        for id in ids {
+            let t = id.trim();
+            if !t.is_empty() {
+                parts.push(t.to_string());
+            }
+        }
+        if parts.is_empty() {
+            return Ok(vec![]);
+        }
+        let filter = format!("id=in.({})", parts.join(","));
+        self.fetch_table("appunti", Some(&filter), None, None)
+            .await
+    }
+
+    /// Righe destinatari dove l'utente è destinatario.
+    pub async fn fetch_appunti_destinatari_for_user(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<Value>, String> {
+        let uid = user_id.trim();
+        if uid.is_empty() {
+            return Err("user_id obbligatorio".to_string());
+        }
+        let filter = format!("user_id=eq.{}", encode_query_value(uid));
+        self.fetch_table("appunti_destinatari", Some(&filter), None, None)
+            .await
+    }
+
+    /// Destinatari di un appunto.
+    pub async fn fetch_appunti_destinatari_for_appunto(
+        &self,
+        appunto_id: &str,
+    ) -> Result<Vec<Value>, String> {
+        let aid = appunto_id.trim();
+        if aid.is_empty() {
+            return Ok(vec![]);
+        }
+        let filter = format!("appunto_id=eq.{}", encode_query_value(aid));
+        self.fetch_table("appunti_destinatari", Some(&filter), None, None)
+            .await
+    }
+
+    /// Sostituisce i destinatari di un appunto.
+    pub async fn replace_appunti_destinatari(
+        &self,
+        appunto_id: &str,
+        destinatari: &[String],
+    ) -> Result<(), String> {
+        let aid = appunto_id.trim();
+        if aid.is_empty() {
+            return Err("appunto_id obbligatorio".to_string());
+        }
+        let table_name = &self.config.tables.appunti_destinatari;
+        let base = self.config.url.trim_end_matches('/');
+
+        let del_url = format!(
+            "{}/rest/v1/{}?appunto_id=eq.{}",
+            base,
+            table_name,
+            encode_query_value(aid)
+        );
+        println!(
+            "📡 Supabase DELETE [appunti_destinatari → {}] appunto_id={}",
+            table_name, aid
+        );
+        let del_req = self.http.delete(&del_url);
+        let del_resp = self
+            .apply_auth_headers(del_req)
+            .send()
+            .await
+            .map_err(|e| format!("Errore DELETE destinatari appunti: {}", e))?;
+        if !del_resp.status().is_success() {
+            let status = del_resp.status();
+            let body = del_resp.text().await.unwrap_or_default();
+            return Err(format!(
+                "Errore cancellazione destinatari HTTP {}: {}",
+                status, body
+            ));
+        }
+
+        let mut rows = Vec::new();
+        for d in destinatari {
+            let uid = d.trim();
+            if uid.is_empty() {
+                continue;
+            }
+            rows.push(serde_json::json!({
+                "appunto_id": aid,
+                "user_id": uid
+            }));
+        }
+        if rows.is_empty() {
+            return Ok(());
+        }
+
+        let post_url = format!("{}/rest/v1/{}", base, table_name);
+        println!(
+            "📡 Supabase POST [appunti_destinatari → {}] {} riga/e",
+            table_name,
+            rows.len()
+        );
+        let post_req = self
+            .http
+            .post(&post_url)
+            .header("Content-Type", "application/json")
+            .header("Prefer", "return=minimal")
+            .json(&rows);
+        let post_resp = self
+            .apply_auth_headers(post_req)
+            .send()
+            .await
+            .map_err(|e| format!("Errore POST destinatari appunti: {}", e))?;
+        if !post_resp.status().is_success() {
+            let status = post_resp.status();
+            let body = post_resp.text().await.unwrap_or_default();
+            return Err(format!(
+                "Errore inserimento destinatari HTTP {}: {}",
+                status, body
+            ));
+        }
+        Ok(())
+    }
+
+    /// Inserisce o aggiorna un appunto (PATCH se id presente).
+    pub async fn upsert_appunto(
+        &self,
+        body: &serde_json::Map<String, Value>,
+        row_id: Option<&str>,
+    ) -> Result<Value, String> {
+        let table_name = &self.config.tables.appunti;
+        let base = self.config.url.trim_end_matches('/');
+
+        let response = if let Some(id) = row_id.map(str::trim).filter(|s| !s.is_empty()) {
+            let url = format!(
+                "{}/rest/v1/{}?id=eq.{}",
+                base,
+                table_name,
+                encode_query_value(id)
+            );
+            println!("📡 Supabase PATCH [appunti → {}] id={}", table_name, id);
+            let request = self
+                .http
+                .patch(&url)
+                .header("Content-Type", "application/json")
+                .header("Prefer", "return=representation")
+                .json(body);
+            self.apply_auth_headers(request)
+                .send()
+                .await
+                .map_err(|e| format!("Errore connessione Supabase PATCH appunti: {}", e))?
+        } else {
+            let url = format!("{}/rest/v1/{}", base, table_name);
+            println!("📡 Supabase POST [appunti → {}]", table_name);
+            let request = self
+                .http
+                .post(&url)
+                .header("Content-Type", "application/json")
+                .header("Prefer", "return=representation")
+                .json(body);
+            self.apply_auth_headers(request)
+                .send()
+                .await
+                .map_err(|e| format!("Errore connessione Supabase POST appunti: {}", e))?
+        };
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let err_body = response.text().await.unwrap_or_default();
+            return Err(format!(
+                "Errore Supabase salvataggio appunti HTTP {}: {}",
+                status, err_body
+            ));
+        }
+
+        let rows: Vec<Value> = response
+            .json()
+            .await
+            .map_err(|e| format!("Errore parsing risposta appunti: {}", e))?;
+
+        rows.into_iter()
+            .next()
+            .ok_or_else(|| "Nessuna riga restituita dopo salvataggio appunto".to_string())
+    }
+
+    /// Elimina un appunto solo se appartiene a user_id (destinatari in CASCADE).
+    pub async fn delete_appunto(&self, row_id: &str, user_id: &str) -> Result<(), String> {
+        let id = row_id.trim();
+        let uid = user_id.trim();
+        if id.is_empty() || uid.is_empty() {
+            return Err("id e user_id obbligatori per eliminare un appunto".to_string());
+        }
+        let table_name = &self.config.tables.appunti;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!(
+            "{}/rest/v1/{}?id=eq.{}&user_id=eq.{}",
+            base,
+            table_name,
+            encode_query_value(id),
+            encode_query_value(uid)
+        );
+        println!(
+            "📡 Supabase DELETE [appunti → {}] id={} user_id={}",
+            table_name, id, uid
+        );
+        let request = self.http.delete(&url);
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Supabase DELETE appunti: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let err_body = response.text().await.unwrap_or_default();
+            return Err(format!(
+                "Errore Supabase eliminazione appunto HTTP {}: {}",
+                status, err_body
+            ));
+        }
+        Ok(())
+    }
+
+    /// Risposte di un appunto (ordine cronologico).
+    pub async fn fetch_appunti_risposte(
+        &self,
+        appunto_id: &str,
+    ) -> Result<Vec<Value>, String> {
+        let aid = appunto_id.trim();
+        if aid.is_empty() {
+            return Ok(vec![]);
+        }
+        let filter = format!("appunto_id=eq.{}", encode_query_value(aid));
+        self.fetch_table(
+            "appunti_risposte",
+            Some(&filter),
+            None,
+            Some("created_at.asc.nullslast"),
+        )
+        .await
+    }
+
+    /// Risposte per più appunti (per conteggio).
+    pub async fn fetch_appunti_risposte_by_appunti(
+        &self,
+        appunto_ids: &[String],
+    ) -> Result<Vec<Value>, String> {
+        if appunto_ids.is_empty() {
+            return Ok(vec![]);
+        }
+        let parts: Vec<String> = appunto_ids
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if parts.is_empty() {
+            return Ok(vec![]);
+        }
+        let filter = format!("appunto_id=in.({})", parts.join(","));
+        self.fetch_table("appunti_risposte", Some(&filter), None, None)
+            .await
+    }
+
+    pub async fn insert_appunto_risposta(
+        &self,
+        body: &serde_json::Map<String, Value>,
+    ) -> Result<Value, String> {
+        let table_name = &self.config.tables.appunti_risposte;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/rest/v1/{}", base, table_name);
+        println!("📡 Supabase POST [appunti_risposte → {}]", table_name);
+        let request = self
+            .http
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .header("Prefer", "return=representation")
+            .json(body);
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione POST risposta appunto: {}", e))?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let err_body = response.text().await.unwrap_or_default();
+            return Err(format!(
+                "Errore salvataggio risposta HTTP {}: {}",
+                status, err_body
+            ));
+        }
+        let rows: Vec<Value> = response
+            .json()
+            .await
+            .map_err(|e| format!("Errore parsing risposta: {}", e))?;
+        rows.into_iter()
+            .next()
+            .ok_or_else(|| "Nessuna riga restituita dopo salvataggio risposta".to_string())
+    }
+
+    /// Elimina risposta: autore della risposta oppure autore dell'appunto (passare user_id chiamante).
+    pub async fn delete_appunto_risposta(
+        &self,
+        risposta_id: &str,
+        user_id: &str,
+    ) -> Result<(), String> {
+        let rid = risposta_id.trim();
+        let uid = user_id.trim();
+        if rid.is_empty() || uid.is_empty() {
+            return Err("id risposta e user_id obbligatori".to_string());
+        }
+        let table_name = &self.config.tables.appunti_risposte;
+        let base = self.config.url.trim_end_matches('/');
+
+        // Prima prova: solo se è l'autore della risposta
+        let url_own = format!(
+            "{}/rest/v1/{}?id=eq.{}&user_id=eq.{}",
+            base,
+            table_name,
+            encode_query_value(rid),
+            encode_query_value(uid)
+        );
+        let resp = self
+            .apply_auth_headers(self.http.delete(&url_own))
+            .send()
+            .await
+            .map_err(|e| format!("Errore DELETE risposta: {}", e))?;
+        if resp.status().is_success() {
+            return Ok(());
+        }
+
+        // Seconda: autore dell'appunto può cancellare qualsiasi risposta
+        let filter = format!("id=eq.{}", encode_query_value(rid));
+        let rows = self
+            .fetch_table("appunti_risposte", Some(&filter), None, None)
+            .await?;
+        let row = rows
+            .first()
+            .ok_or_else(|| "Risposta non trovata".to_string())?;
+        let appunto_id = get_field(row, "appunto_id");
+        if appunto_id.is_empty() {
+            return Err("Risposta senza appunto collegato".to_string());
+        }
+        let app_filter = format!(
+            "id=eq.{}&user_id=eq.{}",
+            encode_query_value(&appunto_id),
+            encode_query_value(uid)
+        );
+        let apps = self
+            .fetch_table("appunti", Some(&app_filter), None, None)
+            .await?;
+        if apps.is_empty() {
+            return Err("Puoi eliminare solo le tue risposte (o quelle sotto i tuoi appunti)".to_string());
+        }
+        let url = format!(
+            "{}/rest/v1/{}?id=eq.{}",
+            base,
+            table_name,
+            encode_query_value(rid)
+        );
+        let resp2 = self
+            .apply_auth_headers(self.http.delete(&url))
+            .send()
+            .await
+            .map_err(|e| format!("Errore DELETE risposta: {}", e))?;
+        if !resp2.status().is_success() {
+            let status = resp2.status();
+            let body = resp2.text().await.unwrap_or_default();
+            return Err(format!(
+                "Errore eliminazione risposta HTTP {}: {}",
+                status, body
+            ));
+        }
+        Ok(())
     }
 
     /// Telefoni del socio (più numeri per IdSocio).
@@ -2102,6 +2707,100 @@ impl SupabaseClient {
                 idsocio, anno
             )
         })
+    }
+
+    /// Elimina una riga dello storico tesseramenti (colonna id).
+    pub async fn delete_tesseramento(&self, row_id: &str) -> Result<(), String> {
+        let id = row_id.trim().trim_matches('"');
+        if id.is_empty() || !id.chars().all(|c| c.is_ascii_digit()) {
+            return Err("Id tesseramento non valido".to_string());
+        }
+        let table_name = &self.config.tables.tesseramenti;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/rest/v1/{}?id=eq.{}", base, table_name, id);
+        println!("📡 Supabase DELETE [tesseramenti → {}] id={}", table_name, id);
+
+        let request = self.http.delete(&url);
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Supabase DELETE tesseramenti: {}", e))?;
+
+        if response.status().is_success() {
+            return Ok(());
+        }
+        let status = response.status();
+        let err_body = response.text().await.unwrap_or_default();
+        Err(format!(
+            "Errore Supabase DELETE tesseramenti HTTP {}: {}",
+            status, err_body
+        ))
+    }
+
+    /// True se questo IdSocio compare come socio trasportato in almeno un servizio.
+    pub async fn socio_ha_servizi_collegati(&self, idsocio: &str) -> Result<bool, String> {
+        let id = idsocio.trim();
+        if id.is_empty() || !id.chars().all(|c| c.is_ascii_digit()) {
+            return Err("IdSocio non valido".to_string());
+        }
+        let table_name = self
+            .config
+            .tables
+            .table_name("servizi")
+            .ok_or_else(|| "Tabella servizi sconosciuta".to_string())?;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!(
+            "{}/rest/v1/{}?select=idservizio&IdSocio=eq.{}&limit=1",
+            base, table_name, id
+        );
+        let request = self.http.get(&url).header("Content-Type", "application/json");
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Supabase servizi socio: {}", e))?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(format!("Errore Supabase servizi socio HTTP {}: {}", status, body));
+        }
+        let rows: Vec<Value> = response
+            .json()
+            .await
+            .map_err(|e| format!("Errore lettura servizi del socio: {}", e))?;
+        Ok(!rows.is_empty())
+    }
+
+    /// Cancella tutte le righe di una tabella con questo IdSocio.
+    pub async fn delete_righe_idsocio(&self, table_type: &str, idsocio: &str) -> Result<(), String> {
+        let id = idsocio.trim();
+        if id.is_empty() || !id.chars().all(|c| c.is_ascii_digit()) {
+            return Err("IdSocio non valido".to_string());
+        }
+        let table_name = self
+            .config
+            .tables
+            .table_name(table_type)
+            .ok_or_else(|| format!("Tabella sconosciuta: {}", table_type))?;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/rest/v1/{}?IdSocio=eq.{}", base, table_name, id);
+        println!("📡 Supabase DELETE [{} → {}] IdSocio={}", table_type, table_name, id);
+        let request = self.http.delete(&url);
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Supabase DELETE {}: {}", table_type, e))?;
+        if response.status().is_success() {
+            return Ok(());
+        }
+        let status = response.status();
+        let err_body = response.text().await.unwrap_or_default();
+        Err(format!(
+            "Errore Supabase DELETE {} HTTP {}: {}",
+            table_type, status, err_body
+        ))
     }
 
     /// Aggiorna i campi tessera “corrente” su tesserati (usati da Elenco Soci).

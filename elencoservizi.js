@@ -7,12 +7,12 @@ import {
 import {
     initCompletaServizio,
     setupModaleCompleta,
-    apriModalCompleta,
-    caricaDatiCompletaServizio
+    apriModalCompleta
 } from './completa-servizio.js';
 import { testoNoteFineVisibile, parseTrattaDaNote, htmlContenutoRiepilogoTratta, normalizzaPayloadTratta } from './tratta-riepilogo.js';
 import { parseTariffaDaNote, htmlContenutoRiepilogoTariffa } from './calcola-tariffa.js';
 import { initStampaPdfElencoServizi } from './elencoservizi-pdf.js';
+import { testoMezzoServizio } from './mezzo-etichetta.js';
 
 function escapeHtmlElenco(str) {
     if (str === undefined || str === null) return '';
@@ -212,8 +212,6 @@ async function caricaTuttiAnniSeFiltroUrl() {
     applicaFiltroArchiviaIniziale = false;
     filtroAnnoModo = 'tutti';
     updateAnnoHeaderUI();
-    await getServiziForModo('tutti');
-    serviziOriginali = getServiziListaBaseForModo('tutti');
 }
 
 /** Filtro iniziale da URL (?idsocio= o ?operatore=). */
@@ -249,7 +247,6 @@ async function applicaFiltroInizialeDaUrl() {
 
     applyAllFilters();
     updateFilterWarning();
-    updateServiziCount();
 }
 
 async function focusElencoSociWindow() {
@@ -511,53 +508,7 @@ function normalizzaNumero(numStrOrNum) {
 
 // Funzione per costruire la stringa del mezzo
 function costruisciStringaMezzo(servizio) {
-    // Se il servizio ha il campo "mezzo" (NR_AUTOMEZZO), cerca nell'elenco automezzi
-    const nrAutomezzo = servizio.mezzo || '';
-    
-    if (!nrAutomezzo || (typeof nrAutomezzo === 'string' && nrAutomezzo.trim() === '')) {
-        // Se non c'è il campo mezzo, usa direttamente mezzo_usato
-        return servizio.mezzo_usato || '';
-    }
-    
-    // Normalizza il numero del servizio (es: "2.0" -> "2")
-    const nrAutomezzoNormalizzato = normalizzaNumero(nrAutomezzo);
-    
-    // Verifica se gli automezzi sono stati caricati
-    if (!allAutomezzi || allAutomezzi.length === 0) {
-        console.warn(`⚠️ Lista automezzi vuota o non ancora caricata per NR_AUTOMEZZO: "${nrAutomezzo}"`);
-        return servizio.mezzo_usato || '';
-    }
-    
-    // Cerca l'automezzo corrispondente (confronta anche con valori normalizzati)
-    const automezzo = allAutomezzi.find(a => {
-        if (!a || !a.nr_automezzo) return false;
-        const nrAutomezzoLista = normalizzaNumero(a.nr_automezzo);
-        return nrAutomezzoLista === nrAutomezzoNormalizzato;
-    });
-    
-    if (automezzo) {
-        // Costruisci la stringa nel formato: MARCA & MODELLO & (NR_AUTOMEZZO)
-        const marca = (automezzo.marca || '').trim();
-        const modello = (automezzo.modello || '').trim();
-        // Usa il numero normalizzato per la visualizzazione
-        const nr = normalizzaNumero(automezzo.nr_automezzo) || '';
-        
-        const parti = [];
-        if (marca) parti.push(marca);
-        if (modello) parti.push(modello);
-        if (nr) parti.push(`(${nr})`);
-        
-        const risultato = parti.join(' - ');
-        console.log(`✓ Mezzo trovato: "${nrAutomezzo}" (normalizzato: "${nrAutomezzoNormalizzato}") -> "${risultato}"`);
-        return risultato;
-    }
-    
-    // Se non trova l'automezzo, log per debug e usa il valore originale di mezzo_usato
-    const automezziDisponibili = allAutomezzi.map(a => 
-        `NR: "${normalizzaNumero(a.nr_automezzo)}" (MARCA: "${a.marca || ''}", MODELLO: "${a.modello || ''}")`
-    ).join(', ');
-    console.warn(`⚠️ Automezzo non trovato per NR_AUTOMEZZO: "${nrAutomezzo}" (normalizzato: "${nrAutomezzoNormalizzato}"). Automezzi disponibili (${allAutomezzi.length}):`, automezziDisponibili);
-    return servizio.mezzo_usato || '';
+    return testoMezzoServizio(servizio, allAutomezzi);
 }
 
 // Carica tutti gli automezzi
@@ -613,6 +564,9 @@ let serviziCache = [];
 let serviziOriginali = []; // Cache per i servizi originali (prima del filtro)
 const PAGE_SIZE = 50;
 let currentPage = 1;
+let totaleServiziRemoti = 0;
+let elencoPaginatoSulServer = false;
+let caricaListaToken = 0;
 let filtroAnnoModo = 'corrente'; // corrente | precedente | tutti
 const serviziAnnoCache = {
     corrente: null,
@@ -702,23 +656,28 @@ function getServiziListaBaseForModo(modo) {
     return [...raw];
 }
 
-async function fetchServiziFromBackend(modo) {
+async function fetchServiziFromBackend(modo, limite) {
     if (!isTauri() || !invoke) {
         return serviziOriginali.length ? [...serviziOriginali] : [];
     }
 
+    const tetto = limite ? { limite } : {};
+
     if (modo === 'tutti') {
-        return await invoke('get_all_servizi_completi', { anno: null, tuttiAnni: true });
+        return await invoke('get_all_servizi_completi', { anno: null, tuttiAnni: true, ...tetto });
     }
     if (modo === 'precedente') {
         return await invoke('get_all_servizi_completi', {
             anno: getAnnoPrecedente(),
-            tuttiAnni: false
+            tuttiAnni: false,
+            ...tetto
         });
     }
     return await invoke('get_all_servizi_completi', {
         anno: getAnnoCorrente(),
-        tuttiAnni: false
+        tuttiAnni: false,
+        escludiArchiviati: true,
+        ...tetto
     });
 }
 
@@ -758,6 +717,117 @@ function updateAnnoHeaderUI() {
     }
 }
 
+function testoONull(valore) {
+    const s = String(valore || '').trim();
+    return s || null;
+}
+
+function operatoreRichiestaAttiva() {
+    const daRicerca = testoONull(filtriRicerca.operatore);
+    const daPulsante = filtroOperatoreAttivo ? testoONull(valoreFiltroOperatore) : null;
+    const valore = daRicerca || daPulsante;
+    if (!valore) return { ids: [], nome: null };
+    const raccolti = raccogliIdsOperatore(valore);
+    const nome = testoONull(raccolti.nomeTarget) || valore;
+    return { ids: raccolti.ids || [], nome };
+}
+
+function costruisciRichiestaElenco(offset, limite) {
+    const tutti = filtroAnnoModo === 'tutti';
+    const anno = filtroAnnoModo === 'precedente' ? getAnnoPrecedente() : getAnnoCorrente();
+    const operatore = operatoreRichiestaAttiva();
+    const richiedente = testoONull(filtriRicerca.richiedente) || (filtroRichiedenteAttivo ? testoONull(valoreFiltroRichiedente) : null);
+    const stato = filtroStatoAttivo ? testoONull(valoreFiltroStato) : null;
+    return {
+        anno: tutti ? null : anno,
+        tuttiAnni: tutti,
+        escludiArchiviati: filtroAnnoModo === 'corrente',
+        offset,
+        limite,
+        idsocio: testoONull(filtriRicerca.idsocio),
+        idservizio: testoONull(filtriRicerca.idservizio),
+        trasportato: filtroTrasportatoAttivo ? testoONull(valoreFiltroTrasportato) : null,
+        nominativo: testoONull(filtriRicerca.nominativo),
+        dataDa: testoONull(filtriRicerca.dataDa),
+        dataA: testoONull(filtriRicerca.dataA),
+        statoServizio: stato,
+        richiedente,
+        statoIncasso: testoONull(filtriRicerca.statoIncasso),
+        tipoPagamento: testoONull(filtriRicerca.tipoPagamento),
+        tipoServizio: testoONull(filtriRicerca.tipoServizio),
+        carrozzina: testoONull(filtriRicerca.carrozzina),
+        operatoreIds: operatore.ids,
+        operatoreNome: operatore.nome
+    };
+}
+
+async function caricaLista(page) {
+    const containerBody = document.getElementById('servizi-container-body');
+    const pagina = Math.max(1, page || 1);
+    if (!isTauri() || !invoke) {
+        renderServiziView(false);
+        return;
+    }
+
+    const token = ++caricaListaToken;
+    if (containerBody) {
+        containerBody.innerHTML = '<div class="servizi-lista-loading">Caricamento servizi...</div>';
+    }
+
+    try {
+        await invoke('init_supabase_from_config').catch(() => {});
+        const risposta = await invoke('get_servizi_elenco_pagina', costruisciRichiestaElenco((pagina - 1) * PAGE_SIZE, PAGE_SIZE));
+        if (token !== caricaListaToken) return false;
+
+        const servizi = Array.isArray(risposta?.servizi) ? risposta.servizi : [];
+        totaleServiziRemoti = Number(risposta?.totale) || 0;
+        elencoPaginatoSulServer = true;
+        currentPage = pagina;
+        serviziCache = servizi;
+        serviziOriginali = servizi;
+        if (totaleServiziRemoti === 0) {
+            if (containerBody) {
+                containerBody.innerHTML = '<div class="servizi-lista-empty">Nessun servizio trovato</div>';
+            }
+            updatePaginationBar(0, 1, 1);
+            updateServiziCount();
+            updateFiltroStatoButtons();
+            return true;
+        }
+        renderServiziView(false);
+        updateFiltroStatoButtons();
+        if (containerBody) containerBody.scrollTop = 0;
+        return true;
+    } catch (error) {
+        if (token !== caricaListaToken) return false;
+        console.error('Errore nel caricamento servizi:', error);
+        const errorMsg = error?.message || error || 'Errore sconosciuto';
+        if (containerBody) {
+            containerBody.innerHTML = `<div class="servizi-lista-empty">Errore: ${errorMsg}</div>`;
+        }
+        updatePaginationBar(0, 1, 1);
+        return false;
+    }
+}
+
+async function scaricaServiziFiltratiPerStampa() {
+    if (!elencoPaginatoSulServer || !invoke) {
+        return serviziCache || [];
+    }
+    const tutti = [];
+    const blocco = 200;
+    let offset = 0;
+    const tetto = Math.min(totaleServiziRemoti || 0, 4000);
+    while (offset < tetto) {
+        const risposta = await invoke('get_servizi_elenco_pagina', costruisciRichiestaElenco(offset, blocco));
+        const pezzo = Array.isArray(risposta?.servizi) ? risposta.servizi : [];
+        tutti.push(...pezzo);
+        if (pezzo.length < blocco) break;
+        offset += blocco;
+    }
+    return tutti;
+}
+
 async function switchAnnoModo(modo) {
     if (modo === filtroAnnoModo) {
         return;
@@ -766,26 +836,8 @@ async function switchAnnoModo(modo) {
     applicaFiltroArchiviaIniziale = false;
     filtroAnnoModo = modo;
     updateAnnoHeaderUI();
-
-    const containerBody = document.getElementById('servizi-container-body');
-    if (containerBody) {
-        containerBody.innerHTML = '<div class="servizi-lista-loading">Caricamento servizi...</div>';
-    }
-
-    try {
-        await getServiziForModo(filtroAnnoModo);
-        serviziOriginali = getServiziListaBaseForModo(filtroAnnoModo);
-        applyAllFilters();
-        if (document.getElementById('ricerca-tipo-pagamento')) {
-            popolaDropdownDaServizi();
-        }
-    } catch (error) {
-        console.error('Errore cambio anno servizi:', error);
-        if (containerBody) {
-            containerBody.innerHTML = `<div class="servizi-lista-empty">Errore: ${error.message || error}</div>`;
-        }
-        updatePaginationBar(0, 1, 1);
-    }
+    currentPage = 1;
+    await caricaLista(1);
 }
 
 // Carica tutti i servizi e popola la lista
@@ -843,38 +895,17 @@ async function loadAllServizi() {
         updateFiltroStatoButtons();
         return;
     }
-    
-    try {
-        applicaFiltroArchiviaIniziale = true;
-        filtroAnnoModo = 'corrente';
-        updateAnnoHeaderUI();
-        console.log(`Caricamento servizi anno ${getAnnoCorrente()} (non archiviati)...`);
-        await getServiziForModo('corrente');
-        serviziOriginali = getServiziListaBaseForModo('corrente');
-        console.log(`Servizi anno corrente non archiviati: ${serviziOriginali.length} di ${serviziAnnoCache.corrente?.length || 0}`);
-        
-        if (serviziOriginali.length === 0) {
-            console.warn('Nessun servizio trovato per l\'anno corrente (non archiviati)');
-            containerBody.innerHTML = '<div class="servizi-lista-empty">Nessun servizio trovato per l\'anno corrente</div>';
-            serviziCache = [];
-            updateServiziCount();
-            updatePaginationBar(0, 1, 1);
-            updateFiltroStatoButtons();
-            return;
-        }
-        
-        applyAllFilters();
-        
-        // Popola dropdown dopo il caricamento servizi
-        if (document.getElementById('ricerca-stato-incasso')) {
-            popolaDropdownDaServizi();
-        }
-    } catch (error) {
-        console.error('Errore nel caricamento servizi:', error);
-        console.error('Stack trace:', error.stack);
-        const errorMsg = error.message || 'Errore sconosciuto';
-        containerBody.innerHTML = `<div class="servizi-lista-empty">Errore: ${errorMsg}</div>`;
-    }
+
+    elencoPaginatoSulServer = true;
+    filtroAnnoModo = 'corrente';
+    updateAnnoHeaderUI();
+    await caricaLista(1);
+
+    caricaAutomezzi()
+        .then(() => {
+            if (serviziCache.length) renderServiziView(false);
+        })
+        .catch((error) => console.error('Errore caricamento mezzi:', error));
 }
 
 // Crea il blocco HTML di un singolo servizio
@@ -1113,9 +1144,14 @@ function updatePaginationBar(totalItems, page, totalPages) {
 }
 
 function goToPage(page) {
-    const totalPages = getTotalPages(serviziCache.length);
+    const totalItems = elencoPaginatoSulServer ? totaleServiziRemoti : serviziCache.length;
+    const totalPages = getTotalPages(totalItems);
     const nextPage = Math.min(Math.max(1, page), totalPages);
     if (nextPage === currentPage) return;
+    if (elencoPaginatoSulServer) {
+        caricaLista(nextPage);
+        return;
+    }
     currentPage = nextPage;
     renderServiziView(false);
     const containerBody = document.getElementById('servizi-container-body');
@@ -1132,7 +1168,7 @@ function renderServiziView(resetPage = false) {
         currentPage = 1;
     }
 
-    const totalItems = serviziCache.length;
+    const totalItems = elencoPaginatoSulServer ? totaleServiziRemoti : serviziCache.length;
     const totalPages = getTotalPages(totalItems);
 
     if (currentPage > totalPages) {
@@ -1157,7 +1193,9 @@ function renderServiziView(resetPage = false) {
     }
 
     const start = (currentPage - 1) * PAGE_SIZE;
-    const pageItems = serviziCache.slice(start, start + PAGE_SIZE);
+    const pageItems = elencoPaginatoSulServer
+        ? serviziCache
+        : serviziCache.slice(start, start + PAGE_SIZE);
     const fragment = document.createDocumentFragment();
     for (const servizio of pageItems) {
         fragment.appendChild(createServizioBlock(servizio));
@@ -1178,19 +1216,8 @@ function updateServiziCount() {
     const countElement = document.getElementById('servizi-count');
     if (!countElement) return;
     
-    // Usa serviziCache per il conteggio (contiene i servizi attualmente visualizzati)
-    const count = serviziCache.length;
-    const total = serviziOriginali.length;
-    
-    // Controlla se ci sono filtri ricerca attivi
-    const hasRicercaFilters = Object.values(filtriRicerca).some(val => val !== null && val !== '');
-    
-    // Se ci sono filtri attivi, mostra anche il totale
-    if (filtroTrasportatoAttivo || filtroOperatoreAttivo || filtroStatoAttivo || filtroRichiedenteAttivo || hasRicercaFilters) {
-        countElement.textContent = `(${count} di ${total})`;
-    } else {
-        countElement.textContent = `(${count})`;
-    }
+    const count = elencoPaginatoSulServer ? totaleServiziRemoti : serviziCache.length;
+    countElement.textContent = `(${count})`;
 }
 
 // Funzione per aggiornare il messaggio di attenzione filtro
@@ -1226,10 +1253,8 @@ function updateFiltroStatoButtons() {
     const btnAnnullati = document.getElementById('btn-annullati');
     const btnCompletato = document.getElementById('btn-completato');
     const btnTutti = document.getElementById('btn-tutti');
-    const haCompletati = haServiziStatoCompletato();
-
     if (btnCompletato) {
-        btnCompletato.disabled = !haCompletati;
+        btnCompletato.disabled = false;
     }
 
     // Rimuovi classe active da tutti i pulsanti
@@ -1246,7 +1271,7 @@ function updateFiltroStatoButtons() {
             btnEseguiti.classList.add('active');
         } else if (stato === 'ANNULLATO' && btnAnnullati) {
             btnAnnullati.classList.add('active');
-        } else if (stato === 'COMPLETATO' && btnCompletato && haCompletati) {
+        } else if (stato === 'COMPLETATO' && btnCompletato) {
             btnCompletato.classList.add('active');
         }
     }
@@ -1442,9 +1467,12 @@ function rimuoviTuttiFiltri() {
     
     // Reset form modale
     resetFormRicerca();
-    
-    // Ripristina servizi del periodo anno selezionato (senza altri filtri)
-    populateListaServizi([...serviziOriginali]);
+    currentPage = 1;
+    if (elencoPaginatoSulServer) {
+        caricaLista(1);
+    } else {
+        populateListaServizi([...serviziOriginali]);
+    }
     
     // Aggiorna lo stato visivo di tutti i pulsanti
     updateFilterWarning();
@@ -1457,6 +1485,11 @@ function rimuoviTuttiFiltri() {
 
 // Funzione helper per applicare tutti i filtri attivi
 function applyAllFilters() {
+    if (elencoPaginatoSulServer || (isTauri() && invoke)) {
+        caricaLista(1);
+        return;
+    }
+
     if (filtroStatoAttivo && normalizzaStatoServizio(valoreFiltroStato) === 'COMPLETATO' && !haServiziStatoCompletato()) {
         filtroStatoAttivo = false;
         valoreFiltroStato = null;
@@ -1625,14 +1658,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Chiusura con X → torna a Elenco Soci / Operatori (finestra aperta da pulsante SERVIZI)
     await setupChiusuraRitornoFinestraOrigine();
     
-    // Operatori (IdSocio) servono al filtro ricerca e al filtro da URL
-    await caricaDatiPerDropdown();
-
-    // Carica gli automezzi prima di caricare i servizi
-    await caricaAutomezzi();
-    
-    // Carica tutti i servizi e popola la lista
-    await loadAllServizi();
+    const filtroUrl = getIdsocioFromUrl() || getOperatoreFromUrl();
+    if (!filtroUrl) {
+        await loadAllServizi();
+    }
     popolaDropdownOperatori();
 
     // Filtro da URL (apertura da Elenco Soci → SERVIZI)
@@ -1723,7 +1752,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderServiziView(false);
         }
     });
-    await caricaDatiCompletaServizio();
     setupModaleCompleta();
 
     initModificaServizio({
@@ -1740,8 +1768,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderServiziView(false);
         }
     });
-    await caricaDatiModificaServizio();
     setupModaleModifica();
+
+    // Soci, telefoni e tendine dei popup: dopo che la lista è già visibile, una volta sola.
+    caricaDatiPerDropdown()
+        .then(() => {
+            popolaDropdownOperatori();
+            return caricaDatiModificaServizio();
+        })
+        .catch((err) => console.error('Dati elenco in sottofondo:', err));
     
     // Setup modale ricerca
     setupModaleRicerca();
@@ -1749,9 +1784,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     initStampaPdfElencoServizi({
         getServiziFiltrati: () => serviziCache,
         getServiziPagina: () => {
+            if (elencoPaginatoSulServer) return [...serviziCache];
             const start = (currentPage - 1) * PAGE_SIZE;
             return serviziCache.slice(start, start + PAGE_SIZE);
         },
+        getTotaleFiltrato: () => elencoPaginatoSulServer ? totaleServiziRemoti : serviziCache.length,
+        scaricaServiziFiltrati: scaricaServiziFiltratiPerStampa,
         getTitolo: () => {
             const el = document.getElementById('servizi-title-text');
             return (el && el.textContent.trim()) || 'ELENCO SERVIZI';
@@ -1904,9 +1942,27 @@ async function caricaDatiPerDropdown() {
         );
         
         console.log(`✓ Caricati ${allTesserati.length} tesserati, ${allOperatori.length} operatori`);
-        
-        // Popola dropdown stato incasso e tipo pagamento dai servizi
-        popolaDropdownDaServizi();
+
+        try {
+            const tipi = await invoke('get_all_tipi_pagamento');
+            const selectTipo = document.getElementById('ricerca-tipo-pagamento');
+            if (selectTipo && Array.isArray(tipi)) {
+                const corrente = selectTipo.value;
+                while (selectTipo.options.length > 1) selectTipo.remove(1);
+                tipi.forEach((tipo) => {
+                    const nome = String(tipo || '').trim();
+                    if (!nome) return;
+                    const option = document.createElement('option');
+                    option.value = nome;
+                    option.textContent = nome;
+                    selectTipo.appendChild(option);
+                });
+                if (corrente) selectTipo.value = corrente;
+            }
+        } catch (errTipi) {
+            console.warn('Tipi pagamento:', errTipi);
+            popolaDropdownDaServizi();
+        }
         
         // Popola dropdown operatori
         popolaDropdownOperatori();
@@ -2159,9 +2215,14 @@ async function applicaFiltriRicerca() {
         }));
     }
 
-    applyAllFilters();
+    let ok = true;
+    if (isTauri() && invoke) {
+        ok = await caricaLista(1);
+    } else {
+        applyAllFilters();
+    }
 
-    if (filtriRicerca.operatore && serviziCache.length === 0 && filtroAnnoModo !== 'tutti') {
+    if (ok && filtriRicerca.operatore && (elencoPaginatoSulServer ? totaleServiziRemoti === 0 : serviziCache.length === 0) && filtroAnnoModo !== 'tutti') {
         console.log('Nessun servizio nell\'anno corrente: riprovo su TUTTI GLI ANNI');
         await switchAnnoModo('tutti');
     }

@@ -7,8 +7,7 @@ import {
 import {
     initCompletaServizio,
     setupModaleCompleta,
-    apriModalCompleta,
-    caricaDatiCompletaServizio
+    apriModalCompleta
 } from './completa-servizio.js';
 import {
     richiediSessione,
@@ -566,6 +565,9 @@ async function setupTessereDaFareRefreshListener() {
             // Appena salvi (es. tipologia non più NUOVO), la lista si aggiorna subito
             loadTessereDaFare();
         });
+        await listen('socio-anagrafica-deleted', () => {
+            loadTessereDaFare();
+        });
     } catch (err) {
         console.warn('Listener aggiornamento tessere da fare:', err);
     }
@@ -708,6 +710,46 @@ window.updateServizioField = async function(id, field, value) {
     }
 };
 
+function oggiIsoLocale() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Mostra bustina + avviso se oggi ci sono appunti in agenda per l'utente. */
+async function aggiornaAvvisoAgenda(sessione) {
+    const bustina = document.getElementById('agenda-bustina');
+    const countEl = document.getElementById('agenda-bustina-count');
+    const btn = document.getElementById('btn-appunti');
+    if (!bustina || !btn || btn.hidden) {
+        if (bustina) bustina.hidden = true;
+        return;
+    }
+    if (!invoke || !sessione?.user_id) {
+        bustina.hidden = true;
+        return;
+    }
+
+    try {
+        const list = await invoke('get_appunti_giorno', {
+            userId: sessione.user_id,
+            user_id: sessione.user_id,
+            data: oggiIsoLocale()
+        });
+        const n = Array.isArray(list) ? list.length : 0;
+        if (n > 0) {
+            bustina.hidden = false;
+            if (countEl) countEl.textContent = String(n);
+            btn.title = 'Agenda — ci sono appunti per oggi';
+        } else {
+            bustina.hidden = true;
+            btn.title = 'Agenda';
+        }
+    } catch (err) {
+        console.warn('Avviso agenda non disponibile:', err);
+        bustina.hidden = true;
+    }
+}
+
 // Inizializza Tauri all'avvio (Supabase — SharePoint non più richiesto)
 async function initApp() {
     console.log('=== INIZIALIZZAZIONE APP ===');
@@ -731,7 +773,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('=== DOMContentLoaded index.html ===');
 
     // Login obbligatorio
-    const sessione = richiediSessione();
+    const sessione = await richiediSessione();
     if (!sessione) return;
 
     await applicaTitoloFinestra('AUSER Asti - Accesso');
@@ -781,13 +823,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
     setupModaleCompleta();
-    if (tauriReady) {
-        await caricaDatiCompletaServizio();
-    }
-
     setupModaleModifica();
+
+    // Le tre colonne e le tessere partono subito.
+    // Soci, telefoni e mezzi servono solo ai popup: si scaricano dopo, una volta sola.
+    const caricamentoServiziHome = Promise.all([
+        loadServiziGiorno(),
+        loadProssimiServizi(),
+        loadServiziInseritiOggi(),
+        loadTessereDaFare(),
+    ]);
     if (tauriReady) {
-        await caricaDatiModificaServizio();
+        caricamentoServiziHome.finally(() => {
+            caricaDatiModificaServizio();
+        });
     }
     
     // Imposta il listener per il pulsante di chiusura (header o footer)
@@ -994,7 +1043,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 try {
                     await apriFinestraPopup('selezione-data-incassi', {
                         url: 'SELEZIONEDATAINCASSI.html',
-                        title: 'Seleziona data incassi',
+                        title: 'Incassi giornalieri',
                         width: 480,
                         height: 340,
                         resizable: false,
@@ -1041,6 +1090,77 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 window.open('RIEPILOGOPAGAMENTI.html', '_blank');
             }
+        });
+    }
+
+    // Pulsante VERIFICA TESSERAMENTI (anomalie) — di default solo admin
+    const verificaTesseramentiBtn = document.getElementById('btn-verifica-tesseramenti');
+    if (verificaTesseramentiBtn) {
+        verificaTesseramentiBtn.addEventListener('click', async () => {
+            if (!puoVedereSidebar('verifica_tesseramenti', sessione)) {
+                alert('Non hai il permesso per aprire la Verifica Tesseramenti.');
+                return;
+            }
+            if (isTauri()) {
+                try {
+                    await apriFinestraPopup('verifica-tesseramenti', {
+                        url: 'VERIFICATESSERAMENTI.html',
+                        title: 'Verifica anomalie tesseramento',
+                        width: 1400,
+                        height: 900,
+                        resizable: true,
+                        maximized: true,
+                        decorations: true,
+                        alwaysOnTop: false,
+                        center: true
+                    });
+                } catch (error) {
+                    console.error('Errore apertura verifica tesseramenti:', error);
+                    alert('Impossibile aprire la Verifica Tesseramenti.');
+                }
+            } else {
+                window.open('VERIFICATESSERAMENTI.html', '_blank');
+            }
+        });
+    }
+
+    // Pulsante AGENDA — visibile solo se abilitato in Gestione utenti (admin: sempre)
+    const appuntiBtn = document.getElementById('btn-appunti');
+    if (appuntiBtn) {
+        appuntiBtn.addEventListener('click', async () => {
+            if (!puoVedereSidebar('appunti', sessione)) {
+                alert('Non hai il permesso per aprire l\'Agenda.');
+                return;
+            }
+            if (isTauri()) {
+                try {
+                    await apriFinestraPopup('appunti', {
+                        url: 'APPUNTI.html',
+                        title: 'Agenda',
+                        width: 720,
+                        height: 820,
+                        resizable: true,
+                        maximized: false,
+                        decorations: true,
+                        alwaysOnTop: false,
+                        center: true
+                    });
+                } catch (error) {
+                    console.error('Errore apertura agenda:', error);
+                    alert('Impossibile aprire l\'Agenda.');
+                }
+            } else {
+                window.open('APPUNTI.html', '_blank', 'width=720,height=820');
+            }
+        });
+    }
+
+    // Bustina se oggi ci sono appunti/agenda da vedere
+    if (tauriReady && puoVedereSidebar('appunti', sessione)) {
+        await aggiornaAvvisoAgenda(sessione);
+        // Aggiorna quando torni sulla home (es. dopo aver usato l'Agenda)
+        window.addEventListener('focus', () => {
+            aggiornaAvvisoAgenda(sessione);
         });
     }
     
@@ -1219,23 +1339,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateDateInfo();
     setupTessereDaFareClickHandlers();
     await setupTessereDaFareRefreshListener();
-    
-    // Carica i dati
-    loadServiziGiorno();
-    
-    // Aspetta che Tauri sia pronto prima di caricare gli altri dati
-    if (tauriReady) {
-        loadProssimiServizi();
-        loadServiziInseritiOggi();
-        loadTessereDaFare();
-    } else {
-        // Anche se Tauri non è pronto, chiama le funzioni per mostrare messaggi appropriati
-        console.log('Tauri non pronto, carico comunque le funzioni per mostrare messaggi');
-        loadProssimiServizi();
-        loadServiziInseritiOggi();
-        loadTessereDaFare();
-    }
-    
+
     // Aggiorna data ogni minuto
     setInterval(updateDateInfo, 60000);
 });

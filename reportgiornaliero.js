@@ -19,9 +19,10 @@ function isTauri() {
 }
 
 let dataSelezionata = new Date();
-const serviziAnnoCache = {};
+const serviziGiornoCache = {};
 /** Mappa nominativo operatore (UPPER) → telefono principale (da Telefoni_supa via IdSocio) */
 let telefonoOperatoreByNome = null;
+let richiestaReport = 0;
 
 function pad2(n) {
     return String(n).padStart(2, '0');
@@ -64,26 +65,28 @@ function aggiornaLabelData() {
     if (labelPrint) labelPrint.textContent = testo;
 }
 
-async function fetchServiziAnno(anno) {
-    if (serviziAnnoCache[anno]) {
-        return serviziAnnoCache[anno];
+async function fetchServiziDelGiorno(dataItaliana) {
+    if (serviziGiornoCache[dataItaliana]) {
+        return serviziGiornoCache[dataItaliana];
     }
     if (!isTauri() || !invoke) {
-        serviziAnnoCache[anno] = [];
+        serviziGiornoCache[dataItaliana] = [];
         return [];
     }
-    try {
-        await invoke('init_supabase_from_config').catch(() => {});
-        const servizi = await invoke('get_all_servizi_completi', {
-            anno,
-            tuttiAnni: false
-        });
-        serviziAnnoCache[anno] = Array.isArray(servizi) ? servizi : [];
-        return serviziAnnoCache[anno];
-    } catch (error) {
-        console.error('Errore caricamento servizi:', error);
-        throw error;
+    await invoke('init_supabase_from_config').catch(() => {});
+    const servizi = await invoke('get_servizi_report_giorno', { data: dataItaliana });
+    serviziGiornoCache[dataItaliana] = Array.isArray(servizi) ? servizi : [];
+    return serviziGiornoCache[dataItaliana];
+}
+
+function mostraServizi(container, empty, servizi) {
+    if (servizi.length === 0) {
+        container.innerHTML = '';
+        if (empty) empty.style.display = 'block';
+        return;
     }
+    if (empty) empty.style.display = 'none';
+    container.innerHTML = servizi.map(creaBloccoServizio).join('');
 }
 
 async function fetchTelefonoOperatoreMap() {
@@ -193,23 +196,26 @@ async function caricaReport() {
     if (empty) empty.style.display = 'none';
 
     const dataItaliana = formatDataItaliana(dataSelezionata);
-    const anno = dataSelezionata.getFullYear();
+    const richiesta = ++richiestaReport;
 
     try {
-        const [tuttiAnno] = await Promise.all([
-            fetchServiziAnno(anno),
-            fetchTelefonoOperatoreMap()
-        ]);
-        const servizi = filtraServiziPerData(tuttiAnno, dataItaliana);
+        const servizi = filtraServiziPerData(
+            await fetchServiziDelGiorno(dataItaliana),
+            dataItaliana
+        );
+        if (richiesta !== richiestaReport) return;
+        mostraServizi(container, empty, servizi);
+        setLoading(false);
 
-        if (servizi.length === 0) {
-            if (empty) empty.style.display = 'block';
-        } else {
-            container.innerHTML = servizi.map(creaBloccoServizio).join('');
+        if (!telefonoOperatoreByNome) {
+            fetchTelefonoOperatoreMap().then(() => {
+                if (richiesta !== richiestaReport) return;
+                mostraServizi(container, empty, servizi);
+            });
         }
     } catch (error) {
+        if (richiesta !== richiestaReport) return;
         container.innerHTML = `<div class="report-empty">Errore: ${escapeHtml(error.message || error)}</div>`;
-    } finally {
         setLoading(false);
     }
 }

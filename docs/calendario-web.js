@@ -506,8 +506,8 @@ function applicaAuditModificaSuPayload(payload, servizio) {
     };
     payload[findCol(['ModificatoDa', 'modificato_da', 'Modificato_Da'], 'ModificatoDa')] = account;
     payload[findCol(
-        ['modificated', 'Modificated', 'modified', 'Modified', 'updated_at'],
-        'modificated'
+        ['update_at', 'Update_At', 'updated_at', 'Updated_At', 'Updated', 'updated', 'modificated', 'Modificated', 'modified', 'Modified'],
+        'update_at'
     )] = new Date().toISOString();
 }
 

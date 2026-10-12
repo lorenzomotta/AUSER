@@ -597,7 +597,7 @@ async function chiudiFinestra() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const sessione = richiediSessione();
+    const sessione = await richiediSessione();
     if (!sessione) return;
     if (!puoVedereSidebar('riepilogo_pagamenti', sessione)) {
         alert('Non hai il permesso per questa pagina.');

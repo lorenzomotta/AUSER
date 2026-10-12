@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agenda - AUSER Asti</title>
+    <link rel="stylesheet" href="responsive-app.css">
+    <link rel="stylesheet" href="appunti.css">
+</head>
+<body>
+    <div class="ap-app">
+        <header class="ap-header">
+            <button type="button" class="ap-btn ap-btn-chiudi" id="btn-chiudi">CHIUDI</button>
+            <div class="ap-header-center">
+                <h1 class="ap-title">AGENDA</h1>
+                <p class="ap-subtitle" id="ap-utente"></p>
+            </div>
+            <button type="button" class="ap-btn ap-btn-oggi" id="btn-oggi">OGGI</button>
+        </header>
+
+        <nav class="ap-nav-giorno" aria-label="Navigazione giorno">
+            <button type="button" class="ap-btn ap-btn-cerca ap-btn-lato" id="btn-apri-cerca">CERCA</button>
+            <button type="button" class="ap-nav-btn" id="btn-ieri" title="Giorno precedente">◀</button>
+            <div class="ap-giorno-box">
+                <label class="ap-giorno-label" for="ap-data">Giorno</label>
+                <input type="date" id="ap-data" class="ap-data-input">
+                <p class="ap-giorno-testo" id="ap-giorno-testo"></p>
+            </div>
+            <button type="button" class="ap-nav-btn" id="btn-domani" title="Giorno successivo">▶</button>
+            <button type="button" class="ap-btn ap-btn-aggiungi ap-btn-lato" id="btn-apri-aggiungi">AGGIUNGI</button>
+        </nav>
+
+        <main class="ap-main">
+            <section class="ap-lista-wrap">
+                <div class="ap-lista-head">
+                    <h2 class="ap-lista-title">Promemoria del giorno</h2>
+                    <span class="ap-conteggio" id="ap-conteggio">0</span>
+                </div>
+                <div class="ap-lista" id="ap-lista" aria-live="polite">
+                    <p class="ap-empty">Caricamento…</p>
+                </div>
+            </section>
+        </main>
+
+        <p class="ap-stato" id="ap-stato" aria-live="polite"></p>
+    </div>
+
+    <div id="ap-dialog-conferma" class="ap-dialog-overlay" hidden aria-hidden="true">
+        <div class="ap-dialog" role="dialog" aria-modal="true" aria-labelledby="ap-dialog-messaggio">
+            <p id="ap-dialog-messaggio" class="ap-dialog-messaggio">Eliminare questo appunto?</p>
+            <div class="ap-dialog-actions">
+                <button type="button" id="ap-dialog-si" class="ap-dialog-btn ap-dialog-btn-si" data-label-default="SÌ">SÌ</button>
+                <button type="button" id="ap-dialog-no" class="ap-dialog-btn ap-dialog-btn-no" data-label-default="ANNULLA">ANNULLA</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ap-dialog-data" class="ap-dialog-overlay" hidden aria-hidden="true">
+        <div class="ap-dialog" role="dialog" aria-modal="true" aria-labelledby="ap-dialog-data-titolo">
+            <p id="ap-dialog-data-titolo" class="ap-dialog-messaggio">Scegli una data</p>
+            <label class="ap-dialog-data-label" for="ap-dialog-data-input">Data</label>
+            <input type="date" id="ap-dialog-data-input" class="ap-dialog-data-input">
+            <div class="ap-dialog-actions">
+                <button type="button" id="ap-dialog-data-ok" class="ap-dialog-btn ap-dialog-btn-ok">OK</button>
+                <button type="button" id="ap-dialog-data-no" class="ap-dialog-btn ap-dialog-btn-no">ANNULLA</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ap-dialog-aggiungi" class="ap-dialog-overlay" hidden aria-hidden="true">
+        <div class="ap-dialog ap-dialog-largo" role="dialog" aria-modal="true" aria-labelledby="ap-dialog-aggiungi-titolo">
+            <p id="ap-dialog-aggiungi-titolo" class="ap-dialog-messaggio">Nuovo appunto</p>
+            <label class="ap-dialog-data-label" for="ap-aggiungi-data">Giorno dell'appunto</label>
+            <input type="date" id="ap-aggiungi-data" class="ap-dialog-data-input">
+            <p class="ap-dialog-sottotitolo" id="ap-aggiungi-giorno"></p>
+            <section class="ap-nuovo">
+                <label for="ap-nuovo-testo" class="ap-nuovo-label">Cosa da fare</label>
+                <textarea id="ap-nuovo-testo" class="ap-textarea" rows="3" placeholder="Scrivi qui un promemoria…" maxlength="2000"></textarea>
+
+                <fieldset class="ap-visibilita">
+                    <legend>Chi può vederlo</legend>
+                    <label class="ap-radio">
+                        <input type="radio" name="ap-vis" value="privato" checked>
+                        Solo io
+                    </label>
+                    <label class="ap-radio">
+                        <input type="radio" name="ap-vis" value="selezionati">
+                        Persone scelte
+                    </label>
+                    <label class="ap-radio">
+                        <input type="radio" name="ap-vis" value="tutti">
+                        Tutti
+                    </label>
+                </fieldset>
+
+                <div class="ap-destinatari" id="ap-destinatari" hidden>
+                    <p class="ap-destinatari-hint">Seleziona uno o più utenti:</p>
+                    <div class="ap-destinatari-list" id="ap-destinatari-list">
+                        <p class="ap-empty-mini">Caricamento utenti…</p>
+                    </div>
+                </div>
+            </section>
+            <div class="ap-dialog-actions">
+                <button type="button" class="ap-dialog-btn ap-dialog-btn-ok" id="btn-aggiungi">SALVA</button>
+                <button type="button" class="ap-dialog-btn ap-dialog-btn-no" id="btn-chiudi-aggiungi">ANNULLA</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ap-dialog-cerca" class="ap-dialog-overlay" hidden aria-hidden="true">
+        <div class="ap-dialog ap-dialog-largo" role="dialog" aria-modal="true" aria-labelledby="ap-dialog-cerca-titolo">
+            <p id="ap-dialog-cerca-titolo" class="ap-dialog-messaggio">Cerca un appunto</p>
+            <label for="ap-cerca" class="ap-ricerca-label">Testo</label>
+            <input type="search" id="ap-cerca" class="ap-cerca-input" placeholder="Scrivi cosa ricordi…" maxlength="80">
+            <fieldset class="ap-visibilita ap-modo-ricerca">
+                <legend>Come cercare</legend>
+                <label class="ap-radio">
+                    <input type="radio" name="ap-modo" value="contenuto" checked>
+                    Testo contenuto
+                </label>
+                <label class="ap-radio">
+                    <input type="radio" name="ap-modo" value="esatto">
+                    Testo esatto
+                </label>
+            </fieldset>
+            <div class="ap-dialog-actions">
+                <button type="button" class="ap-dialog-btn ap-dialog-btn-ok" id="btn-cerca">CERCA</button>
+                <button type="button" class="ap-dialog-btn ap-dialog-btn-no" id="btn-chiudi-cerca">CHIUDI</button>
+            </div>
+            <div class="ap-ricerca-risultati" id="ap-ricerca-risultati" hidden></div>
+        </div>
+    </div>
+
+    <script type="module" src="appunti.js"></script>
+</body>
+</html>

@@ -20,6 +20,12 @@ const LOOKUP_META = {
         titolo: 'Tipi pagamento',
         label: 'Tipo di pagamento',
         intro: 'Aggiungi, modifica o elimina i tipi di pagamento (tabella TipoPagamenti_supa).'
+    },
+    mansioni: {
+        titolo: 'Mansioni',
+        label: 'Mansione',
+        intro: 'Aggiungi, modifica o elimina le mansioni operatore (tabella Mansioni_supa). ' +
+            'Ogni mansione diventa una casella in anagrafica socio.'
     }
 };
 
@@ -145,7 +151,10 @@ export function createLookupManager(deps) {
         if (testo) {
             testo.textContent =
                 `Sei sicuro di voler eliminare «${item.valore || ''}» da ${m.titolo}? ` +
-                'L\'operazione non si può annullare.';
+                'L\'operazione non si può annullare.' +
+                (kindAttivo === 'mansioni'
+                    ? ' La casella sparirà dall\'anagrafica; i soci che l\'avevano spuntata mantengono il valore salvato.'
+                    : '');
         }
         if (modal) modal.hidden = false;
     }

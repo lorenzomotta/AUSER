@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verifica anomalie tesseramento - AUSER Asti</title>
+    <link rel="stylesheet" href="responsive-app.css">
+    <link rel="stylesheet" href="verificatesseramenti.css">
+</head>
+<body>
+    <div class="vt-app">
+        <header class="vt-header">
+            <button type="button" class="vt-btn vt-btn-chiudi" id="btn-chiudi">CHIUDI</button>
+            <h1 class="vt-title">VERIFICA EVENTUALI ANOMALIE NEI DATI DI TESSERAMENTO</h1>
+            <div class="vt-header-right">
+                <label class="vt-anno-label" for="vt-anno">ANNO</label>
+                <select id="vt-anno" class="vt-anno-select" title="Anno usato per i rinnovi duplicati"></select>
+                <button type="button" class="vt-btn vt-btn-ricarica" id="btn-ricarica">RICARICA</button>
+                <span class="vt-stato" id="vt-stato" aria-live="polite"></span>
+            </div>
+        </header>
+
+        <main class="vt-grid">
+            <!-- 1. Duplicati anno corrente -->
+            <section class="vt-panel" data-check="duplicati" aria-labelledby="vt-h-duplicati">
+                <header class="vt-panel-head vt-head-duplicati">
+                    <h2 id="vt-h-duplicati">RINNOVO TESSERAMENTI DELL'ANNO CORRENTE DUPLICATI</h2>
+                </header>
+                <div class="vt-panel-toolbar">
+                    <span class="vt-count" id="count-duplicati">0</span>
+                    <span class="vt-count-label">anomalie</span>
+                    <button type="button" class="vt-btn-freccia" data-show="duplicati" title="Mostra elenco" aria-label="Mostra duplicati">
+                        ▶
+                    </button>
+                </div>
+                <div class="vt-panel-body" id="body-duplicati" hidden>
+                    <div class="vt-lista-wrap">
+                        <table class="vt-table">
+                            <thead>
+                                <tr>
+                                    <th>Nominativo</th>
+                                    <th>IdSocio</th>
+                                    <th>Anno</th>
+                                    <th>N° tessera</th>
+                                    <th>Data</th>
+                                    <th>Tipologia</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rows-duplicati"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. Senza data e senza numero -->
+            <section class="vt-panel" data-check="senza-entrambi" aria-labelledby="vt-h-senza-entrambi">
+                <header class="vt-panel-head vt-head-senza-entrambi">
+                    <h2 id="vt-h-senza-entrambi">TESSERAMENTI PRIVI DI DATA TESSERAMENTO e NUMERO TESSERA</h2>
+                </header>
+                <div class="vt-panel-toolbar">
+                    <span class="vt-count" id="count-senza-entrambi">0</span>
+                    <span class="vt-count-label">anomalie</span>
+                    <button type="button" class="vt-btn-freccia" data-show="senza-entrambi" title="Mostra elenco" aria-label="Mostra senza data e numero">
+                        ▶
+                    </button>
+                </div>
+                <div class="vt-panel-body" id="body-senza-entrambi" hidden>
+                    <div class="vt-lista-wrap">
+                        <table class="vt-table">
+                            <thead>
+                                <tr>
+                                    <th>Nominativo</th>
+                                    <th>IdSocio</th>
+                                    <th>Anno</th>
+                                    <th>N° tessera</th>
+                                    <th>Data</th>
+                                    <th>Tipologia</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rows-senza-entrambi"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. Numero senza data -->
+            <section class="vt-panel" data-check="numero-senza-data" aria-labelledby="vt-h-numero-senza-data">
+                <header class="vt-panel-head vt-head-numero-senza-data">
+                    <h2 id="vt-h-numero-senza-data">TESSERAMENTI CON NUMERO TESSERA MA SENZA DATA TESSERAMENTO</h2>
+                </header>
+                <div class="vt-panel-toolbar">
+                    <span class="vt-count" id="count-numero-senza-data">0</span>
+                    <span class="vt-count-label">anomalie</span>
+                    <button type="button" class="vt-btn-freccia" data-show="numero-senza-data" title="Mostra elenco" aria-label="Mostra numero senza data">
+                        ▶
+                    </button>
+                </div>
+                <div class="vt-panel-body" id="body-numero-senza-data" hidden>
+                    <div class="vt-lista-wrap">
+                        <table class="vt-table">
+                            <thead>
+                                <tr>
+                                    <th>Nominativo</th>
+                                    <th>IdSocio</th>
+                                    <th>Anno</th>
+                                    <th>N° tessera</th>
+                                    <th>Data</th>
+                                    <th>Tipologia</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rows-numero-senza-data"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. Data senza numero -->
+            <section class="vt-panel" data-check="data-senza-numero" aria-labelledby="vt-h-data-senza-numero">
+                <header class="vt-panel-head vt-head-data-senza-numero">
+                    <h2 id="vt-h-data-senza-numero">TESSERAMENTI CON DATA TESSERAMENTO MA SENZA NUMERO TESSERA</h2>
+                </header>
+                <div class="vt-panel-toolbar">
+                    <span class="vt-count" id="count-data-senza-numero">0</span>
+                    <span class="vt-count-label">anomalie</span>
+                    <button type="button" class="vt-btn-freccia" data-show="data-senza-numero" title="Mostra elenco" aria-label="Mostra data senza numero">
+                        ▶
+                    </button>
+                </div>
+                <div class="vt-panel-body" id="body-data-senza-numero" hidden>
+                    <div class="vt-lista-wrap">
+                        <table class="vt-table">
+                            <thead>
+                                <tr>
+                                    <th>Nominativo</th>
+                                    <th>IdSocio</th>
+                                    <th>Anno</th>
+                                    <th>N° tessera</th>
+                                    <th>Data</th>
+                                    <th>Tipologia</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rows-data-senza-numero"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script type="module" src="verificatesseramenti.js"></script>
+</body>
+</html>

@@ -438,15 +438,19 @@ export function buildPayloadUpdateServizio(servizio, dati, mergeNoteFineFn) {
             payload,
             row,
             [
+                'update_at',
+                'Update_At',
+                'updated_at',
+                'Updated_At',
+                'Updated',
+                'updated',
                 'modificated',
                 'Modificated',
                 'MODIFICATED',
                 'modified',
-                'Modified',
-                'updated_at',
-                'Updated_At'
+                'Modified'
             ],
-            'modificated',
+            'update_at',
             new Date().toISOString()
         );
     }

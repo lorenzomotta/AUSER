@@ -92,8 +92,11 @@ body {
 .btn-salva:disabled, .btn-salva-tess:disabled { opacity: 0.55; cursor: not-allowed; }
 .btn-cerca-filtro { background-color: #1565c0; color: #fff; }
 .btn-cerca-filtro:hover { background-color: #0d47a1; }
-.btn-azzera-filtro { background-color: #fff; color: #555; border: 1px solid #999; }
-.btn-azzera-filtro:hover { background-color: #eee; }
+.btn-elimina-socio { background-color: #6d1b1b; color: #fff; }
+.btn-elimina-socio:hover { background-color: #4e1212; }
+.btn-elimina-socio:disabled { opacity: 0.55; cursor: not-allowed; }
+.anag-dialog-btn-ok { background: #1565c0; color: #fff; }
+.anag-dialog-btn-ok:hover { background: #0d47a1; }
 
 .anagrafica-container.mode-ricerca .page-title {
     color: #1565c0;
@@ -249,6 +252,64 @@ body {
 .btn-annulla-anagrafica { background-color: #757575; color: #fff; }
 .btn-annulla-tess:hover,
 .btn-annulla-anagrafica:hover { background-color: #616161; }
+.btn-elimina-tess { background-color: #c62828; color: #fff; margin-right: auto; }
+.btn-elimina-tess:hover { background-color: #b71c1c; }
+.btn-elimina-tess:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.anag-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 5000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(33, 33, 33, 0.45);
+}
+
+.anag-dialog-overlay[hidden] {
+    display: none !important;
+}
+
+.anag-dialog {
+    width: min(380px, 100%);
+    background: #fff;
+    border: 2px solid #37474f;
+    border-radius: 6px;
+    padding: 18px 16px 14px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+}
+
+.anag-dialog-messaggio {
+    margin: 0 0 16px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #263238;
+    text-align: center;
+    line-height: 1.4;
+    white-space: pre-line;
+}
+
+.anag-dialog-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.anag-dialog-btn {
+    min-width: 120px;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.anag-dialog-btn-si { background: #c62828; color: #fff; }
+.anag-dialog-btn-si:hover { background: #b71c1c; }
+.anag-dialog-btn-no { background: #78909c; color: #fff; }
+.anag-dialog-btn-no:hover { background: #607d8b; }
 
 .loading-message {
     text-align: center;
@@ -633,6 +694,10 @@ textarea.form-control {
     flex-wrap: wrap;
     align-items: center;
     gap: 10px;
+}
+
+.disponibilita-flags {
+    display: contents;
 }
 
 .flags-sep {

@@ -108,10 +108,20 @@
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-riepilogo-incassi" hidden>INCASSI GIORNALIERI</button>
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-elenco-operatori" hidden>ELENCO OPERATORI</button>
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-riepilogo-pagamenti" hidden>RIEPILOGO PAGAMENTI</button>
-            <div class="sidebar-divider"></div>
-            <div class="sidebar-user" id="sidebar-user" hidden>
-                <span class="sidebar-user-label" id="sidebar-user-label"></span>
-                <button type="button" class="btn btn-sidebar btn-sidebar-logout" id="btn-logout">CAMBIA UTENTE</button>
+            <button class="btn btn-sidebar btn-sidebar-nav" id="btn-verifica-tesseramenti" hidden>VERIFICA TESSERAMENTI</button>
+            <div class="sidebar-footer">
+                <div class="sidebar-divider"></div>
+                <button type="button" class="btn btn-sidebar btn-sidebar-appunti" id="btn-appunti" title="Agenda" hidden>
+                    <span class="agenda-btn-label">AGENDA</span>
+                    <span class="agenda-bustina" id="agenda-bustina" hidden title="Ci sono appunti oggi — apri l'Agenda">
+                        <span class="agenda-bustina-icon" aria-hidden="true">✉</span>
+                        <span class="agenda-bustina-count" id="agenda-bustina-count">0</span>
+                    </span>
+                </button>
+                <div class="sidebar-user" id="sidebar-user" hidden>
+                    <span class="sidebar-user-label" id="sidebar-user-label"></span>
+                    <button type="button" class="btn btn-sidebar btn-sidebar-logout" id="btn-logout">CAMBIA UTENTE</button>
+                </div>
             </div>
         </div>
     </aside>

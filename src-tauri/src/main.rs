@@ -62,6 +62,15 @@ struct SupabaseTablesConfigSection {
     /// Storico annuale: tabella dedicata (Tesseramenti_supa), più righe per IdSocio
     #[serde(default)]
     tesseramenti: Option<String>,
+    #[serde(default)]
+    mansioni: Option<String>,
+    /// Appunti personali (agenda) per utente
+    #[serde(default)]
+    appunti: Option<String>,
+    #[serde(default)]
+    appunti_destinatari: Option<String>,
+    #[serde(default)]
+    appunti_risposte: Option<String>,
     /// Legacy: non esiste tabella operatori — filtrare tesserati.Operatore
     #[serde(alias = "operatori")]
     operatori: Option<String>,
@@ -606,6 +615,18 @@ async fn setup_supabase_from_config(config: &AppConfig) {
             tesseramenti: cfg
                 .and_then(|t| t.tesseramenti.clone())
                 .unwrap_or_else(|| "Tesseramenti_supa".to_string()),
+            mansioni: cfg
+                .and_then(|t| t.mansioni.clone())
+                .unwrap_or_else(|| "Mansioni_supa".to_string()),
+            appunti: cfg
+                .and_then(|t| t.appunti.clone())
+                .unwrap_or_else(|| "appunti_utente".to_string()),
+            appunti_destinatari: cfg
+                .and_then(|t| t.appunti_destinatari.clone())
+                .unwrap_or_else(|| "appunti_destinatari".to_string()),
+            appunti_risposte: cfg
+                .and_then(|t| t.appunti_risposte.clone())
+                .unwrap_or_else(|| "appunti_risposte".to_string()),
         };
 
         let sb_config = SupabaseConfig {
@@ -617,7 +638,7 @@ async fn setup_supabase_from_config(config: &AppConfig) {
         *guard = Some(SupabaseClient::new(sb_config));
         println!(
             "✓ Client Supabase inizializzato ({} tabelle configurate)",
-            17
+            20
         );
         println!(
             "  tesserati={}, tesseramenti={}, servizi={}, automezzi={}, tipo_socio={}",
@@ -733,6 +754,33 @@ async fn fetch_servizi_supabase(filter: Option<&str>) -> Result<Vec<serde_json::
         .fetch_servizi(filter)
         .await
         .map_err(|e| format_supabase_error(&e))
+}
+
+async fn fetch_servizi_anteprima(filter: &str, limit: usize) -> Result<Vec<serde_json::Value>, String> {
+    const COLONNE: &str = "idservizio,Prelievo_Data,Prelievo_Ora,Prelievo_Comune,Prelievo_Indirizzo,Prelievo_Note,IdSocio,Trasportato,Sollevatore,Standard,Carrozzina,Richiedente,Motivazione,Destinazione_Data,Destinazione_Comune,Destinazione_Indirizzo,Destinazione_Note,Donazioni,Incassato,TipoPagamento,Oper,IdOperatore,Oper2,IdOperatore2,Mezzo,Km,Km_uscita,Km_rientro,Tempo,Bonifico_Data,Ricevuta_Data,Ricevuta_numero,StatoServizio,NoteFineServizio,Archiviazione,CreatoDa,ModificatoDa,created_at,update_at";
+    ensure_supabase_client().await?;
+    let tentativi = [
+        (COLONNE, "Prelievo_Data.desc"),
+        ("*", "Prelievo_Data.desc"),
+        ("*", "DATA_PRELIEVO.desc"),
+    ];
+    let mut ultimo_errore = String::new();
+    for (colonne, order) in tentativi {
+        let esito = {
+            let guard = get_supabase_client().lock().await;
+            let client = guard
+                .as_ref()
+                .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+            client
+                .fetch_servizi_limit(filter, order, limit, colonne)
+                .await
+        };
+        match esito {
+            Ok(rows) => return Ok(rows),
+            Err(e) => ultimo_errore = format_supabase_error(&e),
+        }
+    }
+    Err(ultimo_errore)
 }
 
 async fn fetch_servizi_ilike_colonna(
@@ -935,10 +983,10 @@ struct ServizioCompleto {
     creato_da: String,
     #[serde(default)]
     modificato_da: String,
-    /// Timestamp creazione (colonne Supabase: created / created_at)
+    /// Timestamp creazione (colonna Supabase: created_at)
     #[serde(default)]
     created_at: String,
-    /// Timestamp ultima modifica (colonne: modificated / updated_at)
+    /// Timestamp ultima modifica (colonna Supabase: update_at)
     #[serde(default)]
     updated_at: String,
 }
@@ -1010,6 +1058,24 @@ struct SocioAnagrafica {
 struct TesseramentoRecord {
     id: Option<String>,
     idsocio: String,
+    anno: String,
+    numero: String,
+    data: String,
+    scadenza: String,
+    tipologia: String,
+    quota: String,
+    note: String,
+}
+
+/// Tesseramento + nominativo socio (per verifiche anomalie)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct TesseramentoListaItem {
+    id: Option<String>,
+    idsocio: String,
+    nominativo: String,
+    /// true se IdSocio esiste in anagrafica tesserati
+    #[serde(default)]
+    collegato: bool,
     anno: String,
     numero: String,
     data: String,
@@ -1709,6 +1775,21 @@ fn servizi_filter_anno(anno: u32) -> String {
     )
 }
 
+/// Null e false restano. I servizi con Archiviazione = true non partono nello scarico.
+fn servizi_filter_senza_archiviati(base: &str) -> String {
+    format!(
+        "{}&or=(Archiviazione.is.null,Archiviazione.eq.false)",
+        base
+    )
+}
+
+fn servizio_e_archiviato(archivia: &str) -> bool {
+    matches!(
+        archivia.trim().to_lowercase().as_str(),
+        "true" | "si" | "sì" | "1" | "yes" | "y" | "s"
+    )
+}
+
 fn oggi_iso_local() -> String {
     Local::now().format("%Y-%m-%d").to_string()
 }
@@ -1772,7 +1853,13 @@ fn nominativi_cache() -> &'static Mutex<Option<HashMap<String, String>>> {
     NOMINATIVI_CACHE.get_or_init(|| Mutex::new(None))
 }
 
+fn nominativi_load_lock() -> &'static Mutex<()> {
+    static CELL: OnceLock<Mutex<()>> = OnceLock::new();
+    CELL.get_or_init(|| Mutex::new(()))
+}
+
 async fn fetch_idsocio_nominativo_map() -> HashMap<String, String> {
+    let _load = nominativi_load_lock().lock().await;
     {
         let guard = nominativi_cache().lock().await;
         if let Some(ref map) = *guard {
@@ -1926,6 +2013,7 @@ fn tesserati_firma_allineamento() -> &'static Mutex<(usize, usize)> {
     CELL.get_or_init(|| Mutex::new((0, 0)))
 }
 
+#[derive(Clone)]
 struct CandidatoOperatore {
     idsocio: String,
     is_operatore: bool,
@@ -1961,12 +2049,16 @@ fn scegli_idsocio_da_nome(
     None
 }
 
+#[allow(dead_code)]
 fn postgrest_eq_filtro(colonna: &str, valore: &str) -> String {
     let escaped = valore.replace('\\', "\\\\").replace('"', "\\\"");
     let quoted = format!("eq.\"{}\"", escaped);
     format!("{}={}", colonna, urlencoding::encode(&quoted))
 }
 
+// Controllo su tutti i servizi: non parte più aprendo home o elenco.
+// Il numero operatore si sistema solo sulla riga aperta.
+#[allow(dead_code)]
 async fn allinea_id_operatore_da_oper_una_volta() -> Result<(), String> {
     {
         let mut fatto = allineamento_id_operatore_eseguito().lock().await;
@@ -1985,6 +2077,7 @@ async fn allinea_id_operatore_da_oper_una_volta() -> Result<(), String> {
     risultato
 }
 
+#[allow(dead_code)]
 async fn allinea_id_operatore_da_oper_interno() -> Result<(), String> {
     println!("=== Allineamento IdOperatore da colonna Oper ===");
     ensure_supabase_client().await?;
@@ -2169,6 +2262,159 @@ async fn allinea_id_operatore_da_oper_interno() -> Result<(), String> {
         *fatto = false;
     }
     Ok(())
+}
+
+fn mappa_candidati_operatore_cache(
+) -> &'static Mutex<Option<HashMap<String, Vec<CandidatoOperatore>>>> {
+    static CELL: OnceLock<Mutex<Option<HashMap<String, Vec<CandidatoOperatore>>>>> = OnceLock::new();
+    CELL.get_or_init(|| Mutex::new(None))
+}
+
+/// Nome operatore → soci candidati. Si scarica una volta per sessione, solo se serve.
+async fn mappa_candidati_operatore() -> Result<HashMap<String, Vec<CandidatoOperatore>>, String> {
+    {
+        let guard = mappa_candidati_operatore_cache().lock().await;
+        if let Some(ref map) = *guard {
+            return Ok(map.clone());
+        }
+    }
+
+    ensure_supabase_client().await?;
+    let tesserati = {
+        let guard = get_supabase_client().lock().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+        client
+            .fetch_tesserati(None, Some("id,IdSocio,NominativoSocio,Operatore"))
+            .await
+            .map_err(|e| format_supabase_error(&e))?
+    };
+
+    let mut mappa: HashMap<String, Vec<CandidatoOperatore>> = HashMap::new();
+    for row in &tesserati {
+        let nominativo = get_field_any(
+            row,
+            &[
+                "NominativoSocio",
+                "NOMINATIVOSOCIO",
+                "Nominativo",
+                "nominativo_socio",
+            ],
+        );
+        let chiave = nome_operatore_chiave(&nominativo);
+        if chiave.is_empty() {
+            continue;
+        }
+        let idsocio = normalize_idsocio_key(&get_field_any(row, &["IdSocio", "IDSOCIO", "idsocio"]));
+        if idsocio.is_empty() {
+            continue;
+        }
+        let is_operatore = flag_vero(&get_bool_field(
+            row,
+            &["Operatore", "OPERATORE", "operatore"],
+        ));
+        mappa.entry(chiave).or_default().push(CandidatoOperatore {
+            idsocio,
+            is_operatore,
+            nominativo,
+        });
+    }
+
+    let mut cache = mappa_candidati_operatore_cache().lock().await;
+    *cache = Some(mappa.clone());
+    Ok(mappa)
+}
+
+/// Sistema IdOperatore solo sulla riga aperta, se in Oper c'è un nome e il numero non coincide.
+async fn allinea_id_operatore_riga(row: &mut serde_json::Value) {
+    let oper = get_field_any(row, &["Oper", "OPER", "oper"]);
+    let trimmed = oper.trim();
+    if trimmed.is_empty() || trimmed.parse::<i64>().is_ok() {
+        return;
+    }
+    let chiave = nome_operatore_chiave(trimmed);
+    if chiave.is_empty() {
+        return;
+    }
+
+    let id_attuale = normalize_idsocio_key(&get_field_any(
+        row,
+        &["IdOperatore", "IDOPERATORE", "Id_Operatore"],
+    ));
+    if !id_attuale.is_empty() {
+        let nominativi = fetch_idsocio_nominativo_map().await;
+        if let Some(nom) = lookup_nominativo_by_idsocio(&nominativi, &id_attuale) {
+            if nome_operatore_chiave(&nom) == chiave {
+                return;
+            }
+        }
+    }
+
+    let mappa = match mappa_candidati_operatore().await {
+        Ok(m) => m,
+        Err(e) => {
+            println!("⚠️ Allineamento servizio aperto: {}", e);
+            return;
+        }
+    };
+    let Some(candidato) = scegli_idsocio_da_nome(&chiave, &mappa) else {
+        println!(
+            "ℹ️ Servizio {}: operatore '{}' non univoco in anagrafica, IdOperatore non aggiornato",
+            servizio_id_from_row(row),
+            trimmed
+        );
+        return;
+    };
+    if id_attuale == candidato.idsocio {
+        return;
+    }
+    let id_num: i64 = match candidato.idsocio.parse() {
+        Ok(n) => n,
+        Err(_) => {
+            println!(
+                "⚠️ IdSocio non numerico per '{}': {}",
+                trimmed, candidato.idsocio
+            );
+            return;
+        }
+    };
+    let id_servizio = servizio_id_from_row(row);
+    if id_servizio == 0 {
+        return;
+    }
+    let col_id = find_colonna_esatta(
+        row,
+        &["IdOperatore", "IDOPERATORE", "Id_Operatore", "idoperatore"],
+    )
+    .unwrap_or_else(|| "IdOperatore".to_string());
+
+    let mut body = serde_json::Map::new();
+    body.insert(col_id.clone(), serde_json::json!(id_num));
+
+    let patch = {
+        if ensure_supabase_client().await.is_err() {
+            println!("⚠️ Allineamento servizio {}: Supabase non disponibile", id_servizio);
+            return;
+        }
+        let guard = get_supabase_client().lock().await;
+        match guard.as_ref() {
+            Some(client) => client.patch_servizio(id_servizio, &body).await,
+            None => Err("Client Supabase non disponibile".to_string()),
+        }
+    };
+    match patch {
+        Ok(()) => {
+            println!(
+                "✓ Servizio {}: Oper='{}' → IdOperatore={} ({})",
+                id_servizio, trimmed, id_num, candidato.nominativo
+            );
+            if let Some(obj) = row.as_object_mut() {
+                obj.insert(col_id, serde_json::json!(id_num));
+            }
+        }
+        Err(e) => println!("⚠️ PATCH servizio {}: {}", id_servizio, e),
+    }
 }
 
 fn resolve_operatore_nome(row: &serde_json::Value, nominativi: &HashMap<String, String>) -> String {
@@ -2460,23 +2706,27 @@ fn supabase_row_to_servizio_completo(
         created_at: get_field_any(
             row,
             &[
-                "created",
-                "Created",
-                "CREATED",
                 "created_at",
                 "Created_At",
+                "Created",
+                "created",
+                "CREATED",
             ],
         ),
         updated_at: get_field_any(
             row,
             &[
-                "modificated",
-                "Modificated",
-                "MODIFICATED",
-                "modified",
-                "Modified",
+                "update_at",
+                "Update_At",
                 "updated_at",
                 "Updated_At",
+                "Updated",
+                "updated",
+                "UPDATED",
+                "modificated",
+                "Modificated",
+                "modified",
+                "Modified",
             ],
         ),
     })
@@ -2558,9 +2808,6 @@ fn sort_servizi_completi(servizi: &mut [ServizioCompleto]) {
 #[tauri::command]
 async fn get_servizi_giorno() -> Result<Vec<Servizio>, String> {
     println!("=== get_servizi_giorno chiamato (Supabase, solo oggi) ===");
-    if let Err(e) = allinea_id_operatore_da_oper_una_volta().await {
-        println!("⚠️ Allineamento IdOperatore da Oper: {}", e);
-    }
 
     let filter = servizi_filter_solo_oggi();
     let rows = fetch_servizi_home(&filter).await?;
@@ -2592,6 +2839,92 @@ async fn get_servizi_giorno() -> Result<Vec<Servizio>, String> {
         "✓ Trovati {} servizi del giorno ({}) da Supabase",
         servizi.len(),
         oggi_italiano
+    );
+    Ok(servizi)
+}
+
+/// Servizi di un solo giorno, per il report giornaliero (non scarica l'anno intero).
+#[tauri::command]
+async fn get_servizi_report_giorno(data: String) -> Result<Vec<ServizioCompleto>, String> {
+    let trimmed = data.trim();
+    let iso = if trimmed.contains('/') {
+        italian_date_to_iso(trimmed).ok_or_else(|| format!("Data non valida: {}", trimmed))?
+    } else if trimmed.len() >= 10 {
+        trimmed[..10].to_string()
+    } else {
+        return Err(format!("Data non valida: {}", trimmed));
+    };
+    let giorno_dopo = next_day_iso(&iso).ok_or_else(|| format!("Data non valida: {}", iso))?;
+    let data_it = iso_date_to_italiana(&iso).unwrap_or_default();
+    println!("=== get_servizi_report_giorno {} ===", data_it);
+
+    let filter = format!(
+        "Prelievo_Data=gte.{}&Prelievo_Data=lt.{}",
+        iso, giorno_dopo
+    );
+    let rows = fetch_servizi_home(&filter).await?;
+    let nominativi = fetch_idsocio_nominativo_map().await;
+
+    let mut servizi: Vec<ServizioCompleto> = rows
+        .iter()
+        .filter_map(|row| {
+            let raw = servizio_data_raw(row);
+            let stessa_data = raw.starts_with(&iso) || servizio_data_italiana(row) == data_it;
+            if !stessa_data {
+                return None;
+            }
+            supabase_row_to_servizio_completo(row, &nominativi)
+        })
+        .collect();
+
+    servizi.sort_by(|a, b| a.ora_inizio.cmp(&b.ora_inizio));
+    println!("✓ Report giorno {}: {} servizi", data_it, servizi.len());
+    Ok(servizi)
+}
+
+/// Servizi da lunedì a domenica, per il report settimanale (non scarica l'anno intero).
+#[tauri::command]
+async fn get_servizi_report_settimana(dal: String, al: String) -> Result<Vec<ServizioCompleto>, String> {
+    let iso_dal = italian_date_to_iso(dal.trim())
+        .ok_or_else(|| format!("Data iniziale non valida: {}", dal.trim()))?;
+    let iso_al = italian_date_to_iso(al.trim())
+        .ok_or_else(|| format!("Data finale non valida: {}", al.trim()))?;
+    let iso_fine = next_day_iso(&iso_al)
+        .ok_or_else(|| format!("Data finale non valida: {}", al.trim()))?;
+    println!(
+        "=== get_servizi_report_settimana {} → {} ===",
+        dal.trim(),
+        al.trim()
+    );
+
+    let filter = format!(
+        "Prelievo_Data=gte.{}&Prelievo_Data=lt.{}",
+        iso_dal, iso_fine
+    );
+    let rows = fetch_servizi_home(&filter).await?;
+    let nominativi = fetch_idsocio_nominativo_map().await;
+
+    let mut servizi: Vec<ServizioCompleto> = rows
+        .iter()
+        .filter_map(|row| {
+            let raw = servizio_data_raw(row);
+            let iso_riga = if raw.len() >= 10 && raw.as_bytes().get(4) == Some(&b'-') {
+                raw[..10].to_string()
+            } else {
+                italian_date_to_iso(&servizio_data_italiana(row)).unwrap_or_default()
+            };
+            if iso_riga.as_str() < iso_dal.as_str() || iso_riga.as_str() >= iso_fine.as_str() {
+                return None;
+            }
+            supabase_row_to_servizio_completo(row, &nominativi)
+        })
+        .collect();
+
+    println!(
+        "✓ Report settimana {}–{}: {} servizi",
+        dal.trim(),
+        al.trim(),
+        servizi.len()
     );
     Ok(servizi)
 }
@@ -2927,10 +3260,74 @@ async fn get_tessere_da_fare() -> Result<Vec<Tessera>, String> {
     }
 }
 
+fn tesserato_e_archiviato(archivia: &str) -> bool {
+    matches!(
+        archivia.trim().to_lowercase().as_str(),
+        "true" | "si" | "sì" | "1" | "yes" | "y" | "s"
+    )
+}
+
+/// Prova la colonna booleana, poi quella testuale (SI/NO). La prima che risponde viene usata.
+async fn fetch_tesserati_per_archivio(
+    client: &supabase::SupabaseClient,
+    solo_archiviati: bool,
+) -> Result<Vec<serde_json::Value>, String> {
+    const COLONNE: &[&str] = &["Archiviato", "Archivia", "Archiviazione"];
+    let mut ultimo = String::from("Nessun filtro archivio applicabile");
+    for colonna in COLONNE {
+        let filtri = if solo_archiviati {
+            vec![
+                format!(
+                    "or=({colonna}.eq.true,{colonna}.eq.SI,{colonna}.eq.si,{colonna}.eq.1,{colonna}.eq.yes)"
+                ),
+                format!("{colonna}=eq.true"),
+            ]
+        } else {
+            vec![
+                format!(
+                    "or=({colonna}.is.null,{colonna}.eq.false,{colonna}.eq.NO,{colonna}.eq.no,{colonna}.eq.0)"
+                ),
+                format!("or=({colonna}.is.null,{colonna}.eq.false)"),
+            ]
+        };
+        for filtro in filtri {
+            match client.fetch_tesserati(Some(&filtro), None).await {
+                Ok(rows) => {
+                    println!(
+                        "✓ Tesserati filtro archivio ({} righe): {}",
+                        rows.len(),
+                        filtro
+                    );
+                    return Ok(rows);
+                }
+                Err(e) => {
+                    println!("⚠️ Filtro tesserati '{}' fallito: {}", filtro, e);
+                    ultimo = e;
+                }
+            }
+        }
+    }
+    Err(ultimo)
+}
+
 // Comando per ottenere tutti i tesserati da Supabase (Elenco Soci)
 #[tauri::command]
-async fn get_all_tesserati() -> Result<Vec<Tesserato>, String> {
-    println!("=== get_all_tesserati chiamato (Supabase / tesserati_supa) ===");
+async fn get_all_tesserati(
+    escludi_archiviati: Option<bool>,
+    solo_archiviati: Option<bool>,
+) -> Result<Vec<Tesserato>, String> {
+    let solo = solo_archiviati.unwrap_or(false);
+    let escludi = escludi_archiviati.unwrap_or(false) && !solo;
+    println!(
+        "=== get_all_tesserati chiamato (Supabase / tesserati_supa){} ===",
+        if solo {
+            ", solo archiviati"
+        } else if escludi {
+            ", senza archiviati"
+        } else {
+            ""
+        }
+    );
 
     ensure_supabase_client().await?;
 
@@ -2938,12 +3335,34 @@ async fn get_all_tesserati() -> Result<Vec<Tesserato>, String> {
     let mut riallinea_oper = false;
 
     let result = if let Some(client) = client_guard.as_ref() {
-        let rows = client
-            .fetch_tesserati(None, None)
-            .await
-            .map_err(|e| format_supabase_error(&e))?;
+        let (rows, filtro_archivio_ok) = if solo || escludi {
+            match fetch_tesserati_per_archivio(client, solo).await {
+                Ok(rows) => (rows, true),
+                Err(e) => {
+                    println!(
+                        "⚠️ Filtro archiviati non applicato ({}), scarico tutti e filtro in locale",
+                        e
+                    );
+                    (
+                        client
+                            .fetch_tesserati(None, None)
+                            .await
+                            .map_err(|e| format_supabase_error(&e))?,
+                        false,
+                    )
+                }
+            }
+        } else {
+            (
+                client
+                    .fetch_tesserati(None, None)
+                    .await
+                    .map_err(|e| format_supabase_error(&e))?,
+                false,
+            )
+        };
 
-        if rows.is_empty() {
+        if rows.is_empty() && !solo && !escludi {
             println!("⚠️ Nessun tesserato trovato in Supabase");
             return Ok(vec![]);
         }
@@ -2952,6 +3371,30 @@ async fn get_all_tesserati() -> Result<Vec<Tesserato>, String> {
             .iter()
             .filter_map(supabase_row_to_tesserato)
             .collect();
+
+        if (solo || escludi) && !filtro_archivio_ok {
+            let before = tesserati.len();
+            tesserati.retain(|t| solo == tesserato_e_archiviato(&t.archivia));
+            println!(
+                "  Filtro archiviati lato Rust: {} → {} soci",
+                before,
+                tesserati.len()
+            );
+        } else if solo || escludi {
+            // Se il filtro SQL ha usato una colonna vuota, togli comunque chi risulta archiviato.
+            let before = tesserati.len();
+            tesserati.retain(|t| {
+                let arch = tesserato_e_archiviato(&t.archivia);
+                if solo { arch } else { !arch }
+            });
+            if tesserati.len() != before {
+                println!(
+                    "  Filtro archiviati di sicurezza: {} → {} soci",
+                    before,
+                    tesserati.len()
+                );
+            }
+        }
 
         // Telefono in elenco = telefono principale da Telefoni_supa (con riferimento)
         match client.fetch_telefoni(None).await {
@@ -3020,12 +3463,14 @@ async fn get_all_tesserati() -> Result<Vec<Tesserato>, String> {
         );
 
         let firma_nuova = (tesserati.len(), operatore_count);
-        riallinea_oper = {
-            let mut firma = tesserati_firma_allineamento().lock().await;
-            let changed = *firma != (0, 0) && *firma != firma_nuova;
-            *firma = firma_nuova;
-            changed
-        };
+        if !solo && !escludi {
+            riallinea_oper = {
+                let mut firma = tesserati_firma_allineamento().lock().await;
+                let changed = *firma != (0, 0) && *firma != firma_nuova;
+                *firma = firma_nuova;
+                changed
+            };
+        }
 
         Ok(tesserati)
     } else {
@@ -3039,9 +3484,168 @@ async fn get_all_tesserati() -> Result<Vec<Tesserato>, String> {
         );
         *allineamento_id_operatore_eseguito().lock().await = false;
         *nominativi_cache().lock().await = None;
+        *mappa_candidati_operatore_cache().lock().await = None;
     }
 
     result
+}
+
+/// Risolve IdSocio → (id canonico in tesserati, nominativo).
+/// Usa chiavi normalizzate (trim / senza zeri iniziali) per allineare Access/Supabase.
+fn build_idsocio_anagrafica_map(
+    tesserati_rows: &[serde_json::Value],
+) -> HashMap<String, (String, String)> {
+    let mut map: HashMap<String, (String, String)> = HashMap::new();
+    for row in tesserati_rows {
+        let id_raw = get_field_any(row, &["IdSocio", "IDSOCIO", "idsocio"]);
+        if id_raw.trim().is_empty() {
+            continue;
+        }
+        let id_canon = id_raw.trim().to_string();
+        let nom = get_field_any(
+            row,
+            &[
+                "NominativoSocio",
+                "NOMINATIVOSOCIO",
+                "Nominativo",
+                "NOMINATIVO",
+                "nominativo_socio",
+            ],
+        );
+        let entry = (id_canon.clone(), nom);
+        // Inserisci sia grezzo che normalizzato, così "0123" e "123" trovano lo stesso socio
+        map.insert(id_canon.clone(), entry.clone());
+        let norm = normalize_idsocio_key(&id_canon);
+        if !norm.is_empty() {
+            map.insert(norm, entry);
+        }
+    }
+    map
+}
+
+fn resolve_tesseramento_socio(
+    idsocio_raw: &str,
+    anag: &HashMap<String, (String, String)>,
+) -> (String, String, bool) {
+    let trimmed = idsocio_raw.trim();
+    if trimmed.is_empty() {
+        return (String::new(), String::new(), false);
+    }
+    if let Some((canon, nom)) = anag.get(trimmed) {
+        return (canon.clone(), nom.clone(), true);
+    }
+    let norm = normalize_idsocio_key(trimmed);
+    if !norm.is_empty() {
+        if let Some((canon, nom)) = anag.get(&norm) {
+            return (canon.clone(), nom.clone(), true);
+        }
+    }
+    // Nessun match in anagrafica: restituisci comunque l'id normalizzato (meglio di zeri iniziali)
+    let fallback = if norm.is_empty() {
+        trimmed.to_string()
+    } else {
+        norm
+    };
+    (fallback, String::new(), false)
+}
+
+/// Tutti i tesseramenti (storico) con nominativo, per la videata verifica anomalie.
+#[tauri::command]
+async fn get_all_tesseramenti() -> Result<Vec<TesseramentoListaItem>, String> {
+    println!("=== get_all_tesseramenti chiamato ===");
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+
+    if let Some(client) = client_guard.as_ref() {
+        let rows = client
+            .fetch_tesseramenti(None)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+
+        let anag_map = match client.fetch_tesserati(None, None).await {
+            Ok(tesserati_rows) => build_idsocio_anagrafica_map(&tesserati_rows),
+            Err(e) => {
+                println!(
+                    "⚠️ Impossibile caricare nominativi tesserati per arricchire tesseramenti: {}",
+                    e
+                );
+                HashMap::new()
+            }
+        };
+
+        let mut list: Vec<TesseramentoListaItem> = rows
+            .iter()
+            .map(|row| {
+                let tess = supabase_row_to_tesseramento(row);
+                let (idsocio, nominativo, collegato) =
+                    resolve_tesseramento_socio(&tess.idsocio, &anag_map);
+                TesseramentoListaItem {
+                    id: tess.id,
+                    idsocio,
+                    nominativo,
+                    collegato,
+                    anno: tess.anno,
+                    numero: tess.numero,
+                    data: tess.data,
+                    scadenza: tess.scadenza,
+                    tipologia: tess.tipologia,
+                    quota: tess.quota,
+                    note: tess.note,
+                }
+            })
+            .collect();
+
+        let orfani = list.iter().filter(|t| !t.collegato).count();
+        list.sort_by(|a, b| {
+            a.nominativo
+                .to_lowercase()
+                .cmp(&b.nominativo.to_lowercase())
+                .then_with(|| {
+                    let ya = a.anno.parse::<i32>().unwrap_or(0);
+                    let yb = b.anno.parse::<i32>().unwrap_or(0);
+                    yb.cmp(&ya)
+                })
+        });
+
+        println!(
+            "✓ get_all_tesseramenti: {} riga/e (non collegati ad anagrafica: {})",
+            list.len(),
+            orfani
+        );
+        Ok(list)
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+/// Cerca un tesserato per IdSocio (prova grezzo + normalizzato, es. 0123 → 123).
+async fn fetch_tesserato_row_by_idsocio(
+    client: &SupabaseClient,
+    idsocio: &str,
+) -> Result<Option<serde_json::Value>, String> {
+    let trimmed = idsocio.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    let mut tried = Vec::new();
+    for candidate in [trimmed.to_string(), normalize_idsocio_key(trimmed)] {
+        if candidate.is_empty() || tried.iter().any(|t| t == &candidate) {
+            continue;
+        }
+        tried.push(candidate.clone());
+        let filter = format!("IdSocio=eq.{}", candidate);
+        let rows = client
+            .fetch_tesserati(Some(&filter), None)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+        if let Some(row) = rows.into_iter().next() {
+            return Ok(Some(row));
+        }
+    }
+    Ok(None)
 }
 
 // Anagrafica completa di un socio (dati + storico tesseramenti)
@@ -3054,17 +3658,21 @@ async fn get_socio_anagrafica(idsocio: String) -> Result<SocioAnagraficaCompleta
     let client_guard = get_supabase_client().lock().await;
 
     if let Some(client) = client_guard.as_ref() {
-        let filter = format!("IdSocio=eq.{}", idsocio);
-        let rows = client
-            .fetch_tesserati(Some(&filter), None)
-            .await
-            .map_err(|e| format_supabase_error(&e))?;
+        let richiesto = idsocio.trim().to_string();
+        let row = fetch_tesserato_row_by_idsocio(client, &richiesto)
+            .await?
+            .ok_or_else(|| format!("Socio IdSocio={} non trovato", richiesto))?;
 
-        let row = rows
-            .first()
-            .ok_or_else(|| format!("Socio IdSocio={} non trovato", idsocio))?;
+        // Usa l'IdSocio reale della riga anagrafica per telefoni / tesseramenti
+        let idsocio = get_field_any(&row, &["IdSocio", "IDSOCIO", "idsocio"]);
+        if idsocio.is_empty() {
+            return Err(format!(
+                "Socio trovato ma senza IdSocio valido (richiesto: {})",
+                richiesto
+            ));
+        }
 
-        let anagrafica = supabase_row_to_anagrafica(row)
+        let anagrafica = supabase_row_to_anagrafica(&row)
             .ok_or_else(|| format!("Dati anagrafici non validi per IdSocio={}", idsocio))?;
 
         let contatti_filter = format!("IdSocio=eq.{}", idsocio);
@@ -3138,36 +3746,58 @@ async fn get_socio_anagrafica(idsocio: String) -> Result<SocioAnagraficaCompleta
             anagrafica.telefono = tel_princ;
         }
 
-        // Storico: tutte le righe in Tesseramenti_supa collegate per IdSocio
-        let tess_filter = format!("IdSocio=eq.{}", idsocio);
-        let mut tesseramenti: Vec<TesseramentoRecord> = match client
-            .fetch_tesseramenti(Some(&tess_filter))
-            .await
+        // Storico: prova IdSocio canonico e (se diverso) quello richiesto (es. 0123 vs 123)
+        let mut tesseramenti: Vec<TesseramentoRecord> = Vec::new();
+        let mut seen_tess = std::collections::HashSet::new();
+        let mut id_varianti = vec![idsocio.clone()];
+        if !richiesto.is_empty() && richiesto != idsocio {
+            id_varianti.push(richiesto.clone());
+        }
+        let norm_rich = normalize_idsocio_key(&richiesto);
+        if !norm_rich.is_empty()
+            && !id_varianti.iter().any(|v| v == &norm_rich)
         {
-            Ok(rows) => {
-                println!(
-                    "✓ Storico Tesseramenti_supa: {} riga/e per IdSocio={}",
-                    rows.len(),
-                    idsocio
-                );
-                rows.iter().map(supabase_row_to_tesseramento).collect()
+            id_varianti.push(norm_rich);
+        }
+
+        for id_var in &id_varianti {
+            let tess_filter = format!("IdSocio=eq.{}", id_var);
+            match client.fetch_tesseramenti(Some(&tess_filter)).await {
+                Ok(rows) => {
+                    println!(
+                        "✓ Storico Tesseramenti_supa: {} riga/e per IdSocio={}",
+                        rows.len(),
+                        id_var
+                    );
+                    for r in rows {
+                        let tess = supabase_row_to_tesseramento(&r);
+                        let key = tess
+                            .id
+                            .clone()
+                            .unwrap_or_else(|| {
+                                format!("{}|{}|{}|{}", tess.idsocio, tess.anno, tess.numero, tess.data)
+                            });
+                        if seen_tess.insert(key) {
+                            tesseramenti.push(tess);
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!(
+                        "⚠️ Storico tesseramenti non disponibile per IdSocio={} ({})",
+                        id_var, e
+                    );
+                }
             }
-            Err(e) => {
-                println!(
-                    "⚠️ Storico tesseramenti non disponibile ({}), uso solo campi su tesserati",
-                    e
-                );
-                Vec::new()
-            }
-        };
+        }
 
         // Se lo storico è vuoto (tabella assente o non ancora popolata),
         // mostra almeno il tesseramento corrente dalle colonne su tesserati
         if tesseramenti.is_empty() {
-            if let Some(legacy) = tesseramento_from_tesserato_row(row) {
+            if let Some(legacy) = tesseramento_from_tesserato_row(&row) {
                 tesseramenti.push(legacy);
             }
-        } else if let Some(legacy) = tesseramento_from_tesserato_row(row) {
+        } else if let Some(legacy) = tesseramento_from_tesserato_row(&row) {
             // Completa numero tessera dall'anagrafica se manca sullo storico
             for tess in &mut tesseramenti {
                 if tess.numero.is_empty() && tess.anno == legacy.anno {
@@ -3634,6 +4264,134 @@ async fn save_tesseramento(tesseramento: TesseramentoRecord) -> Result<Tesserame
     } else {
         Err("Client Supabase non disponibile".to_string())
     }
+}
+
+async fn riallinea_tesseramento_corrente(
+    client: &supabase::SupabaseClient,
+    idsocio: &str,
+) -> Result<(), String> {
+    let filter = format!("IdSocio=eq.{}", idsocio);
+    let rows = client
+        .fetch_tesseramenti(Some(&filter))
+        .await
+        .unwrap_or_default();
+    let mut rimasti: Vec<TesseramentoRecord> = rows.iter().map(supabase_row_to_tesseramento).collect();
+    rimasti.sort_by(|a, b| {
+        b.anno
+            .parse::<i32>()
+            .unwrap_or(0)
+            .cmp(&a.anno.parse::<i32>().unwrap_or(0))
+    });
+
+    if let Some(corrente) = rimasti.first() {
+        let numero = serde_json::json!(corrente.numero);
+        let data = italian_date_to_iso(&corrente.data)
+            .filter(|s| !s.is_empty())
+            .map(|s| serde_json::json!(s));
+        let tipologia = if corrente.tipologia.trim().is_empty() {
+            None
+        } else {
+            Some(serde_json::json!(corrente.tipologia))
+        };
+        client
+            .sync_tesseramento_su_tesserati(
+                idsocio,
+                &corrente.anno,
+                Some(&numero),
+                data.as_ref(),
+                tipologia.as_ref(),
+            )
+            .await
+    } else {
+        let mut patch = serde_json::Map::new();
+        patch.insert("Tesseramento_Anno".to_string(), serde_json::Value::Null);
+        patch.insert("Tesseramento_Numero".to_string(), serde_json::Value::Null);
+        patch.insert("Tesseramento_Data".to_string(), serde_json::Value::Null);
+        client.patch_tesserato(idsocio, &patch).await
+    }
+}
+
+#[tauri::command]
+async fn delete_tesseramento(tesseramento: TesseramentoRecord) -> Result<(), String> {
+    println!(
+        "=== delete_tesseramento IdSocio={} Anno={} id={:?} ===",
+        tesseramento.idsocio, tesseramento.anno, tesseramento.id
+    );
+
+    let idsocio = tesseramento.idsocio.trim().to_string();
+    if idsocio.is_empty() {
+        return Err("IdSocio obbligatorio per eliminare il tesseramento".to_string());
+    }
+
+    ensure_supabase_client().await?;
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    if let Some(id) = tesseramento
+        .id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        client
+            .delete_tesseramento(id)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+    }
+
+    if let Err(e) = riallinea_tesseramento_corrente(client, &idsocio).await {
+        println!("⚠️ Riallineamento tessera su anagrafica dopo delete: {}", e);
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct DeleteSocioResult {
+    eliminato: bool,
+    ha_servizi: bool,
+}
+
+#[tauri::command]
+async fn delete_socio_anagrafica(idsocio: String) -> Result<DeleteSocioResult, String> {
+    let idsocio = normalize_idsocio_key(idsocio.trim());
+    if idsocio.is_empty() {
+        return Err("IdSocio obbligatorio".to_string());
+    }
+    println!("=== delete_socio_anagrafica IdSocio={} ===", idsocio);
+
+    ensure_supabase_client().await?;
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    let ha_servizi = client
+        .socio_ha_servizi_collegati(&idsocio)
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+    if ha_servizi {
+        println!("  socio {} non eliminato: ha servizi collegati", idsocio);
+        return Ok(DeleteSocioResult {
+            eliminato: false,
+            ha_servizi: true,
+        });
+    }
+
+    for tabella in ["tesseramenti", "telefoni", "email", "tesserati"] {
+        client
+            .delete_righe_idsocio(tabella, &idsocio)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+    }
+
+    println!("✓ Socio {} eliminato", idsocio);
+    Ok(DeleteSocioResult {
+        eliminato: true,
+        ha_servizi: false,
+    })
 }
 
 fn idsocio_json_value(idsocio: &str) -> serde_json::Value {
@@ -4517,6 +5275,28 @@ fn supabase_row_to_user_permissions(row: &serde_json::Value) -> UserPermissionsR
     }
 }
 
+/// True se l'utente può vedere l'Agenda (stessa logica della sidebar JS).
+fn user_can_see_agenda(p: &UserPermissionsRecord) -> bool {
+    if p.is_admin {
+        return true;
+    }
+    if !p.programma {
+        return false;
+    }
+    match &p.sidebar_menu {
+        serde_json::Value::Object(map) => match map.get("appunti") {
+            Some(serde_json::Value::Bool(true)) => true,
+            Some(serde_json::Value::String(s)) => {
+                let t = s.trim().to_ascii_lowercase();
+                t == "true" || t == "1"
+            }
+            Some(serde_json::Value::Number(n)) => n.as_i64() == Some(1),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
 /// Chiavi pubbliche per login Auth (senza secret)
 #[tauri::command]
 async fn get_supabase_auth_config() -> Result<serde_json::Value, String> {
@@ -4557,6 +5337,786 @@ async fn get_supabase_auth_config() -> Result<serde_json::Value, String> {
                 .unwrap_or_else(|| "user_permissions".to_string())
         }
     }))
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct AppuntoRecord {
+    id: Option<String>,
+    user_id: String,
+    #[serde(default)]
+    autore_username: String,
+    /// Data giorno in formato YYYY-MM-DD
+    data: String,
+    testo: String,
+    fatto: bool,
+    ordine: i32,
+    /// privato | selezionati | tutti
+    #[serde(default = "default_visibilita_privato")]
+    visibilita: String,
+    /// user_id destinatari (se selezionati)
+    #[serde(default)]
+    destinatari: Vec<String>,
+    /// Nomi destinatari (solo in lettura)
+    #[serde(default)]
+    destinatari_nomi: Vec<String>,
+    /// Numero risposte (solo in lettura)
+    #[serde(default)]
+    num_risposte: i32,
+}
+
+fn default_visibilita_privato() -> String {
+    "privato".to_string()
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct UtenteAppuntiItem {
+    user_id: String,
+    username: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct AppuntoRispostaRecord {
+    id: Option<String>,
+    appunto_id: String,
+    user_id: String,
+    #[serde(default)]
+    username: String,
+    testo: String,
+    #[serde(default)]
+    created_at: String,
+}
+
+fn supabase_row_to_risposta(row: &serde_json::Value) -> AppuntoRispostaRecord {
+    AppuntoRispostaRecord {
+        id: row.get("id").map(|v| {
+            v.as_str()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| json_to_string(v))
+        }),
+        appunto_id: get_field_any(row, &["appunto_id", "AppuntoId"]),
+        user_id: get_field_any(row, &["user_id", "UserId"]),
+        username: get_field_any(row, &["username", "Username", "USERNAME"]),
+        testo: get_field_any(row, &["testo", "Testo"]),
+        created_at: get_field_any(row, &["created_at", "CreatedAt"]),
+    }
+}
+
+/// Verifica se l'utente può vedere/rispondere a un appunto.
+async fn utente_puo_accedere_appunto(
+    client: &SupabaseClient,
+    appunto_id: &str,
+    user_id: &str,
+) -> Result<(bool, String), String> {
+    let filter = format!("id=eq.{}", appunto_id.trim());
+    let rows = client
+        .fetch_table("appunti", Some(&filter), None, None)
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+    let row = rows
+        .first()
+        .ok_or_else(|| "Appunto non trovato".to_string())?;
+    let a = supabase_row_to_appunto(row);
+    let uid = user_id.trim();
+    if a.user_id == uid {
+        return Ok((true, a.visibilita));
+    }
+    if a.visibilita == "tutti" {
+        return Ok((true, a.visibilita));
+    }
+    if a.visibilita == "selezionati" {
+        let dest = client
+            .fetch_appunti_destinatari_for_appunto(appunto_id)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+        let ok = dest.iter().any(|r| {
+            get_field_any(r, &["user_id", "UserId"]) == uid
+        });
+        return Ok((ok, a.visibilita));
+    }
+    Ok((false, a.visibilita))
+}
+
+fn normalize_visibilita(raw: &str) -> String {
+    match raw.trim().to_lowercase().as_str() {
+        "tutti" | "all" | "pubblico" => "tutti".to_string(),
+        "selezionati" | "scelti" | "selected" => "selezionati".to_string(),
+        _ => "privato".to_string(),
+    }
+}
+
+fn supabase_row_to_appunto(row: &serde_json::Value) -> AppuntoRecord {
+    let data_raw = get_field_any(row, &["data", "Data", "DATA"]);
+    let data = if data_raw.len() >= 10 {
+        data_raw.chars().take(10).collect()
+    } else {
+        data_raw
+    };
+    let fatto = matches!(
+        get_bool_field(row, &["fatto", "Fatto", "FATTO"])
+            .to_lowercase()
+            .as_str(),
+        "true" | "si" | "sì" | "1" | "yes"
+    );
+    let ordine = get_field_any(row, &["ordine", "Ordine", "ORDINE"])
+        .parse::<i32>()
+        .unwrap_or(0);
+    let visibilita = normalize_visibilita(&get_field_any(
+        row,
+        &["visibilita", "Visibilita", "VISIBILITA"],
+    ));
+    AppuntoRecord {
+        id: row.get("id").map(|v| {
+            v.as_str()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| json_to_string(v))
+        }),
+        user_id: get_field_any(row, &["user_id", "UserId", "USER_ID"]),
+        autore_username: get_field_any(
+            row,
+            &["autore_username", "AutoreUsername", "autore"],
+        ),
+        data,
+        testo: get_field_any(row, &["testo", "Testo", "TESTSTO"]),
+        fatto,
+        ordine,
+        visibilita,
+        destinatari: Vec::new(),
+        destinatari_nomi: Vec::new(),
+        num_risposte: 0,
+    }
+}
+
+/// Normalizza data giorno: accetta YYYY-MM-DD o DD/MM/YYYY → YYYY-MM-DD
+fn normalize_appunto_data(raw: &str) -> Result<String, String> {
+    let s = raw.trim();
+    if s.len() >= 10 && s.chars().nth(4) == Some('-') {
+        return Ok(s.chars().take(10).collect());
+    }
+    let parts: Vec<&str> = s.split('/').collect();
+    if parts.len() == 3 {
+        let d = parts[0].trim();
+        let m = parts[1].trim();
+        let y = parts[2].trim();
+        if y.len() == 4 && !d.is_empty() && !m.is_empty() {
+            return Ok(format!(
+                "{}-{:0>2}-{:0>2}",
+                y,
+                m.parse::<u32>().unwrap_or(0),
+                d.parse::<u32>().unwrap_or(0)
+            ));
+        }
+    }
+    Err(format!("Data appunto non valida: {}", raw))
+}
+
+async fn enrich_appunti_destinatari(
+    client: &SupabaseClient,
+    list: &mut [AppuntoRecord],
+    nomi: &HashMap<String, String>,
+) -> Result<(), String> {
+    for a in list.iter_mut() {
+        if a.visibilita != "selezionati" {
+            continue;
+        }
+        let Some(ref id) = a.id else { continue };
+        let rows = client
+            .fetch_appunti_destinatari_for_appunto(id)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+        let mut ids = Vec::new();
+        let mut labels = Vec::new();
+        for r in rows {
+            let uid = get_field_any(&r, &["user_id", "UserId", "USER_ID"]);
+            if uid.is_empty() {
+                continue;
+            }
+            let nom = nomi
+                .get(&uid)
+                .cloned()
+                .unwrap_or_else(|| uid.clone());
+            ids.push(uid);
+            labels.push(nom);
+        }
+        a.destinatari = ids;
+        a.destinatari_nomi = labels;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_utenti_per_appunti(user_id: String) -> Result<Vec<UtenteAppuntiItem>, String> {
+    let uid = user_id.trim();
+    if uid.is_empty() {
+        return Err("user_id obbligatorio".to_string());
+    }
+    ensure_supabase_client().await?;
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let rows = client
+            .fetch_user_permissions(None)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+        let mut list: Vec<UtenteAppuntiItem> = rows
+            .iter()
+            .map(supabase_row_to_user_permissions)
+            .filter(|p| !p.user_id.trim().is_empty())
+            // Solo chi può vedere l'Agenda (admin o permesso sidebar "appunti")
+            .filter(user_can_see_agenda)
+            .map(|p| {
+                let user_id = p.user_id;
+                let username = if p.username.trim().is_empty() {
+                    user_id.clone()
+                } else {
+                    p.username
+                };
+                UtenteAppuntiItem { user_id, username }
+            })
+            .collect();
+        list.sort_by(|a, b| {
+            a.username
+                .to_lowercase()
+                .cmp(&b.username.to_lowercase())
+        });
+        Ok(list)
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+#[tauri::command]
+async fn get_appunti_giorno(user_id: String, data: String) -> Result<Vec<AppuntoRecord>, String> {
+    let uid = user_id.trim().to_string();
+    let day = normalize_appunto_data(&data)?;
+    if uid.is_empty() {
+        return Err("user_id obbligatorio".to_string());
+    }
+    println!("=== get_appunti_giorno user_id={} data={} ===", uid, day);
+
+    ensure_supabase_client().await?;
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let mut by_id: HashMap<String, AppuntoRecord> = HashMap::new();
+
+        // 1) I miei
+        let miei = client
+            .fetch_appunti_by_owner_day(&uid, &day)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+        for row in &miei {
+            let a = supabase_row_to_appunto(row);
+            if let Some(ref id) = a.id {
+                by_id.insert(id.clone(), a);
+            }
+        }
+
+        // 2) Visibili a tutti (quel giorno)
+        match client.fetch_appunti_tutti_day(&day).await {
+            Ok(tutti) => {
+                for row in &tutti {
+                    let a = supabase_row_to_appunto(row);
+                    if let Some(ref id) = a.id {
+                        by_id.entry(id.clone()).or_insert(a);
+                    }
+                }
+            }
+            Err(e) => {
+                // Colonna visibilita assente: solo privati
+                println!("⚠️ fetch appunti tutti: {} (esegui SQL aggiornato?)", e);
+            }
+        }
+
+        // 3) Dove sono destinatario
+        match client.fetch_appunti_destinatari_for_user(&uid).await {
+            Ok(dest_rows) => {
+                let mut ids: Vec<String> = dest_rows
+                    .iter()
+                    .map(|r| get_field_any(r, &["appunto_id", "AppuntoId", "appuntoId"]))
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                ids.sort();
+                ids.dedup();
+                if !ids.is_empty() {
+                    let shared = client
+                        .fetch_appunti_by_ids(&ids)
+                        .await
+                        .map_err(|e| format_supabase_error(&e))?;
+                    for row in &shared {
+                        let a = supabase_row_to_appunto(row);
+                        if a.data != day {
+                            continue;
+                        }
+                        if let Some(ref id) = a.id {
+                            by_id.entry(id.clone()).or_insert(a);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                println!("⚠️ fetch destinatari appunti: {} (esegui SQL aggiornato?)", e);
+            }
+        }
+
+        // Mappa username
+        let mut nomi: HashMap<String, String> = HashMap::new();
+        if let Ok(perm_rows) = client.fetch_user_permissions(None).await {
+            for row in &perm_rows {
+                let p = supabase_row_to_user_permissions(row);
+                if !p.user_id.is_empty() {
+                    let label = if p.username.trim().is_empty() {
+                        p.user_id.clone()
+                    } else {
+                        p.username.clone()
+                    };
+                    nomi.insert(p.user_id, label);
+                }
+            }
+        }
+
+        let mut list: Vec<AppuntoRecord> = by_id.into_values().collect();
+        for a in &mut list {
+            if a.autore_username.trim().is_empty() {
+                if let Some(n) = nomi.get(&a.user_id) {
+                    a.autore_username = n.clone();
+                }
+            }
+        }
+        enrich_appunti_destinatari(client, &mut list, &nomi).await?;
+
+        // Conteggio risposte
+        let ids: Vec<String> = list.iter().filter_map(|a| a.id.clone()).collect();
+        if !ids.is_empty() {
+            match client.fetch_appunti_risposte_by_appunti(&ids).await {
+                Ok(risp) => {
+                    let mut counts: HashMap<String, i32> = HashMap::new();
+                    for r in &risp {
+                        let aid = get_field_any(r, &["appunto_id", "AppuntoId"]);
+                        if !aid.is_empty() {
+                            *counts.entry(aid).or_insert(0) += 1;
+                        }
+                    }
+                    for a in &mut list {
+                        if let Some(ref id) = a.id {
+                            a.num_risposte = *counts.get(id).unwrap_or(&0);
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("⚠️ Conteggio risposte non disponibile: {}", e);
+                }
+            }
+        }
+
+        list.sort_by(|a, b| {
+            let own_a = if a.user_id == uid { 0 } else { 1 };
+            let own_b = if b.user_id == uid { 0 } else { 1 };
+            own_a
+                .cmp(&own_b)
+                .then_with(|| a.ordine.cmp(&b.ordine))
+                .then_with(|| {
+                    a.autore_username
+                        .to_lowercase()
+                        .cmp(&b.autore_username.to_lowercase())
+                })
+        });
+
+        println!("✓ Appunti giorno {}: {} riga/e", day, list.len());
+        Ok(list)
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+fn pulisci_testo_ricerca(raw: &str) -> String {
+    raw.trim()
+        .chars()
+        .filter(|c| !matches!(c, '%' | '*' | ',' | '(' | ')' | '&' | '=' | '\\' | '"' | '\''))
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Cerca negli appunti visibili all'utente (propri, per tutti, o dove è destinatario).
+#[tauri::command]
+async fn cerca_appunti(
+    user_id: String,
+    testo: String,
+    modo: Option<String>,
+) -> Result<Vec<AppuntoRecord>, String> {
+    let uid = user_id.trim().to_string();
+    let q = pulisci_testo_ricerca(&testo);
+    let esatto = modo
+        .as_deref()
+        .unwrap_or("contenuto")
+        .trim()
+        .eq_ignore_ascii_case("esatto");
+    if uid.is_empty() {
+        return Err("user_id obbligatorio".to_string());
+    }
+    if q.is_empty() || (!esatto && q.chars().count() < 2) {
+        return Err(if esatto {
+            "Scrivi il testo esatto dell'appunto".to_string()
+        } else {
+            "Scrivi almeno 2 lettere".to_string()
+        });
+    }
+    println!(
+        "=== cerca_appunti user_id={} modo={} testo='{}' ===",
+        uid,
+        if esatto { "esatto" } else { "contenuto" },
+        q
+    );
+
+    ensure_supabase_client().await?;
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    let mut by_id: HashMap<String, AppuntoRecord> = HashMap::new();
+    let inserisci = |by_id: &mut HashMap<String, AppuntoRecord>, rows: &[serde_json::Value]| {
+        for row in rows {
+            let a = supabase_row_to_appunto(row);
+            if let Some(ref id) = a.id {
+                by_id.entry(id.clone()).or_insert(a);
+            }
+        }
+    };
+
+    let miei = client
+        .fetch_appunti_testo(&format!("user_id=eq.{}", uid), &q, esatto)
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+    inserisci(&mut by_id, &miei);
+
+    match client
+        .fetch_appunti_testo("visibilita=eq.tutti", &q, esatto)
+        .await
+    {
+        Ok(tutti) => inserisci(&mut by_id, &tutti),
+        Err(e) => println!("⚠️ cerca appunti tutti: {}", e),
+    }
+
+    if let Ok(dest_rows) = client.fetch_appunti_destinatari_for_user(&uid).await {
+        let mut ids: Vec<String> = dest_rows
+            .iter()
+            .map(|r| get_field_any(r, &["appunto_id", "AppuntoId", "appuntoId"]))
+            .filter(|s| !s.is_empty())
+            .collect();
+        ids.sort();
+        ids.dedup();
+        if !ids.is_empty() {
+            let filtro = format!("id=in.({})", ids.join(","));
+            match client.fetch_appunti_testo(&filtro, &q, esatto).await {
+                Ok(shared) => inserisci(&mut by_id, &shared),
+                Err(e) => println!("⚠️ cerca appunti condivisi: {}", e),
+            }
+        }
+    }
+
+    let mut nomi: HashMap<String, String> = HashMap::new();
+    if let Ok(perm_rows) = client.fetch_user_permissions(None).await {
+        for row in &perm_rows {
+            let p = supabase_row_to_user_permissions(row);
+            if !p.user_id.is_empty() {
+                let label = if p.username.trim().is_empty() {
+                    p.user_id.clone()
+                } else {
+                    p.username.clone()
+                };
+                nomi.insert(p.user_id, label);
+            }
+        }
+    }
+
+    let mut list: Vec<AppuntoRecord> = by_id.into_values().collect();
+    for a in &mut list {
+        if a.autore_username.trim().is_empty() {
+            if let Some(n) = nomi.get(&a.user_id) {
+                a.autore_username = n.clone();
+            }
+        }
+    }
+    list.sort_by(|a, b| b.data.cmp(&a.data).then_with(|| b.testo.cmp(&a.testo)));
+    list.truncate(40);
+    println!("✓ Ricerca appunti '{}': {} risultato/i", q, list.len());
+    Ok(list)
+}
+
+#[tauri::command]
+async fn save_appunto(appunto: AppuntoRecord) -> Result<AppuntoRecord, String> {
+    let uid = appunto.user_id.trim().to_string();
+    let day = normalize_appunto_data(&appunto.data)?;
+    let testo = appunto.testo.trim().to_string();
+    let visibilita = normalize_visibilita(&appunto.visibilita);
+    if uid.is_empty() {
+        return Err("user_id obbligatorio".to_string());
+    }
+    if testo.is_empty() {
+        return Err("Il testo dell'appunto non può essere vuoto".to_string());
+    }
+
+    let mut destinatari: Vec<String> = appunto
+        .destinatari
+        .iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty() && s != &uid)
+        .collect();
+    destinatari.sort();
+    destinatari.dedup();
+
+    if visibilita == "selezionati" && destinatari.is_empty() {
+        return Err("Seleziona almeno un destinatario".to_string());
+    }
+    if visibilita != "selezionati" {
+        destinatari.clear();
+    }
+
+    let autore = appunto.autore_username.trim().to_string();
+
+    println!(
+        "=== save_appunto user_id={} data={} vis={} id={:?} dest={} ===",
+        uid,
+        day,
+        visibilita,
+        appunto.id,
+        destinatari.len()
+    );
+
+    ensure_supabase_client().await?;
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let row_id = appunto
+            .id
+            .as_ref()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
+        if let Some(ref id) = row_id {
+            let filter = format!("id=eq.{}&user_id=eq.{}", id, uid);
+            let owned = client
+                .fetch_table("appunti", Some(&filter), None, None)
+                .await
+                .map_err(|e| format_supabase_error(&e))?;
+            if owned.is_empty() {
+                return Err("Solo l'autore può modificare questo appunto".to_string());
+            }
+        }
+
+        let mut body = serde_json::Map::new();
+        if row_id.is_none() {
+            body.insert("user_id".to_string(), serde_json::json!(uid));
+        }
+        // Sempre aggiornabile (serve per spostare l'appunto su un'altra data)
+        body.insert("data".to_string(), serde_json::json!(day));
+        body.insert("testo".to_string(), serde_json::json!(testo));
+        body.insert("fatto".to_string(), serde_json::json!(appunto.fatto));
+        body.insert("ordine".to_string(), serde_json::json!(appunto.ordine));
+        body.insert("visibilita".to_string(), serde_json::json!(visibilita));
+        if !autore.is_empty() {
+            body.insert("autore_username".to_string(), serde_json::json!(autore));
+        }
+        body.insert(
+            "updated_at".to_string(),
+            serde_json::json!(chrono::Utc::now().to_rfc3339()),
+        );
+
+        let saved = match client.upsert_appunto(&body, row_id.as_deref()).await {
+            Ok(row) => row,
+            Err(e) => {
+                let msg = e.to_string();
+                let manca_colonna = msg.contains("PGRST204")
+                    || msg.contains("autore_username")
+                    || msg.contains("visibilita")
+                    || msg.contains("schema cache");
+                if manca_colonna {
+                    if visibilita != "privato" || !destinatari.is_empty() {
+                        return Err(
+                            "Per condividere gli appunti aggiorna Supabase:\n\
+                             SQL Editor → esegui il file supabase-appunti-upgrade.sql\n\
+                             (poi riprova)."
+                                .to_string(),
+                        );
+                    }
+                    // Schema vecchio: salva solo i campi base (Solo io)
+                    println!("⚠️ Colonne condivisione assenti: salvataggio compatibile (solo privato)");
+                    body.remove("visibilita");
+                    body.remove("autore_username");
+                    client
+                        .upsert_appunto(&body, row_id.as_deref())
+                        .await
+                        .map_err(|e2| format_supabase_error(&e2))?
+                } else {
+                    return Err(format_supabase_error(&msg));
+                }
+            }
+        };
+        let mut out = supabase_row_to_appunto(&saved);
+        let saved_id = out
+            .id
+            .clone()
+            .ok_or_else(|| "Appunto salvato senza id".to_string())?;
+
+        if visibilita == "selezionati" || !destinatari.is_empty() {
+            client
+                .replace_appunti_destinatari(&saved_id, &destinatari)
+                .await
+                .map_err(|e| {
+                    format!(
+                        "{}\n\nEsegui su Supabase: supabase-appunti-upgrade.sql",
+                        format_supabase_error(&e)
+                    )
+                })?;
+        } else {
+            // Pulisci eventuali destinatari; se la tabella non esiste ancora, ignora
+            if let Err(e) = client.replace_appunti_destinatari(&saved_id, &[]).await {
+                println!("⚠️ Destinatari non aggiornati (tabella assente?): {}", e);
+            }
+        }
+
+        out.destinatari = destinatari;
+        out.visibilita = visibilita;
+        if out.autore_username.is_empty() {
+            out.autore_username = autore;
+        }
+        Ok(out)
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+#[tauri::command]
+async fn delete_appunto(user_id: String, id: String) -> Result<(), String> {
+    let uid = user_id.trim();
+    let rid = id.trim();
+    if uid.is_empty() || rid.is_empty() {
+        return Err("user_id e id obbligatori".to_string());
+    }
+    println!("=== delete_appunto user_id={} id={} ===", uid, rid);
+
+    ensure_supabase_client().await?;
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        client
+            .delete_appunto(rid, uid)
+            .await
+            .map_err(|e| format_supabase_error(&e))
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+#[tauri::command]
+async fn get_appunti_risposte(
+    user_id: String,
+    appunto_id: String,
+) -> Result<Vec<AppuntoRispostaRecord>, String> {
+    let uid = user_id.trim();
+    let aid = appunto_id.trim();
+    if uid.is_empty() || aid.is_empty() {
+        return Err("user_id e appunto_id obbligatori".to_string());
+    }
+    println!("=== get_appunti_risposte user={} appunto={} ===", uid, aid);
+
+    ensure_supabase_client().await?;
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let (ok, _) = utente_puo_accedere_appunto(client, aid, uid).await?;
+        if !ok {
+            return Err("Non hai accesso a questo appunto".to_string());
+        }
+        let rows = client
+            .fetch_appunti_risposte(aid)
+            .await
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("PGRST") || msg.contains("relation") || msg.contains("404") {
+                    format!(
+                        "{}\n\nEsegui su Supabase: supabase-appunti-risposte.sql",
+                        format_supabase_error(&msg)
+                    )
+                } else {
+                    format_supabase_error(&msg)
+                }
+            })?;
+        Ok(rows.iter().map(supabase_row_to_risposta).collect())
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+#[tauri::command]
+async fn save_appunto_risposta(
+    risposta: AppuntoRispostaRecord,
+) -> Result<AppuntoRispostaRecord, String> {
+    let uid = risposta.user_id.trim().to_string();
+    let aid = risposta.appunto_id.trim().to_string();
+    let testo = risposta.testo.trim().to_string();
+    let username = risposta.username.trim().to_string();
+    if uid.is_empty() || aid.is_empty() {
+        return Err("user_id e appunto_id obbligatori".to_string());
+    }
+    if testo.is_empty() {
+        return Err("La risposta non può essere vuota".to_string());
+    }
+    println!("=== save_appunto_risposta user={} appunto={} ===", uid, aid);
+
+    ensure_supabase_client().await?;
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        let (ok, vis) = utente_puo_accedere_appunto(client, &aid, &uid).await?;
+        if !ok {
+            return Err("Non hai accesso a questo appunto".to_string());
+        }
+        if vis == "privato" {
+            return Err("Le risposte sono disponibili solo sugli appunti condivisi (Persone scelte / Tutti)".to_string());
+        }
+
+        let mut body = serde_json::Map::new();
+        body.insert("appunto_id".to_string(), serde_json::json!(aid));
+        body.insert("user_id".to_string(), serde_json::json!(uid));
+        body.insert("username".to_string(), serde_json::json!(username));
+        body.insert("testo".to_string(), serde_json::json!(testo));
+
+        let saved = client
+            .insert_appunto_risposta(&body)
+            .await
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("PGRST") || msg.contains("relation") || msg.contains("404") {
+                    format!(
+                        "{}\n\nEsegui su Supabase: supabase-appunti-risposte.sql",
+                        format_supabase_error(&msg)
+                    )
+                } else {
+                    format_supabase_error(&msg)
+                }
+            })?;
+        Ok(supabase_row_to_risposta(&saved))
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+#[tauri::command]
+async fn delete_appunto_risposta(user_id: String, id: String) -> Result<(), String> {
+    let uid = user_id.trim();
+    let rid = id.trim();
+    if uid.is_empty() || rid.is_empty() {
+        return Err("user_id e id obbligatori".to_string());
+    }
+    println!("=== delete_appunto_risposta user={} id={} ===", uid, rid);
+
+    ensure_supabase_client().await?;
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        client
+            .delete_appunto_risposta(rid, uid)
+            .await
+            .map_err(|e| format_supabase_error(&e))
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
 }
 
 #[tauri::command]
@@ -5113,8 +6673,13 @@ fn lookup_kind_meta(kind: &str) -> Result<(&'static str, &'static [&'static str]
             ],
             "Motivazione",
         )),
+        "mansioni" => Ok((
+            "mansioni",
+            &["Mansione", "MANSIONE", "mansione"],
+            "Mansione",
+        )),
         other => Err(format!(
-            "Tipo lookup non supportato: '{}'. Usa richiedenti, tipo_socio, tipo_pagamenti, motivazioni_trasporto",
+            "Tipo lookup non supportato: '{}'. Usa richiedenti, tipo_socio, tipo_pagamenti, motivazioni_trasporto, mansioni",
             other
         )),
     }
@@ -5188,6 +6753,7 @@ async fn fetch_lookup_rows(
         "tipo_socio" => client.fetch_tipologie_socio(None).await,
         "tipo_pagamenti" => client.fetch_tipi_pagamento(None).await,
         "motivazioni_trasporto" => client.fetch_motivazioni_trasporto(None).await,
+        "mansioni" => client.fetch_mansioni(None).await,
         other => Err(format!("Tabella lookup sconosciuta: {}", other)),
     }
     .map_err(|e| format_supabase_error(&e))
@@ -5254,6 +6820,10 @@ async fn add_lookup_item(kind: String, valore: String) -> Result<(), String> {
 
     if dotazione_gia_presente(&existing, value) {
         return Err(format!("Il valore '{}' esiste già", value));
+    }
+
+    if table_type == "mansioni" {
+        return add_mansione_riga(client, &rows, value).await;
     }
 
     let column = resolve_lookup_text_column(rows.first(), candidates, default_column);
@@ -5333,6 +6903,121 @@ async fn delete_lookup_item(kind: String, id: String) -> Result<(), String> {
 
     println!("✓ Eliminato lookup {} id={}", table_type, id);
     Ok(())
+}
+
+/// Mansione operatore (Mansioni_supa): etichetta della casella e codice salvato in Disponibilita
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct MansioneRecord {
+    id: String,
+    mansione: String,
+    codice: String,
+    ordine: i64,
+    attiva: bool,
+}
+
+/// "Nonno Vigile" → "NONNO_VIGILE" (stesso formato dei codici già salvati sui soci)
+fn codice_mansione_da_testo(testo: &str) -> String {
+    let mut codice = String::new();
+    for ch in testo.trim().to_uppercase().chars() {
+        let ch = match ch {
+            'À' | 'Á' => 'A',
+            'È' | 'É' => 'E',
+            'Ì' | 'Í' => 'I',
+            'Ò' | 'Ó' => 'O',
+            'Ù' | 'Ú' => 'U',
+            c => c,
+        };
+        if ch.is_ascii_alphanumeric() {
+            codice.push(ch);
+        } else if !codice.ends_with('_') {
+            codice.push('_');
+        }
+    }
+    codice.trim_matches('_').to_string()
+}
+
+fn mansione_from_row(row: &serde_json::Value) -> Option<MansioneRecord> {
+    let id = row_id_any(row);
+    let mansione = get_field_any(row, &["Mansione", "MANSIONE", "mansione"])
+        .trim()
+        .to_string();
+    if id.is_empty() || mansione.is_empty() {
+        return None;
+    }
+    let codice = {
+        let c = get_field_any(row, &["Codice", "CODICE", "codice"]).trim().to_uppercase();
+        if c.is_empty() {
+            codice_mansione_da_testo(&mansione)
+        } else {
+            c
+        }
+    };
+    let ordine = get_field_any(row, &["Ordine", "ORDINE", "ordine"])
+        .trim()
+        .parse::<i64>()
+        .unwrap_or(0);
+    let attiva = get_bool_field(row, &["Attiva", "ATTIVA", "attiva"]) != "false";
+    Some(MansioneRecord {
+        id,
+        mansione,
+        codice,
+        ordine,
+        attiva,
+    })
+}
+
+async fn add_mansione_riga(
+    client: &SupabaseClient,
+    rows: &[serde_json::Value],
+    mansione: &str,
+) -> Result<(), String> {
+    let codice = codice_mansione_da_testo(mansione);
+    if codice.is_empty() {
+        return Err("Il nome della mansione deve contenere lettere o numeri".to_string());
+    }
+
+    let esistenti: Vec<MansioneRecord> = rows.iter().filter_map(mansione_from_row).collect();
+    if esistenti.iter().any(|m| m.codice == codice) {
+        return Err(format!("Esiste già una mansione con codice {}", codice));
+    }
+    let ordine = esistenti.iter().map(|m| m.ordine).max().unwrap_or(0) + 1;
+
+    let mut body = serde_json::Map::new();
+    body.insert("Mansione".to_string(), serde_json::json!(mansione));
+    body.insert("Codice".to_string(), serde_json::json!(codice));
+    body.insert("Ordine".to_string(), serde_json::json!(ordine));
+
+    client
+        .insert_mansione(&body)
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+
+    println!("✓ Inserita mansione '{}' codice={} ordine={}", mansione, codice, ordine);
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_mansioni() -> Result<Vec<MansioneRecord>, String> {
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    let rows = client
+        .fetch_mansioni(None)
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+
+    let mut mansioni: Vec<MansioneRecord> = rows.iter().filter_map(mansione_from_row).collect();
+    mansioni.sort_by(|a, b| {
+        a.ordine
+            .cmp(&b.ordine)
+            .then_with(|| a.mansione.to_lowercase().cmp(&b.mansione.to_lowercase()))
+    });
+    println!("✓ Caricate {} mansioni", mansioni.len());
+    Ok(mansioni)
 }
 
 fn dotazioni_da_righe(rows: &[serde_json::Value]) -> Vec<String> {
@@ -5420,16 +7105,18 @@ async fn get_servizio_completo(servizio_id: u32) -> Result<ServizioCompleto, Str
     let filter = format!("idservizio=eq.{}", servizio_id);
     let nominativi = fetch_idsocio_nominativo_map().await;
     let rows = fetch_servizi_supabase(Some(&filter)).await?;
-    if let Some(row) = rows.first() {
-        if let Some(sc) = supabase_row_to_servizio_completo(row, &nominativi) {
+    if let Some(mut row) = rows.into_iter().next() {
+        allinea_id_operatore_riga(&mut row).await;
+        if let Some(sc) = supabase_row_to_servizio_completo(&row, &nominativi) {
             return Ok(sc);
         }
     }
 
     let rows = fetch_servizi_supabase(None).await?;
-    for row in &rows {
-        if servizio_id_from_row(row) == servizio_id {
-            if let Some(sc) = supabase_row_to_servizio_completo(row, &nominativi) {
+    for mut row in rows {
+        if servizio_id_from_row(&row) == servizio_id {
+            allinea_id_operatore_riga(&mut row).await;
+            if let Some(sc) = supabase_row_to_servizio_completo(&row, &nominativi) {
                 return Ok(sc);
             }
         }
@@ -5576,15 +7263,304 @@ async fn get_operatori_con_servizi() -> Result<OperatoriConServiziResult, String
     })
 }
 
+fn postgrest_valore(valore: &str) -> String {
+    valore
+        .trim()
+        .chars()
+        .filter(|c| !matches!(c, ',' | ':' | '(' | ')' | '"' | '*' | '%'))
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+fn postgrest_ilike_contiene(valore: &str) -> Option<String> {
+    let pulito: String = valore
+        .trim()
+        .chars()
+        .filter(|c| *c != '*' && *c != '%' && *c != ',' && *c != '(' && *c != ')')
+        .collect();
+    let pulito = pulito.trim();
+    if pulito.is_empty() {
+        None
+    } else {
+        Some(format!("ilike.*{}*", pulito))
+    }
+}
+
+fn postgrest_ilike_esatto(valore: &str) -> Option<String> {
+    let pulito = postgrest_valore(valore);
+    if pulito.is_empty() {
+        None
+    } else {
+        Some(format!("ilike.{pulito}"))
+    }
+}
+
+fn data_iso_valida(valore: &str) -> Option<String> {
+    let s = valore.trim();
+    if s.len() >= 10
+        && s.as_bytes().get(4) == Some(&b'-')
+        && s.as_bytes().get(7) == Some(&b'-')
+        && s[..10].chars().all(|c| c.is_ascii_digit() || c == '-')
+    {
+        Some(s[..10].to_string())
+    } else {
+        None
+    }
+}
+
+fn filtro_operatore_or(ids: &[String], nome: &str) -> Option<String> {
+    let mut parti = Vec::new();
+    for id in ids {
+        let id = id.trim();
+        if id.is_empty() || !id.chars().all(|c| c.is_ascii_digit()) {
+            continue;
+        }
+        parti.push(format!("IdOperatore.eq.{id}"));
+        parti.push(format!("IdOperatore2.eq.{id}"));
+    }
+    if let Some(pattern) = postgrest_ilike_esatto(nome) {
+        parti.push(format!("Oper.{pattern}"));
+        parti.push(format!("Oper2.{pattern}"));
+    }
+    if parti.is_empty() {
+        None
+    } else {
+        Some(format!("or({})", parti.join(",")))
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ServiziElencoPagina {
+    servizi: Vec<ServizioCompleto>,
+    totale: u64,
+}
+
+const COLONNE_ELENCO_SERVIZI: &str = "idservizio,Prelievo_Data,Prelievo_Ora,Prelievo_Comune,Prelievo_Indirizzo,Prelievo_Note,IdSocio,Trasportato,Sollevatore,Standard,Carrozzina,Richiedente,Motivazione,Destinazione_Data,Destinazione_Comune,Destinazione_Indirizzo,Destinazione_Note,Donazioni,Incassato,TipoPagamento,Oper,IdOperatore,Oper2,IdOperatore2,Mezzo,Km,Km_uscita,Km_rientro,Tempo,Bonifico_Data,Ricevuta_Data,Ricevuta_numero,StatoServizio,NoteFineServizio,Archiviazione,CreatoDa,ModificatoDa,created_at,update_at";
+
+/// Una pagina dell'elenco. Il totale arriva da Supabase senza scaricare le altre righe.
+#[tauri::command]
+async fn get_servizi_elenco_pagina(
+    anno: Option<u32>,
+    tutti_anni: Option<bool>,
+    escludi_archiviati: Option<bool>,
+    offset: Option<u32>,
+    limite: Option<u32>,
+    idsocio: Option<String>,
+    idservizio: Option<String>,
+    trasportato: Option<String>,
+    nominativo: Option<String>,
+    data_da: Option<String>,
+    data_a: Option<String>,
+    stato_servizio: Option<String>,
+    richiedente: Option<String>,
+    stato_incasso: Option<String>,
+    tipo_pagamento: Option<String>,
+    tipo_servizio: Option<String>,
+    carrozzina: Option<String>,
+    operatore_ids: Option<Vec<String>>,
+    operatore_nome: Option<String>,
+) -> Result<ServiziElencoPagina, String> {
+    ensure_supabase_client().await?;
+    let tutti = tutti_anni.unwrap_or(false);
+    let senza_archivio = escludi_archiviati.unwrap_or(false);
+    let offset = offset.unwrap_or(0) as usize;
+    let limite = limite.unwrap_or(50).clamp(1, 300) as usize;
+    let year = anno.unwrap_or_else(|| Local::now().date_naive().year() as u32);
+
+    let mut da = if tutti {
+        None
+    } else {
+        Some(format!("{year}-01-01"))
+    };
+    let mut a = if tutti {
+        None
+    } else {
+        Some(format!("{year}-12-31"))
+    };
+    if let Some(d) = data_da.as_deref().and_then(data_iso_valida) {
+        if da.as_ref().map(|x| d.as_str() > x.as_str()).unwrap_or(true) {
+            da = Some(d);
+        }
+    }
+    if let Some(d) = data_a.as_deref().and_then(data_iso_valida) {
+        if a.as_ref().map(|x| d.as_str() < x.as_str()).unwrap_or(true) {
+            a = Some(d);
+        }
+    }
+
+    let mut filtri: Vec<(String, String)> = Vec::new();
+    if let Some(d) = da {
+        filtri.push(("Prelievo_Data".into(), format!("gte.{d}")));
+    }
+    if let Some(d) = a {
+        filtri.push(("Prelievo_Data".into(), format!("lte.{d}")));
+    }
+    if let Some(v) = idsocio.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        filtri.push(("IdSocio".into(), format!("eq.{}", postgrest_valore(v))));
+    }
+    if let Some(v) = idservizio.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        if v.chars().all(|c| c.is_ascii_digit()) {
+            filtri.push(("idservizio".into(), format!("eq.{v}")));
+        }
+    }
+    if let Some(v) = trasportato.as_deref().and_then(postgrest_ilike_esatto) {
+        filtri.push(("Trasportato".into(), v));
+    }
+    if let Some(v) = nominativo.as_deref().and_then(postgrest_ilike_contiene) {
+        filtri.push(("Trasportato".into(), v));
+    }
+    if let Some(v) = stato_servizio.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        filtri.push(("StatoServizio".into(), format!("eq.{}", postgrest_valore(v))));
+    }
+    if let Some(v) = tipo_pagamento.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        filtri.push(("TipoPagamento".into(), format!("eq.{}", postgrest_valore(v))));
+    }
+    if let Some(v) = carrozzina.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        filtri.push(("Carrozzina".into(), format!("eq.{}", postgrest_valore(v))));
+    }
+
+    let richiedente_norm = richiedente
+        .as_deref()
+        .map(|s| s.trim().to_uppercase())
+        .unwrap_or_default();
+    if richiedente_norm == "ALTRI" {
+        filtri.push(("Richiedente".into(), "not.eq.SOCIO".into()));
+        filtri.push(("Richiedente".into(), "not.eq.COMUNE".into()));
+        filtri.push(("Richiedente".into(), "not.eq.".into()));
+    } else if !richiedente_norm.is_empty() {
+        filtri.push(("Richiedente".into(), format!("eq.{richiedente_norm}")));
+    }
+
+    let tipo_norm = tipo_servizio
+        .as_deref()
+        .map(|s| s.trim().to_uppercase())
+        .unwrap_or_default();
+    if tipo_norm == "SOLLEVATORE" {
+        filtri.push(("Sollevatore".into(), "eq.true".into()));
+    } else if tipo_norm == "STANDARD" {
+        filtri.push(("Standard".into(), "eq.true".into()));
+    }
+
+    let incasso_norm = stato_incasso
+        .as_deref()
+        .map(|s| s.trim().to_uppercase())
+        .unwrap_or_default();
+
+    let mut gruppi_or: Vec<String> = Vec::new();
+    if senza_archivio {
+        gruppi_or.push("or(Archiviazione.is.null,Archiviazione.eq.false)".into());
+    }
+    if incasso_norm == "DA INCASSARE" {
+        gruppi_or.push("or(Incassato.is.null,Incassato.eq.)".into());
+    } else if !incasso_norm.is_empty() {
+        filtri.push(("Incassato".into(), format!("eq.{}", postgrest_valore(&incasso_norm))));
+    }
+    if tipo_norm == "STANDARD" {
+        gruppi_or.push("or(Sollevatore.is.null,Sollevatore.eq.false)".into());
+    }
+    if let Some(gruppo) = filtro_operatore_or(
+        operatore_ids.as_deref().unwrap_or(&[]),
+        operatore_nome.as_deref().unwrap_or(""),
+    ) {
+        gruppi_or.push(gruppo);
+    }
+    match gruppi_or.len() {
+        0 => {}
+        1 => {
+            let valore = gruppi_or[0]
+                .strip_prefix("or")
+                .unwrap_or(gruppi_or[0].as_str())
+                .to_string();
+            filtri.push(("or".into(), valore));
+        }
+        _ => {
+            filtri.push(("and".into(), format!("({})", gruppi_or.join(","))));
+        }
+    }
+
+    let ordini = ["Prelievo_Data.desc,idservizio.desc", "Prelievo_Data.desc"];
+    let mut ultimo_errore = String::new();
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    for order in ordini {
+        for colonne in [COLONNE_ELENCO_SERVIZI, "*"] {
+            match client
+                .fetch_servizi_pagina(&filtri, colonne, order, offset, limite)
+                .await
+            {
+                Ok((rows, totale)) => {
+                    let vuoti = HashMap::new();
+                    let servizi: Vec<ServizioCompleto> = rows
+                        .iter()
+                        .filter_map(|row| supabase_row_to_servizio_completo(row, &vuoti))
+                        .collect();
+                    println!(
+                        "✓ Elenco servizi pagina: {} righe, totale {}",
+                        servizi.len(),
+                        totale
+                    );
+                    return Ok(ServiziElencoPagina { servizi, totale });
+                }
+                Err(e) => ultimo_errore = format_supabase_error(&e),
+            }
+        }
+    }
+    Err(ultimo_errore)
+}
+
 // Comando per ottenere tutti i servizi completi (Supabase / Servizi_supa)
 // anno: filtra per anno di Prelievo_Data; tutti_anni=true scarica l'intero archivio
 #[tauri::command]
 async fn get_all_servizi_completi(
     anno: Option<u32>,
     tutti_anni: Option<bool>,
+    limite: Option<u32>,
+    escludi_archiviati: Option<bool>,
 ) -> Result<Vec<ServizioCompleto>, String> {
-    if let Err(e) = allinea_id_operatore_da_oper_una_volta().await {
-        println!("⚠️ Allineamento IdOperatore da Oper: {}", e);
+    let senza_archivio = escludi_archiviati.unwrap_or(false);
+    if let Some(limite) = limite {
+        if !tutti_anni.unwrap_or(false) {
+            let year = anno.unwrap_or_else(|| Local::now().date_naive().year() as u32);
+            let n = limite.clamp(1, 300);
+            println!(
+                "=== get_all_servizi_completi anteprima anno {} (primi {}){} ===",
+                year,
+                n,
+                if senza_archivio { ", senza archiviati" } else { "" }
+            );
+            let filtro_anno = servizi_filter_anno(year);
+            let filtro = if senza_archivio {
+                servizi_filter_senza_archiviati(&filtro_anno)
+            } else {
+                filtro_anno.clone()
+            };
+            let (rows, filtro_ok) = match fetch_servizi_anteprima(&filtro, n as usize).await {
+                Ok(rows) => (rows, true),
+                Err(e) if senza_archivio => {
+                    println!(
+                        "⚠️ Filtro archiviati anteprima fallito ({}), riprovo senza",
+                        e
+                    );
+                    (fetch_servizi_anteprima(&filtro_anno, n as usize).await?, false)
+                }
+                Err(e) => return Err(e),
+            };
+            let nominativi_vuoti = HashMap::new();
+            let mut servizi: Vec<ServizioCompleto> = rows
+                .iter()
+                .filter_map(|row| supabase_row_to_servizio_completo(row, &nominativi_vuoti))
+                .collect();
+            if senza_archivio && !filtro_ok {
+                servizi.retain(|s| !servizio_e_archiviato(&s.archivia));
+            }
+            sort_servizi_completi(&mut servizi);
+            println!("✓ Anteprima elenco: {} servizi", servizi.len());
+            return Ok(servizi);
+        }
     }
 
     let nominativi = fetch_idsocio_nominativo_map().await;
@@ -5609,19 +7585,41 @@ async fn get_all_servizi_completi(
 
     let year = anno.unwrap_or_else(|| Local::now().date_naive().year() as u32);
     println!(
-        "=== get_all_servizi_completi chiamato (Supabase, anno {}) ===",
-        year
+        "=== get_all_servizi_completi chiamato (Supabase, anno {}){} ===",
+        year,
+        if senza_archivio { ", senza archiviati" } else { "" }
     );
 
-    let filter = servizi_filter_anno(year);
-    let (rows, filtered_at_db) = match fetch_servizi_supabase(Some(&filter)).await {
-        Ok(r) => (r, true),
+    let filtro_anno = servizi_filter_anno(year);
+    let filtro = if senza_archivio {
+        servizi_filter_senza_archiviati(&filtro_anno)
+    } else {
+        filtro_anno.clone()
+    };
+    let (rows, filtered_at_db, archivio_filtrato) = match fetch_servizi_supabase(Some(&filtro)).await {
+        Ok(r) => (r, true, senza_archivio),
+        Err(e) if senza_archivio => {
+            println!(
+                "⚠️ Filtro archiviati fallito ({}), riprovo solo per anno",
+                e
+            );
+            match fetch_servizi_supabase(Some(&filtro_anno)).await {
+                Ok(r) => (r, true, false),
+                Err(e2) => {
+                    println!(
+                        "⚠️ Filtro anno Supabase fallito ({}), recupero tutti i servizi: {}",
+                        filtro_anno, e2
+                    );
+                    (fetch_servizi_supabase(None).await?, false, false)
+                }
+            }
+        }
         Err(e) => {
             println!(
                 "⚠️ Filtro anno Supabase fallito ({}), recupero tutti i servizi: {}",
-                filter, e
+                filtro, e
             );
-            (fetch_servizi_supabase(None).await?, false)
+            (fetch_servizi_supabase(None).await?, false, false)
         }
     };
 
@@ -5644,6 +7642,16 @@ async fn get_all_servizi_completi(
                 servizi.len()
             );
         }
+    }
+
+    if senza_archivio && !archivio_filtrato {
+        let before = servizi.len();
+        servizi.retain(|s| !servizio_e_archiviato(&s.archivia));
+        println!(
+            "  Filtro archiviati lato Rust: {} → {} servizi",
+            before,
+            servizi.len()
+        );
     }
 
     sort_servizi_completi(&mut servizi);
@@ -6239,15 +8247,16 @@ fn servizio_completo_to_update_payload(sc: &ServizioCompleto) -> UpdateServizioP
     }
 }
 
-/// Scrive CreatoDa / ModificatoDa e (se presenti) le colonne data created / modificated
+/// Scrive utente in CreatoDa / ModificatoDa e data/ora in Created / Updated.
 fn apply_servizio_audit_fields(
     body: &mut serde_json::Map<String, serde_json::Value>,
     template_row: Option<&serde_json::Value>,
     creato_da: Option<&str>,
     modificato_da: Option<&str>,
     set_created_ts: bool,
-    set_modificated_ts: bool,
+    set_updated_ts: bool,
 ) {
+    // Solo il NOME UTENTE (testo)
     if let Some(v) = creato_da.map(str::trim).filter(|s| !s.is_empty()) {
         put_servizio_field(
             body,
@@ -6267,33 +8276,66 @@ fn apply_servizio_audit_fields(
         );
     }
 
+    // Data/ora sulle colonne created_at / update_at (nomi reali in Servizi_supa)
     let now = Local::now().to_rfc3339();
     if set_created_ts {
-        put_servizio_field(
-            body,
-            template_row,
-            &["created", "Created", "CREATED", "created_at", "Created_At"],
-            "created",
-            serde_json::json!(now),
-        );
-    }
-    if set_modificated_ts {
-        put_servizio_field(
+        put_servizio_audit_timestamp(
             body,
             template_row,
             &[
-                "modificated",
-                "Modificated",
-                "MODIFICATED",
-                "modified",
-                "Modified",
-                "updated_at",
-                "Updated_At",
+                "created_at",
+                "Created_At",
+                "Created",
+                "created",
+                "CREATED",
             ],
-            "modificated",
-            serde_json::json!(now),
+            "created_at",
+            &now,
         );
     }
+    if set_updated_ts {
+        put_servizio_audit_timestamp(
+            body,
+            template_row,
+            &[
+                "update_at",
+                "Update_At",
+                "updated_at",
+                "Updated_At",
+                "Updated",
+                "updated",
+                "UPDATED",
+                "modificated",
+                "Modificated",
+                "modified",
+                "Modified",
+            ],
+            "update_at",
+            &now,
+        );
+    }
+}
+
+/// Scrive il timestamp solo se la colonna esiste nella riga modello,
+/// altrimenti usa il nome predefinito corretto (created_at / update_at).
+fn put_servizio_audit_timestamp(
+    body: &mut serde_json::Map<String, serde_json::Value>,
+    template_row: Option<&serde_json::Value>,
+    candidates: &[&str],
+    default_key: &str,
+    now: &str,
+) {
+    if let Some(r) = template_row {
+        if let Some(key) = resolve_column_key(r, candidates) {
+            body.insert(key, serde_json::json!(now));
+            return;
+        }
+        println!(
+            "⚠️ Colonna data/ora audit non in template {:?}: uso {}",
+            candidates, default_key
+        );
+    }
+    body.insert(default_key.to_string(), serde_json::json!(now));
 }
 
 fn strip_servizio_audit_fields(body: &mut serde_json::Map<String, serde_json::Value>) {
@@ -6306,18 +8348,23 @@ fn strip_servizio_audit_fields(body: &mut serde_json::Map<String, serde_json::Va
         "modificato_da",
         "Modificato_Da",
         "MODIFICATODA",
-        "created",
-        "Created",
-        "CREATED",
         "created_at",
         "Created_At",
+        "Created",
+        "created",
+        "CREATED",
+        "update_at",
+        "Update_At",
+        "updated_at",
+        "Updated_At",
+        "Updated",
+        "updated",
+        "UPDATED",
         "modificated",
         "Modificated",
         "MODIFICATED",
         "modified",
         "Modified",
-        "updated_at",
-        "Updated_At",
     ];
     for k in KEYS {
         body.remove(*k);
@@ -6629,7 +8676,7 @@ async fn update_servizio_completo(payload: UpdateServizioPayload) -> Result<(), 
 
     let template_row = fetch_servizio_row_template(payload.id).await.ok();
     let mut body = build_servizio_supabase_body(&payload, template_row.as_ref()).await;
-    // In update non si tocca CreatoDa / created: solo chi ha modificato e quando
+    // In update non si tocca CreatoDa / created_at: solo ModificatoDa + update_at
     strip_servizio_audit_fields(&mut body);
     apply_servizio_audit_fields(
         &mut body,
@@ -6838,7 +8885,8 @@ async fn create_servizio(payload: UpdateServizioPayload) -> Result<u32, String> 
     body.remove("id_servizio");
 
     let account = payload.creato_da.as_deref();
-    // In creazione: solo CreatoDa (+ created). ModificatoDa resta vuoto finché non si salva una modifica.
+    // In creazione: utente in CreatoDa + data/ora in created_at.
+    // ModificatoDa / update_at restano vuoti finché non si salva una modifica.
     apply_servizio_audit_fields(
         &mut body,
         template_row.as_ref(),
@@ -6949,7 +8997,7 @@ async fn duplicate_servizio(
     body.remove("IDSERVIZIO");
     body.remove("Id_Servizio");
     body.remove("id_servizio");
-    // La copia è un nuovo servizio: solo CreatoDa di chi duplica; ModificatoDa resta vuoto
+    // La copia è un nuovo servizio: CreatoDa + created_at di chi duplica; ModificatoDa/update_at vuoti
     strip_servizio_audit_fields(&mut body);
     let account = creato_da.as_deref();
     apply_servizio_audit_fields(
@@ -7097,11 +9145,6 @@ async fn init_sharepoint_from_config() -> Result<(), String> {
 async fn init_supabase_from_config() -> Result<(), String> {
     let config = load_app_config_from_file().await?;
     setup_supabase_from_config(&config).await;
-    tauri::async_runtime::spawn(async {
-        if let Err(e) = allinea_id_operatore_da_oper_una_volta().await {
-            println!("⚠️ Allineamento IdOperatore da Oper: {}", e);
-        }
-    });
     Ok(())
 }
 
@@ -7214,11 +9257,22 @@ fn main() {
             get_servizi_stesso_luogo_destinazione,
             get_tessere_da_fare,
             get_all_tesserati,
+            get_all_tesseramenti,
+            get_appunti_giorno,
+            cerca_appunti,
+            get_utenti_per_appunti,
+            save_appunto,
+            delete_appunto,
+            get_appunti_risposte,
+            save_appunto_risposta,
+            delete_appunto_risposta,
             get_socio_anagrafica,
             save_socio_anagrafica,
             get_next_idsocio,
             create_socio_anagrafica,
             save_tesseramento,
+            delete_tesseramento,
+            delete_socio_anagrafica,
             save_socio_telefono,
             delete_socio_telefono,
             save_socio_email,
@@ -7237,6 +9291,7 @@ fn main() {
             add_lookup_item,
             update_lookup_item,
             delete_lookup_item,
+            get_mansioni,
             get_all_impostazioni,
             update_impostazione,
             get_supabase_auth_config,
@@ -7248,7 +9303,10 @@ fn main() {
             get_all_stati_servizio,
             add_tipologia_socio,
             get_servizio_completo,
+            get_servizi_report_giorno,
+            get_servizi_report_settimana,
             get_all_servizi_completi,
+            get_servizi_elenco_pagina,
             get_idsocio_con_servizi,
             get_operatori_con_servizi,
             get_motivazioni_servizi,

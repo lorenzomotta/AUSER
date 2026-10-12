@@ -127,12 +127,70 @@ body {
     margin: 10px 0;
 }
 
-.sidebar-user {
+.sidebar-footer {
     margin-top: auto;
     display: flex;
     flex-direction: column;
     gap: 8px;
     padding-top: 4px;
+}
+
+.sidebar-user {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.btn-sidebar-appunti {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background-color: #ef6c00;
+    color: #fff;
+}
+
+.btn-sidebar-appunti:hover {
+    background-color: #e65100;
+}
+
+.agenda-btn-label {
+    font-weight: inherit;
+}
+
+.agenda-bustina {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: #fff;
+    color: #e65100;
+    border-radius: 999px;
+    padding: 2px 7px 2px 6px;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    animation: agenda-bustina-pulse 1.6s ease-in-out infinite;
+}
+
+.agenda-bustina[hidden] {
+    display: none !important;
+}
+
+.agenda-bustina-icon {
+    font-size: 13px;
+    line-height: 1;
+}
+
+.agenda-bustina-count {
+    min-width: 0.9em;
+    text-align: center;
+}
+
+@keyframes agenda-bustina-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
 }
 
 .sidebar-user-label {

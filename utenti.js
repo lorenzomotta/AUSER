@@ -365,7 +365,7 @@ async function chiudiFinestra() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const sessione = richiediSessione();
+    const sessione = await richiediSessione();
     if (!sessione) return;
     if (!isAdmin(sessione)) {
         alert('Accesso riservato agli amministratori.');

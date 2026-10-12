@@ -1,5 +1,6 @@
 // Scheda del Servizio — popup stampa A4 (servizio selezionato dalla home)
 import { testoNoteFineVisibile } from './tratta-riepilogo.js';
+import { trovaAutomezzo, testoMezzoServizio } from './mezzo-etichetta.js';
 
 let invoke;
 
@@ -46,17 +47,6 @@ function setHtml(id, html) {
     el.innerHTML = html || '';
 }
 
-function normalizzaNumero(value) {
-    if (value === null || value === undefined) return '';
-    let trimmed = String(value).trim();
-    if (trimmed.endsWith('.0')) trimmed = trimmed.slice(0, -2);
-    if (trimmed.includes('.')) {
-        const num = parseFloat(trimmed);
-        if (!Number.isNaN(num) && num % 1 === 0) return String(num);
-    }
-    return trimmed;
-}
-
 function formatDataDisplay(value) {
     if (!value) return '';
     const s = String(value).trim();
@@ -92,21 +82,18 @@ function haCarrozzina(servizio) {
 }
 
 function formatAutomezzo(servizio, automezzi) {
-    const nr = normalizzaNumero(servizio.mezzo || '');
-    if (!nr) return servizio.mezzo_usato || '';
-    const auto = (automezzi || []).find(a => normalizzaNumero(a.nr_automezzo) === nr);
-    if (!auto) return nr;
-    const marca = (auto.marca || '').trim();
-    const modello = (auto.modello || '').trim();
-    const desc = [marca, modello].filter(Boolean).join(' ');
-    return desc ? `${nr} ( ${desc} )` : nr;
+    const auto = trovaAutomezzo(automezzi, servizio?.mezzo);
+    if (!auto) return testoMezzoServizio(servizio, automezzi);
+    const nome = [auto.marca, auto.modello]
+        .map((p) => String(p || '').trim())
+        .filter(Boolean)
+        .join(' ');
+    return nome || testoMezzoServizio(servizio, automezzi);
 }
 
 function targaDaMezzo(servizio, automezzi) {
-    const nr = normalizzaNumero(servizio.mezzo || '');
-    if (!nr) return '';
-    const auto = (automezzi || []).find(a => normalizzaNumero(a.nr_automezzo) === nr);
-    return (auto?.targa || '').trim();
+    const auto = trovaAutomezzo(automezzi, servizio?.mezzo);
+    return String(auto?.targa || '').trim();
 }
 
 async function caricaTelefoniTrasportato(idsocio) {

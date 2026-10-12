@@ -328,7 +328,7 @@ function salvaOrdine(ordine) {
     }
 }
 
-export function initStampaPdfElencoServizi({ getServiziFiltrati, getServiziPagina, getTitolo, formatMezzo }) {
+export function initStampaPdfElencoServizi({ getServiziFiltrati, getServiziPagina, getTitolo, formatMezzo, getTotaleFiltrato, scaricaServiziFiltrati }) {
     const modal = document.getElementById('modal-stampa-pdf-servizi');
     const btnApri = document.getElementById('btn-stampa-pdf-elenco');
     const btnChiudi = document.getElementById('btn-stampa-pdf-servizi-chiudi');
@@ -482,8 +482,17 @@ export function initStampaPdfElencoServizi({ getServiziFiltrati, getServiziPagin
         return typeof getServiziFiltrati === 'function' ? (getServiziFiltrati() || []) : [];
     }
 
+    function conteggioDaMostrare() {
+        const soloPagina = document.getElementById('pdf-servizi-solo-pagina')?.checked === true;
+        if (!soloPagina && typeof getTotaleFiltrato === 'function') {
+            const n = Number(getTotaleFiltrato());
+            if (Number.isFinite(n)) return n;
+        }
+        return elencoDaStampare().length;
+    }
+
     function aggiornaConteggio() {
-        const n = elencoDaStampare().length;
+        const n = conteggioDaMostrare();
         if (countEl) countEl.textContent = String(n);
     }
 
@@ -560,15 +569,24 @@ export function initStampaPdfElencoServizi({ getServiziFiltrati, getServiziPagin
         aggiornaPannelloOrdine();
     });
 
-    btnGenera.addEventListener('click', () => {
+    btnGenera.addEventListener('click', async () => {
         mostraErrore('');
         const keys = chiaviSelezionate();
         const campi = CAMPI_PDF_SERVIZI.filter((campo) => keys.includes(campo.key));
-        const servizi = elencoDaStampare();
+        const soloPagina = document.getElementById('pdf-servizi-solo-pagina')?.checked === true;
         const titolo = typeof getTitolo === 'function' ? getTitolo() : 'ELENCO SERVIZI';
         const ordinamento = leggiOrdinamentoScelto();
+        const testoBottone = btnGenera.textContent;
+        btnGenera.disabled = true;
 
         try {
+            let servizi;
+            if (!soloPagina && typeof scaricaServiziFiltrati === 'function') {
+                btnGenera.textContent = 'Preparazione...';
+                servizi = await scaricaServiziFiltrati();
+            } else {
+                servizi = elencoDaStampare();
+            }
             generaPdfElencoServizi(servizi, campi, { titolo, formatMezzo, ordinamento });
             salvaSelezione(keys);
             salvaOrdine({
@@ -582,6 +600,9 @@ export function initStampaPdfElencoServizi({ getServiziFiltrati, getServiziPagin
         } catch (err) {
             console.error('PDF elenco servizi:', err);
             mostraErrore(String(err?.message || err || 'Errore durante la generazione del PDF'));
+        } finally {
+            btnGenera.disabled = false;
+            btnGenera.textContent = testoBottone;
         }
     });
 }

@@ -20,6 +20,7 @@
                 <button type="button" class="btn btn-modifica" id="btn-modifica-anagrafica">MODIFICA</button>
                 <button type="button" class="btn btn-salva" id="btn-salva-anagrafica" hidden>SALVA</button>
                 <button type="button" class="btn btn-annulla-anagrafica" id="btn-annulla-anagrafica" hidden>ANNULLA</button>
+                <button type="button" class="btn btn-elimina-socio" id="btn-elimina-socio" hidden>ELIMINA SOCIO</button>
                 <button type="button" class="btn btn-cerca-filtro" id="btn-cerca-filtro" hidden>CERCA</button>
                 <button type="button" class="btn btn-azzera-filtro" id="btn-azzera-filtro" hidden>AZZERA</button>
                 <button type="button" class="btn btn-chiudi" id="btn-chiudi">CHIUDI</button>
@@ -36,10 +37,7 @@
                         <label class="flag-item"><input type="checkbox" id="field-operatore"><span>Operatore</span></label>
                         <label class="flag-item"><input type="checkbox" id="field-attivo"><span>Attivo</span></label>
                         <span class="flags-sep">|</span>
-                        <label class="flag-item"><input type="checkbox" id="field-disp-autista" value="AUTISTA"><span>Autista</span></label>
-                        <label class="flag-item"><input type="checkbox" id="field-disp-centralista" value="CENTRALISTA"><span>Centralista</span></label>
-                        <label class="flag-item"><input type="checkbox" id="field-disp-nonno-vigile" value="NONNO_VIGILE"><span>Nonno Vigile</span></label>
-                        <label class="flag-item"><input type="checkbox" id="field-disp-scuolabus" value="SCUOLABUS"><span>Scuolabus</span></label>
+                        <span class="disponibilita-flags" id="disponibilita-flags"></span>
                         <label class="flag-item flag-archivia"><input type="checkbox" id="field-archivia"><span>Archiviato</span></label>
                     </div>
                 </div>
@@ -301,6 +299,7 @@
                                 <input type="text" id="tess-note" class="form-control">
                             </div>
                             <div class="form-group col-span-2 editor-actions-cell">
+                                <button type="button" class="btn btn-elimina-tess" id="btn-elimina-tess" hidden>ELIMINA</button>
                                 <button type="button" class="btn btn-annulla-tess" id="btn-annulla-tess">Annulla</button>
                                 <button type="submit" class="btn btn-salva-tess" id="btn-salva-tess">SALVA</button>
                             </div>
@@ -309,6 +308,25 @@
                 </div>
             </section>
         </main>
+    </div>
+
+    <div id="anag-dialog-elimina" class="anag-dialog-overlay" hidden aria-hidden="true">
+        <div class="anag-dialog" role="dialog" aria-modal="true" aria-labelledby="anag-dialog-elimina-messaggio">
+            <p id="anag-dialog-elimina-messaggio" class="anag-dialog-messaggio">Eliminare questo tesseramento?</p>
+            <div class="anag-dialog-actions">
+                <button type="button" id="anag-dialog-elimina-si" class="anag-dialog-btn anag-dialog-btn-si">ELIMINA</button>
+                <button type="button" id="anag-dialog-elimina-no" class="anag-dialog-btn anag-dialog-btn-no">ANNULLA</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="anag-dialog-avviso" class="anag-dialog-overlay" hidden aria-hidden="true">
+        <div class="anag-dialog" role="dialog" aria-modal="true" aria-labelledby="anag-dialog-avviso-messaggio">
+            <p id="anag-dialog-avviso-messaggio" class="anag-dialog-messaggio"></p>
+            <div class="anag-dialog-actions">
+                <button type="button" id="anag-dialog-avviso-ok" class="anag-dialog-btn anag-dialog-btn-ok">OK</button>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>

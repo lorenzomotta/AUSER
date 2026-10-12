@@ -1,0 +1,268 @@
+GUIDA ALLA STRUTTURA DEL PROGRAMMA
+AUSER Asti — Gestione Operativa
+Versione descritta: 1.0.20
+
+Questa guida è per chi vede il progetto per la prima volta.
+Non spiega ogni riga. Spiega dove sono le cose e come si parlano.
+
+
+1. CHE COSA È
+
+È un programma da installare sul computer (non un sito aperto dal browser).
+Serve a gestire i servizi di trasporto, i soci, i mezzi, i report e l'agenda.
+
+Dentro ci sono tre pezzi che lavorano insieme:
+
+  SCHERMATE     quello che l'utente vede e clicca
+  MOTORE        il programma vero, che apre le finestre e parla col database
+  DATABASE      i dati, che stanno online su Supabase
+
+In una frase:
+la schermata chiede, il motore va a prendere i dati, Supabase risponde.
+
+
+2. LE TRE LINGUE (NON SPAVENTARTI)
+
+  HTML    la struttura della pagina (titoli, pulsanti, campi)
+  CSS     i colori, le misure, la disposizione
+  JavaScript   cosa succede quando clicchi
+  Rust    il motore, nella cartella src-tauri
+
+Quasi ogni schermata ha tre file con lo stesso nome.
+Esempio Elenco soci:
+
+  ELENCOSOCI.html     la pagina
+  elencosoci.css      l'aspetto
+  elencosoci.js       il comportamento
+
+Se devi cambiare un pulsante, parti dall'HTML per trovarlo,
+poi dal JS per vedere cosa fa, poi dal CSS se è solo una questione di aspetto.
+
+Regola usata nel progetto: non mescolare tutto in un unico file enorme.
+Una pagina nuova vuole il suo HTML, il suo CSS e il suo JS.
+
+
+3. COME È FATTA UNA CARTELLA
+
+Nella cartella principale del progetto trovi le schermate (i file HTML, CSS e JS).
+
+  index.html + main.js + styles.css
+      la Home. È la prima pagina dopo il login.
+      I pulsanti della colonna sinistra aprono le altre finestre.
+
+  LOGIN.html + login.js + login.css
+      la pagina di accesso.
+
+  src-tauri
+      il motore in Rust.
+      src-tauri/src/main.rs       comandi che le schermate possono chiamare
+      src-tauri/src/supabase.rs   lettura e scrittura sul database
+      src-tauri/src/sharepoint.rs codice vecchio, non è più la strada dei dati
+      src-tauri/tauri.conf.json   nome del programma, finestre, aggiornamenti
+
+  config.json
+      indirizzo del database e chiavi di accesso.
+      Non si copia in giro e non si mette su GitHub.
+      Il modello vuoto, senza segreti, è config.example.json.
+
+  supabase-*.sql
+      istruzioni da eseguire una volta sul database
+      (per esempio le tabelle dell'agenda).
+      Non sono il programma: sono la preparazione del database.
+
+  docs
+      copia del calendario pensata per il sito pubblico.
+      Non è la finestra usata dentro il programma desktop.
+
+  presentazione
+      slide di presentazione, non fa parte del lavoro quotidiano.
+
+  file che finiscono con .backup oppure index-old.html
+      copie vecchie. Non si modificano per cambiare il programma.
+
+
+4. IL VIAGGIO DI UN CLIC
+
+Esempio: l'utente apre l'Elenco soci.
+
+  1. Sulla Home (index.html) c'è il pulsante ELENCO SOCI.
+  2. main.js, al clic, apre una finestra nuova con ELENCOSOCI.html.
+  3. elencosoci.js parte e chiama il motore con una riga di questo tipo:
+
+       invoke('nome_del_comando', { parametri })
+
+     invoke vuol dire: "motore, fai questo lavoro e restituiscimi il risultato".
+
+  4. In main.rs quel nome è una funzione segnata con #[tauri::command].
+  5. La funzione chiede i dati a supabase.rs.
+  6. supabase.rs fa una richiesta HTTP a Supabase (il database online).
+  7. I dati tornano indietro fino a elencosoci.js, che li disegna nella pagina.
+
+Schema:
+
+  pulsante  ->  file .js della pagina  ->  invoke
+       ->  funzione in main.rs  ->  supabase.rs  ->  database
+       ->  i dati rifanno la strada al contrario e la pagina si aggiorna
+
+Se una schermata "non carica", il guasto può essere in uno di questi punti:
+il JS non chiama il comando giusto, il comando Rust ha un errore,
+oppure il database rifiuta la richiesta.
+
+
+5. LA HOME E LE FINESTRE
+
+La Home resta aperta. Le altre funzioni sono finestre separate,
+non pagine che sostituiscono la Home.
+
+Aprirle è il compito di main.js (funzione che crea la finestra popup).
+Ogni finestra ha un'etichetta fissa, per esempio "appunti" o "elenco-servizi".
+Se la finestra è già aperta, il programma la riporta davanti invece di aprirne un'altra.
+
+La colonna di sinistra non mostra tutto a tutti.
+sidebar-permessi.js elenca le voci e dice chi può vederle.
+L'amministratore le accende o le spegne in Gestione utenti.
+Il permesso resta salvato nel database, nel campo SidebarMenu.
+
+
+6. MAPPA DELLE SCHERMATE
+
+Accesso
+  LOGIN.html          entra con email e password
+
+Lavoro di tutti i giorni
+  index.html          Home
+  CALENDARIO.html     calendario servizi dentro il programma
+  NUOVOSERVIZIO.html  crea un servizio
+  ELENCOSERVIZI.html  lista dei servizi, con stampa PDF
+  REPORTGIORNALIERO.html
+  REPORTSETTIMANALE.html
+  SCHEDASERVIZIO.html scheda di un singolo servizio
+
+Persone e mezzi
+  ELENCOSOCI.html         elenco soci, export PDF e Excel
+  ANAGRAFICASOCI.html     scheda di un socio
+  ELENCOOPERATORI.html    operatori
+  REPORTCHILOMETRI.html   chilometraggio di un operatore (la stampa è "Stampa" del foglio)
+  ELENCOMEZZI.html        mezzi
+
+Denaro e controlli
+  SELEZIONEDATAINCASSI.html   chiede il giorno, poi apre il report
+  RIEPILOGOINCASSI.html       incassi di quel giorno
+  RIEPILOGOPAGAMENTI.html     riepilogo pagamenti
+  VERIFICATESSERAMENTI.html   controllo anomalie tessere
+  TRATTEFUORIASTI.html        tratte fuori Asti
+
+Agenda e amministrazione
+  APPUNTI.html        agenda (appunti privati, per persone scelte, o per tutti)
+  UTENTI.html         gestione utenti e permessi
+  IMPOSTAZIONI.html   tabelle di supporto (tipi, stati, e simili)
+
+File JS di aiuto, senza una pagina tutta loro
+  auth-session.js           login, sessione, rinnovo automatico
+  sidebar-permessi.js       quali pulsanti mostrare
+  modifica-servizio.js      finestra per modificare un servizio
+  completa-servizio.js      finestra per chiudere un servizio
+  calcola-tariffa.js        calcolo della tariffa
+  operatore-km-mese.js      avviso sui chilometri dell'operatore
+  elencosoci-pdf.js         costruzione del PDF soci
+  elencosoci-excel.js       costruzione dell'Excel soci
+  elencoservizi-pdf.js      PDF dell'elenco servizi
+  app-version.js            numero di versione nella finestra
+  app-updater.js            controllo aggiornamenti
+  responsive-app.css        rimpicciolisce l'interfaccia sui portatili
+
+
+7. IL LOGIN, IN PAROLE SEMPLICI
+
+Al momento dell'accesso login.js chiama Supabase e riceve un permesso a tempo.
+auth-session.js lo salva sul computer, insieme a un codice per rinnovarlo.
+
+Le schermate, all'apertura, chiamano richiediSessione().
+Se il permesso sta per scadere, il programma lo rinnova da solo
+e l'utente non rivede la pagina di accesso.
+La pagina di accesso torna se si preme Cambia utente,
+oppure se il rinnovo non è più valido.
+
+I dati dei servizi non passano da questo permesso utente.
+Il motore Rust usa una chiave propria, letta da config.json.
+Quella chiave non va mai scritta in un messaggio, in una guida o su GitHub.
+
+
+8. IL DATABASE
+
+Supabase è un database online. Le tabelle hanno nomi che a volte
+non coincidono col nome "logico" usato nel programma.
+La traduzione sta in config.json, dentro supabase.tables.
+Esempio: il programma dice "servizi", la tabella vera è "Servizi_supa".
+
+supabase.rs sa come chiedere le righe (filtri, ordine, pagine).
+main.rs decide quale domanda fare per ogni schermata.
+
+L'agenda usa tre tabelle:
+  appunti_utente        il testo dell'appunto
+  appunti_destinatari   a chi è stato indirizzato
+  appunti_risposte      le risposte sotto un appunto
+
+Gli script supabase-appunti-*.sql servono a creare o aggiornare queste tabelle.
+Si lanciano a mano sul sito di Supabase, non dal programma.
+
+
+9. DOVE METTERE LE MANI
+
+  Cambiare un'etichetta o un pulsante
+      file HTML della schermata, poi il CSS se si sposta
+
+  Cambiare cosa succede al clic
+      file JS della schermata
+
+  I dati non arrivano o arrivano sbagliati
+      prima il JS (quale comando chiama),
+      poi main.rs (quel comando),
+      poi supabase.rs se la richiesta al database è da aggiustare
+
+  Un colore solo a video, non in stampa
+      il CSS della pagina, di solito dentro @media print
+
+  Chi vede un pulsante della Home
+      sidebar-permessi.js e, per i dati, Gestione utenti
+
+
+10. COME SI AVVIA IN SVILUPPO
+
+Dal terminale, nella cartella del progetto:
+
+  npm run tauri dev
+
+Parte il motore e anche un piccolo server locale (porta 1420)
+che mostra le schermate. Se modifichi HTML, CSS o JS,
+spesso basta guardare di nuovo la finestra.
+Se modifichi un file Rust (main.rs o supabase.rs),
+il programma si ricompila da solo: aspetta che finisca.
+
+Non serve capire Rust per cambiare una scritta o un colore.
+Serve se il cambiamento riguarda i dati letti o scritti sul database.
+
+
+11. COSE DA NON FARE SUBITO
+
+  Non modificare config.json per "provare": contiene le chiavi vere.
+  Non cancellare i file .backup se non sai a cosa servivano,
+  ma non usarli come punto di partenza: il codice vivo è senza .backup.
+  Non copiare una modifica solo in docs/ se la vuoi nel programma desktop:
+  docs è il calendario del sito, è una copia a parte.
+  Non allungare main.js con la logica di una schermata nuova:
+  quella logica sta nel JS della schermata.
+
+
+12. DA DOVE INIZIARE A LEGGERE
+
+Ordine consigliato, un file alla volta:
+
+  1. index.html          cosa c'è sulla Home
+  2. main.js             come si apre una finestra (cerca apriFinestraPopup)
+  3. auth-session.js     come si resta collegati
+  4. sidebar-permessi.js quali voci esistono
+  5. una schermata piccola, per esempio SELEZIONEDATAINCASSI.html
+     con selezionedataincassi.js: è corta e si capisce il giro completo
+  6. solo dopo, elencosoci.js o elencoservizi.js
+  7. main.rs e supabase.rs soltanto quando la domanda è "da dove arrivano i dati"

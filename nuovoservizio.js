@@ -13,9 +13,11 @@ import {
 } from './tratta-riepilogo.js';
 import { setupNuovoSocioTrasportato } from './nuovoservizio-nuovo-socio.js';
 import { setupRipetiServizio } from './nuovoservizio-ripeti.js';
-import { formatoAccountSessione } from './auth-session.js';
+import { formatoAccountSessione, risolviAccountCollegato } from './auth-session.js';
 import { apriCalcolaTariffa, ensureCalcolaTariffaMarkup, applicaRiepilogoTariffaNelDom, rimuoviRiepilogoTariffaDalForm, mergeTariffaInNote, leggiTariffaDalDom } from './calcola-tariffa.js';
 import { collegaHintKmOperatore, ensureDatiKmOperatoreMese, avvisaSeLimiteKmOperatore } from './operatore-km-mese.js';
+import { etichettaMezzo, idMezzo, trovaAutomezzo } from './mezzo-etichetta.js';
+import { ensureTariffeDonazione, getTariffeDonazione, testoPulsanteTariffa } from './tariffe-donazione.js';
 
 let invoke;
 
@@ -944,21 +946,27 @@ function popolaSelectOperatori() {
 function popolaSelectMezzi() {
     const select = document.getElementById('ns-mezzo');
     if (!select) return;
+    select.innerHTML = '';
+
+    const vuoto = document.createElement('option');
+    vuoto.value = '';
+    vuoto.textContent = '— Nessuno —';
+    select.appendChild(vuoto);
 
     allAutomezzi.forEach(m => {
-        const nr = normalizzaNumero(m.nr_automezzo);
-        const label = [m.marca, m.modello].filter(Boolean).join(' - ') + (nr ? ` (${nr})` : '');
+        const id = idMezzo(m);
+        if (!id) return;
         const opt = document.createElement('option');
-        opt.value = nr;
-        opt.textContent = label || nr || 'Mezzo';
+        opt.value = id;
+        opt.textContent = etichettaMezzo(m);
         select.appendChild(opt);
     });
 }
 
 function trovaAutomezzoSelezionato() {
-    const nr = normalizzaNumero(getValore('ns-mezzo'));
-    if (!nr) return null;
-    return allAutomezzi.find(m => normalizzaNumero(m.nr_automezzo) === nr) || null;
+    const id = getValore('ns-mezzo');
+    if (!id) return null;
+    return trovaAutomezzo(allAutomezzi, id);
 }
 
 function parseDataScadenzaMezzo(dateStr) {
@@ -1260,7 +1268,7 @@ async function salvaNoteMezzo() {
         }
     } else {
         automezzoSelezionatoCorrente = { ...automezzo, note_mezzo: nuovaNota };
-        const idx = allAutomezzi.findIndex(m => normalizzaNumero(m.nr_automezzo) === normalizzaNumero(automezzo.nr_automezzo));
+        const idx = allAutomezzi.findIndex(m => idMezzo(m) === idMezzo(automezzo));
         if (idx >= 0) {
             allAutomezzi[idx].note_mezzo = nuovaNota;
         }
@@ -1589,12 +1597,20 @@ async function applicaPagamentoConDomande(importo) {
     }
 }
 
+function aggiornaEtichetteTariffe() {
+    const { tariffa1, tariffa2 } = getTariffeDonazione();
+    const btn1 = document.getElementById('btn-pagamento-10');
+    const btn2 = document.getElementById('btn-pagamento-15');
+    if (btn1) btn1.textContent = testoPulsanteTariffa(tariffa1);
+    if (btn2) btn2.textContent = testoPulsanteTariffa(tariffa2);
+}
+
 async function onPagamento10() {
-    await applicaPagamentoConDomande(10);
+    await applicaPagamentoConDomande(getTariffeDonazione().tariffa1);
 }
 
 async function onPagamento15() {
-    await applicaPagamentoConDomande(15);
+    await applicaPagamentoConDomande(getTariffeDonazione().tariffa2);
 }
 
 async function onPagamentoLibero() {
@@ -1847,7 +1863,7 @@ function raccogliDatiForm() {
 function dettagliMezzoPerNr(nr) {
     const key = normalizzaNumero(nr);
     if (!key) return { mezzo: '', dotazioni: '', note_mezzo: '' };
-    const m = allAutomezzi.find((a) => normalizzaNumero(a.nr_automezzo) === key);
+    const m = trovaAutomezzo(allAutomezzi, key);
     return {
         mezzo: key,
         dotazioni: m?.dotazione || '',
@@ -2003,11 +2019,16 @@ async function salvaNuovoServizio() {
         }
 
         await invoke('init_supabase_from_config').catch(() => {});
+        const accountCreatore = await risolviAccountCollegato(invoke);
 
         const idsCreati = [];
+        const payloadConCreatore = (base) => ({
+            ...costruisciPayloadServizio(base),
+            creato_da: accountCreatore || formatoAccountSessione() || null
+        });
 
         if (occorrenze.length < 2) {
-            const nuovoId = await invoke('create_servizio', { payload: costruisciPayloadServizio(dati) });
+            const nuovoId = await invoke('create_servizio', { payload: payloadConCreatore(dati) });
             await mostraAvviso(`Servizio n. ${nuovoId} salvato correttamente.`);
             await chiudiPagina();
             return;
@@ -2030,7 +2051,7 @@ async function salvaNuovoServizio() {
                     idCapofila: idsCreati[0] || null
                 });
                 const nuovoId = await invoke('create_servizio', {
-                    payload: costruisciPayloadServizio(datiOcc)
+                    payload: payloadConCreatore(datiOcc)
                 });
                 idsCreati.push(nuovoId);
             }
@@ -2109,7 +2130,7 @@ async function caricaDatiIniziali() {
         try {
             await invoke('init_supabase_from_config').catch(() => {});
             const [tesserati, automezzi, motivazioni, localitaAuto, richiedenti, tipiPagamento, statiServizio] = await Promise.all([
-                invoke('get_all_tesserati'),
+                invoke('get_all_tesserati', { escludiArchiviati: true }),
                 invoke('get_all_automezzi'),
                 invoke('get_motivazioni_servizi').catch(() => []),
                 invoke('get_localita_autocomplete_servizi').catch(() => ({})),
@@ -2194,6 +2215,8 @@ async function caricaDatiIniziali() {
     popolaSelectStatiServizio();
     popolaSelectOperatori();
     popolaSelectMezzi();
+    await ensureTariffeDonazione(invoke);
+    aggiornaEtichetteTariffe();
     ripetiApi?.aggiornaOpzioniNelleRighe();
     setupAutocompleteTrasportato();
     setupAutocompleteMotivazione();

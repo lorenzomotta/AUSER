@@ -5,7 +5,7 @@ import { createLookupManager } from './impostazioni-lookup.js';
 let invoke;
 /** @type {Array<{id: string, impostazione: string, valore: string}>} */
 let impostazioniCaricate = [];
-/** @type {'impostazioni'|'richiedenti'|'tipo_socio'|'motivazioni_trasporto'|'tipo_pagamenti'} */
+/** @type {'impostazioni'|'richiedenti'|'tipo_socio'|'motivazioni_trasporto'|'tipo_pagamenti'|'mansioni'} */
 let tabAttiva = 'impostazioni';
 
 const INTRO_IMPOSTAZIONI =
@@ -267,7 +267,7 @@ async function chiudiFinestra() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const sessione = richiediSessione();
+    const sessione = await richiediSessione();
     if (!sessione) return;
     if (!isAdmin(sessione)) {
         alert('Accesso riservato agli amministratori.');

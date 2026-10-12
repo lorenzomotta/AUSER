@@ -26,7 +26,10 @@
       "tipo_socio": "TipoSocio_supa",
       "tratte": "Tratte_supa",
       "user_permissions": "user_permissions",
-      "tesseramenti": "Tesseramenti_supa"
+      "tesseramenti": "Tesseramenti_supa",
+      "appunti": "appunti_utente",
+      "appunti_destinatari": "appunti_destinatari",
+      "appunti_risposte": "appunti_risposte"
     }
   },
   "github": {

@@ -12,6 +12,8 @@ import {
     mostraAvvisoModifica
 } from './modifica-servizio.js';
 import { isServizioSerieAggiuntivo } from './nuovoservizio-ripeti.js';
+import { ensureTariffeDonazione } from './tariffe-donazione.js';
+import { risolviAccountCollegato } from './auth-session.js';
 
 let getInvokeFn = () => null;
 let isTauriEnv = () => false;
@@ -146,6 +148,7 @@ export async function apriModalCompleta(servizioId) {
     servizioInCompletamento = servizio;
     if (title) title.textContent = `COMPLETA SERVIZIO ${servizio.id || ''}`;
     aggiornaEtichetteAudit('comp', servizio);
+    await ensureTariffeDonazione(invoke);
     body.innerHTML = costruisciFormServizio(servizio, {
         idPrefix: 'comp',
         chiusuraPrima: true,
@@ -187,6 +190,8 @@ async function salvaCompletaServizio() {
         const invoke = getInvokeFn();
         if (isTauriEnv() && invoke) {
             await invoke('init_supabase_from_config').catch(() => {});
+            const account = await risolviAccountCollegato(invoke);
+            if (account) payload.modificato_da = account;
             await invoke('update_servizio_completo', { payload });
             const extraSerie = await propagaIncassoSerieDaPayload(payload, servizioInCompletamento);
             const aggiornato = await invoke('get_servizio_completo', { servizioId: payload.id });

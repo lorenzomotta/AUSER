@@ -5,6 +5,7 @@ import {
     normalizzaPayloadTratta,
     htmlContenutoRiepilogoTratta
 } from './tratta-riepilogo.js';
+import { testoMezzoServizio } from './mezzo-etichetta.js';
 
 let invoke, appWindow;
 
@@ -133,16 +134,7 @@ function normalizzaNumero(val) {
 }
 
 function costruisciStringaMezzo(servizio) {
-    const nrAutomezzo = normalizzaNumero(servizio.mezzo);
-    if (!nrAutomezzo) return servizio.mezzo_usato || '';
-    if (!allAutomezzi.length) return servizio.mezzo_usato || '';
-    const automezzo = allAutomezzi.find(a => normalizzaNumero(a.nr_automezzo) === nrAutomezzo);
-    if (!automezzo) return servizio.mezzo_usato || '';
-    const parti = [];
-    if (automezzo.marca) parti.push(automezzo.marca.trim());
-    if (automezzo.modello) parti.push(automezzo.modello.trim());
-    if (nrAutomezzo) parti.push(`(${nrAutomezzo})`);
-    return parti.join(' - ') || servizio.mezzo_usato || '';
+    return testoMezzoServizio(servizio, allAutomezzi);
 }
 
 async function caricaAutomezzi() {

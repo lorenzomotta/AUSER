@@ -345,12 +345,11 @@ html, body {
         background: #fff;
     }
 
-    .rc-operatore-nome {
-        background: #c8e6c9 !important;
-    }
-
+    .rc-operatore-nome,
+    .rc-operatore-vuoto .rc-operatore-nome,
+    .rc-nota-altri,
     .rc-totale-label {
-        background: #bdbdbd !important;
+        background: #fff !important;
     }
 
     .rc-operatore-blocco {
