@@ -1137,8 +1137,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     await apriFinestraPopup('appunti', {
                         url: 'APPUNTI.html',
                         title: 'Agenda',
-                        width: 720,
-                        height: 820,
+                        width: 780,
+                        height: 860,
                         resizable: true,
                         maximized: false,
                         decorations: true,
@@ -1150,7 +1150,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     alert('Impossibile aprire l\'Agenda.');
                 }
             } else {
-                window.open('APPUNTI.html', '_blank', 'width=720,height=820');
+                window.open('APPUNTI.html', '_blank', 'width=780,height=860');
             }
         });
     }

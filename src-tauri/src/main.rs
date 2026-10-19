@@ -4784,10 +4784,17 @@ fn build_automezzo_body(
     ];
 
     for (date_str, candidates, default_key) in scadenze {
-        let value = if let Some(iso) = italian_date_to_iso(date_str) {
+        // Postgres rifiuta "" su colonne date (errore 22007).
+        // Campo vuoto → NULL; data italiana → ISO; già ISO → così com'è.
+        let trimmed = date_str.trim();
+        let value = if trimmed.is_empty() {
+            serde_json::Value::Null
+        } else if let Some(iso) = italian_date_to_iso(trimmed) {
             serde_json::json!(iso)
+        } else if chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d").is_ok() {
+            serde_json::json!(trimmed)
         } else {
-            serde_json::json!("")
+            serde_json::Value::Null
         };
         put_field(&mut body, row, candidates, default_key, value);
     }
@@ -4810,16 +4817,46 @@ async fn create_automezzo(automezzo: Automezzo) -> Result<Automezzo, String> {
 
     let client_guard = get_supabase_client().lock().await;
     if let Some(client) = client_guard.as_ref() {
-        let template = client
+        let rows = client
             .fetch_automezzi(None)
             .await
-            .ok()
-            .and_then(|rows| rows.first().cloned());
+            .map_err(|e| format_supabase_error(&e))?;
 
-        let body = build_automezzo_body(&automezzo, template.as_ref());
+        // IdAutomezzo non è serial automatico: va assegnato (max + 1),
+        // come per idservizio / IdSocio. La colonna `id` del DB è un'altra cosa.
+        let mut max_id: u32 = 0;
+        for row in &rows {
+            let id = get_field_any(row, &["IdAutomezzo", "ID_AUTOMEZZO", "id_automezzo"])
+                .parse::<u32>()
+                .unwrap_or(0);
+            if id > max_id {
+                max_id = id;
+            }
+        }
+        let next_id = max_id.saturating_add(1);
+
+        let template = rows.first();
+        let mut body = build_automezzo_body(&automezzo, template);
         if body.is_empty() {
             return Err("Nessun campo da inserire per il nuovo mezzo".to_string());
         }
+
+        let id_column = template
+            .and_then(|row| {
+                resolve_column_key(row, &["IdAutomezzo", "ID_AUTOMEZZO", "id_automezzo"])
+            })
+            .unwrap_or_else(|| "IdAutomezzo".to_string());
+        body.insert(id_column, serde_json::json!(next_id));
+        // Non toccare la colonna seriale `id` / created_at del database
+        body.remove("id");
+        body.remove("created_at");
+
+        println!(
+            "📋 Creazione mezzo: max IdAutomezzo={} → nuovo={} ({} campi)",
+            max_id,
+            next_id,
+            body.len()
+        );
 
         let inserted = client
             .insert_automezzo(&body)
@@ -4867,6 +4904,29 @@ async fn save_automezzo(automezzo: Automezzo) -> Result<(), String> {
             .patch_automezzo(automezzo.id, &body)
             .await
             .map_err(|e| format_supabase_error(&e))?;
+        Ok(())
+    } else {
+        Err("Client Supabase non disponibile".to_string())
+    }
+}
+
+#[tauri::command]
+async fn delete_automezzo(id_automezzo: u32) -> Result<(), String> {
+    println!("=== delete_automezzo IdAutomezzo={} ===", id_automezzo);
+
+    if id_automezzo == 0 {
+        return Err("ID automezzo non valido".to_string());
+    }
+
+    ensure_supabase_client().await?;
+
+    let client_guard = get_supabase_client().lock().await;
+    if let Some(client) = client_guard.as_ref() {
+        client
+            .delete_automezzo(id_automezzo)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+        println!("✓ Automezzo IdAutomezzo={} eliminato", id_automezzo);
         Ok(())
     } else {
         Err("Client Supabase non disponibile".to_string())
@@ -9280,6 +9340,7 @@ fn main() {
             get_all_automezzi,
             save_automezzo,
             create_automezzo,
+            delete_automezzo,
             get_all_tratte,
             save_tratta,
             get_all_dotazioni_mezzi,

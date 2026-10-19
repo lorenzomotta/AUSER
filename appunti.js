@@ -31,6 +31,48 @@ function isTauri() {
             window.__TAURI_IPC__ !== undefined);
 }
 
+/** Zoom pagina Agenda: Ctrl (o Cmd su Mac) + rotellina del mouse */
+const ZOOM_DEFAULT = 1.1;
+const ZOOM_MIN = 0.8;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 0.1;
+let zoomCorrente = ZOOM_DEFAULT;
+
+function applicaZoomAgenda(valore) {
+    const arrotondato = Math.round(valore * 10) / 10;
+    zoomCorrente = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, arrotondato));
+    document.documentElement.style.zoom = String(zoomCorrente);
+}
+
+function initZoomAgenda() {
+    const zoomCss = parseFloat(getComputedStyle(document.documentElement).zoom);
+    if (Number.isFinite(zoomCss) && zoomCss > 0) {
+        zoomCorrente = zoomCss;
+    }
+    applicaZoomAgenda(zoomCorrente);
+
+    document.addEventListener('wheel', (ev) => {
+        if (!(ev.ctrlKey || ev.metaKey)) return;
+        ev.preventDefault();
+        const passo = ev.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
+        applicaZoomAgenda(zoomCorrente + passo);
+    }, { passive: false });
+
+    document.addEventListener('keydown', (ev) => {
+        if (!(ev.ctrlKey || ev.metaKey)) return;
+        if (ev.key === '0') {
+            ev.preventDefault();
+            applicaZoomAgenda(ZOOM_DEFAULT);
+        } else if (ev.key === '+' || ev.key === '=') {
+            ev.preventDefault();
+            applicaZoomAgenda(zoomCorrente + ZOOM_STEP);
+        } else if (ev.key === '-') {
+            ev.preventDefault();
+            applicaZoomAgenda(zoomCorrente - ZOOM_STEP);
+        }
+    });
+}
+
 function escapeHtml(str) {
     if (str === undefined || str === null) return '';
     return String(str)
@@ -916,6 +958,8 @@ async function chiudiFinestra() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    initZoomAgenda();
+
     sessione = await richiediSessione();
     if (!sessione) return;
     if (!puoVedereSidebar('appunti', sessione)) {

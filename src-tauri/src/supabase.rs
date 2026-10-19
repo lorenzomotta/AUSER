@@ -2584,6 +2584,47 @@ impl SupabaseClient {
         }))
     }
 
+    /// Elimina un automezzo per IdAutomezzo (DELETE PostgREST)
+    pub async fn delete_automezzo(&self, id_automezzo: u32) -> Result<(), String> {
+        let table_name = &self.config.tables.automezzi;
+        let base = self.config.url.trim_end_matches('/');
+        let mut last_error: Option<String> = None;
+
+        for id_col in ["IdAutomezzo", "ID_AUTOMEZZO", "id_automezzo"] {
+            let url = format!(
+                "{}/rest/v1/{}?{}=eq.{}",
+                base, table_name, id_col, id_automezzo
+            );
+
+            println!(
+                "📡 Supabase DELETE [automezzi → {}] {}={}",
+                table_name, id_col, id_automezzo
+            );
+
+            let request = self.http.delete(&url);
+            let response = self
+                .apply_auth_headers(request)
+                .send()
+                .await
+                .map_err(|e| format!("Errore connessione Supabase DELETE automezzi: {}", e))?;
+
+            if response.status().is_success() {
+                return Ok(());
+            }
+
+            let status = response.status();
+            let err_body = response.text().await.unwrap_or_default();
+            last_error = Some(format!("HTTP {}: {}", status, err_body));
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            format!(
+                "Impossibile eliminare automezzo IdAutomezzo={}",
+                id_automezzo
+            )
+        }))
+    }
+
     /// Inserisce un nuovo automezzo (POST PostgREST)
     pub async fn insert_automezzo(
         &self,

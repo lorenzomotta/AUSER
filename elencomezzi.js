@@ -23,6 +23,8 @@ let editingMezzoId = null;
 let mezzoEditSnapshot = null;
 let allDotazioni = [];
 let nuovoMezzoModalOpen = false;
+/** IdAutomezzo in attesa di conferma eliminazione */
+let mezzoDaEliminareId = null;
 
 function suggestNextNumeroMezzo() {
     const numbers = allMezzi
@@ -363,6 +365,7 @@ function createMezzoBlock(mezzo) {
                     <div class="mezzo-block-actions">
                         <button type="button" class="btn-mezzo-modifica">MODIFICA</button>
                         <button type="button" class="btn-mezzo-salva" hidden>SALVA</button>
+                        <button type="button" class="btn-mezzo-elimina" hidden>ELIMINA</button>
                         <button type="button" class="btn-mezzo-annulla" hidden>ANNULLA</button>
                     </div>
                     <span class="mezzo-block-status" aria-live="polite"></span>
@@ -403,9 +406,11 @@ function setMezzoBlockEditMode(block, editing) {
 
     const btnModifica = block.querySelector('.btn-mezzo-modifica');
     const btnSalva = block.querySelector('.btn-mezzo-salva');
+    const btnElimina = block.querySelector('.btn-mezzo-elimina');
     const btnAnnulla = block.querySelector('.btn-mezzo-annulla');
     if (btnModifica) btnModifica.hidden = editing;
     if (btnSalva) btnSalva.hidden = !editing;
+    if (btnElimina) btnElimina.hidden = !editing;
     if (btnAnnulla) btnAnnulla.hidden = !editing;
 
     setupDotazioneField(block, editing);
@@ -547,6 +552,108 @@ async function saveMezzoBlock(block) {
     } finally {
         if (btnSalva) btnSalva.disabled = false;
     }
+}
+
+function chiudiDialogEliminaMezzo() {
+    const overlay = document.getElementById('mezzi-dialog-elimina');
+    if (overlay) {
+        overlay.hidden = true;
+        overlay.setAttribute('aria-hidden', 'true');
+    }
+    mezzoDaEliminareId = null;
+    const btnSi = document.getElementById('mezzi-dialog-elimina-si');
+    const btnNo = document.getElementById('mezzi-dialog-elimina-no');
+    if (btnSi) btnSi.disabled = false;
+    if (btnNo) btnNo.disabled = false;
+}
+
+function apriDialogEliminaMezzo(block) {
+    if (!block) return;
+    const id = parseInt(block.dataset.mezzoId, 10) || 0;
+    if (!id) {
+        setBlockStatus(block, 'ID mezzo non valido', true);
+        return;
+    }
+
+    const nr = block.querySelector('[data-field="nr_automezzo"]')?.value?.trim() || '';
+    const marca = block.querySelector('[data-field="marca"]')?.value?.trim() || '';
+    const modello = block.querySelector('[data-field="modello"]')?.value?.trim() || '';
+    const targa = block.querySelector('[data-field="targa"]')?.value?.trim() || '';
+    const etichetta = [nr && `N. ${nr}`, marca, modello, targa && `(${targa})`]
+        .filter(Boolean)
+        .join(' ');
+
+    mezzoDaEliminareId = id;
+    const msgEl = document.getElementById('mezzi-dialog-elimina-messaggio');
+    if (msgEl) {
+        msgEl.textContent = etichetta
+            ? `Eliminare il mezzo ${etichetta}?\n\nL'operazione non si può annullare.`
+            : 'Eliminare questo mezzo?\n\nL\'operazione non si può annullare.';
+    }
+
+    const overlay = document.getElementById('mezzi-dialog-elimina');
+    if (!overlay) return;
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    document.getElementById('mezzi-dialog-elimina-no')?.focus();
+}
+
+async function confermaEliminaMezzo() {
+    const id = mezzoDaEliminareId;
+    if (!id) {
+        chiudiDialogEliminaMezzo();
+        return;
+    }
+
+    const block = document.querySelector(`.mezzo-block[data-mezzo-id="${id}"]`);
+    const btnSi = document.getElementById('mezzi-dialog-elimina-si');
+    const btnNo = document.getElementById('mezzi-dialog-elimina-no');
+    if (btnSi) btnSi.disabled = true;
+    if (btnNo) btnNo.disabled = true;
+
+    try {
+        if (isTauri() && invoke) {
+            await invoke('init_supabase_from_config').catch(() => {});
+            await invoke('delete_automezzo', { idAutomezzo: id });
+        }
+
+        allMezzi = allMezzi.filter((m) => String(m.id) !== String(id));
+        if (String(editingMezzoId) === String(id)) {
+            editingMezzoId = null;
+            mezzoEditSnapshot = null;
+        }
+        chiudiDialogEliminaMezzo();
+        refreshMezziListView();
+        updateNuovoMezzoButtonState();
+    } catch (error) {
+        console.error('Errore eliminazione mezzo:', error);
+        chiudiDialogEliminaMezzo();
+        if (block) {
+            setBlockStatus(block, `Errore eliminazione: ${error}`, true);
+        } else {
+            window.alert(`Impossibile eliminare il mezzo:\n${error}`);
+        }
+    }
+}
+
+function bindDialogEliminaMezzoEvents() {
+    document.getElementById('mezzi-dialog-elimina-si')?.addEventListener('click', confermaEliminaMezzo);
+    document.getElementById('mezzi-dialog-elimina-no')?.addEventListener('click', chiudiDialogEliminaMezzo);
+
+    const overlay = document.getElementById('mezzi-dialog-elimina');
+    overlay?.addEventListener('click', (e) => {
+        if (e.target === overlay) chiudiDialogEliminaMezzo();
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        const dialog = document.getElementById('mezzi-dialog-elimina');
+        if (dialog && !dialog.hidden) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            chiudiDialogEliminaMezzo();
+        }
+    }, true);
 }
 
 function setModalStatus(message, isError = false) {
@@ -729,6 +836,8 @@ function bindMezzoContainerEvents() {
             exitMezzoEditMode(true);
         } else if (e.target.classList.contains('btn-mezzo-salva')) {
             saveMezzoBlock(block);
+        } else if (e.target.classList.contains('btn-mezzo-elimina')) {
+            apriDialogEliminaMezzo(block);
         }
     });
 }
@@ -874,6 +983,7 @@ function hideSearch() {
 document.addEventListener('DOMContentLoaded', async () => {
     bindMezzoContainerEvents();
     bindNuovoMezzoModalEvents();
+    bindDialogEliminaMezzoEvents();
     await initTauri();
     await loadAllMezzi();
 

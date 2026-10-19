@@ -7,9 +7,14 @@ html, body {
     padding: 0;
     height: 100%;
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 12px;
+    font-size: 14px;
     color: #1a1a1a;
     background: #eceff1;
+}
+
+/* Zoom gestito da appunti.js (Ctrl + rotellina del mouse) */
+html {
+    zoom: 1.1;
 }
 
 .ap-app {
@@ -17,7 +22,7 @@ html, body {
     flex-direction: column;
     height: 100vh;
     min-height: 100%;
-    max-width: 720px;
+    max-width: 780px;
     margin: 0 auto;
     background: #f7f9fb;
     box-shadow: 0 0 0 1px #cfd8dc;
@@ -38,7 +43,7 @@ html, body {
 
 .ap-title {
     margin: 0;
-    font-size: 15px;
+    font-size: 18px;
     font-weight: 800;
     letter-spacing: 0.2px;
     line-height: 1.15;
@@ -46,7 +51,7 @@ html, body {
 
 .ap-subtitle {
     margin: 0;
-    font-size: 10px;
+    font-size: 12px;
     opacity: 0.95;
     font-weight: 600;
     line-height: 1.2;
@@ -55,8 +60,8 @@ html, body {
 .ap-btn {
     border: none;
     border-radius: 3px;
-    padding: 4px 8px;
-    font-size: 11px;
+    padding: 5px 10px;
+    font-size: 13px;
     font-weight: 700;
     cursor: pointer;
     line-height: 1.2;
@@ -66,20 +71,20 @@ html, body {
 .ap-btn-oggi { background: #fff; color: #e65100; }
 .ap-btn-aggiungi { background: #2e7d32; color: #fff; }
 .ap-btn-lato {
-    padding: 6px 8px;
-    font-size: 11px;
-    min-width: 72px;
+    padding: 7px 10px;
+    font-size: 13px;
+    min-width: 80px;
     flex-shrink: 0;
 }
 
 .ap-dialog-largo {
-    width: min(480px, 100%);
+    width: min(520px, 100%);
 }
 
 .ap-dialog-sottotitolo {
     margin: -8px 0 12px;
     text-align: center;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     color: #e65100;
     text-transform: capitalize;
@@ -179,8 +184,8 @@ html, body {
     min-width: 0;
     border: 1px solid #bcaaa4;
     border-radius: 3px;
-    padding: 5px 7px;
-    font-size: 12px;
+    padding: 6px 8px;
+    font-size: 14px;
 }
 
 .ap-btn-cerca {
@@ -254,16 +259,16 @@ html, body {
 }
 
 .ap-giorno-label {
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
     color: #607d8b;
     text-transform: uppercase;
 }
 
 .ap-data-input {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
-    padding: 2px 4px;
+    padding: 3px 6px;
     border: 1px solid #90a4ae;
     border-radius: 3px;
     text-align: center;
@@ -272,7 +277,7 @@ html, body {
 .ap-giorno-testo {
     margin: 0;
     flex-basis: 100%;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 800;
     color: #263238;
     text-transform: capitalize;
@@ -314,13 +319,13 @@ html, body {
 .ap-textarea {
     width: 100%;
     resize: vertical;
-    min-height: 32px;
-    padding: 4px 6px;
+    min-height: 40px;
+    padding: 6px 8px;
     border: 1px solid #90a4ae;
     border-radius: 3px;
     font-family: inherit;
-    font-size: 12px;
-    line-height: 1.25;
+    font-size: 14px;
+    line-height: 1.3;
 }
 
 .ap-visibilita {
@@ -336,7 +341,7 @@ html, body {
 
 .ap-visibilita legend {
     padding: 0 4px;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 800;
     color: #546e7a;
 }
@@ -345,7 +350,7 @@ html, body {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
 }
@@ -360,7 +365,7 @@ html, body {
 
 .ap-destinatari-hint {
     margin: 0 0 2px;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 700;
     color: #e65100;
 }
@@ -376,7 +381,7 @@ html, body {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 600;
     padding: 1px 0;
     cursor: pointer;
@@ -568,7 +573,7 @@ html, body {
 
 .ap-lista-title {
     margin: 0;
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 800;
 }
 
@@ -579,7 +584,7 @@ html, body {
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.2);
     font-weight: 800;
-    font-size: 10px;
+    font-size: 12px;
 }
 
 .ap-lista {
@@ -594,7 +599,7 @@ html, body {
     text-align: center;
     color: #78909c;
     font-style: italic;
-    font-size: 11px;
+    font-size: 13px;
 }
 
 .ap-item {
@@ -623,14 +628,14 @@ html, body {
 
 .ap-item-testo {
     width: 100%;
-    min-height: 28px;
+    min-height: 32px;
     resize: vertical;
     border: 1px solid transparent;
     border-radius: 3px;
-    padding: 2px 4px;
+    padding: 3px 5px;
     font-family: inherit;
-    font-size: 12px;
-    line-height: 1.25;
+    font-size: 14px;
+    line-height: 1.3;
     background: transparent;
 }
 
@@ -679,17 +684,17 @@ html, body {
 }
 
 .ap-dialog {
-    width: min(360px, 100%);
+    width: min(400px, 100%);
     background: #fff;
     border: 2px solid #37474f;
     border-radius: 6px;
-    padding: 18px 16px 14px;
+    padding: 22px 20px 16px;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
 }
 
 .ap-dialog-messaggio {
     margin: 0 0 16px;
-    font-size: 15px;
+    font-size: 18px;
     font-weight: 700;
     color: #263238;
     text-align: center;
@@ -705,11 +710,11 @@ html, body {
 }
 
 .ap-dialog-btn {
-    min-width: 120px;
+    min-width: 130px;
     border: none;
     border-radius: 4px;
-    padding: 10px 14px;
-    font-size: 13px;
+    padding: 12px 16px;
+    font-size: 15px;
     font-weight: 800;
     cursor: pointer;
     letter-spacing: 0.02em;
@@ -745,7 +750,7 @@ html, body {
 .ap-dialog-data-label {
     display: block;
     margin: 0 0 4px;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     color: #546e7a;
     text-align: center;
@@ -756,10 +761,10 @@ html, body {
     width: 100%;
     box-sizing: border-box;
     margin: 0 0 16px;
-    padding: 8px 10px;
+    padding: 10px 12px;
     border: 1px solid #90a4ae;
     border-radius: 4px;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 600;
     text-align: center;
 }
