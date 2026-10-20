@@ -439,9 +439,19 @@ fn insert_patch_bool_field(
 /// SCADENZA ASSICURAZIONE → Scadenza_Assicurazione | INSERVIZIO → InServizio
 /// NOTE → Note_mezzo | SCADENZA BOLLO → Scadenza_Bollo
 fn supabase_row_to_automezzo(row: &serde_json::Value) -> Option<Automezzo> {
-    let id_automezzo = get_field_any(row, &["IdAutomezzo", "ID_AUTOMEZZO", "id_automezzo"])
-        .parse::<u32>()
-        .unwrap_or(0);
+    let id_automezzo = get_field_any(
+        row,
+        &[
+            "IdAutomezzo",
+            "ID_AUTOMEZZO",
+            "id_automezzo",
+            "Idmezzo",
+            "IdMezzo",
+            "idmezzo",
+        ],
+    )
+    .parse::<u32>()
+    .unwrap_or(0);
 
     let id = if id_automezzo > 0 {
         id_automezzo
@@ -4700,6 +4710,14 @@ fn build_automezzo_body(
         }
     };
 
+    let numero_mezzo = automezzo.nr_automezzo.trim();
+    let numero_value = if numero_mezzo.is_empty() {
+        serde_json::Value::Null
+    } else if let Ok(n) = numero_mezzo.parse::<f64>() {
+        serde_json::json!(n)
+    } else {
+        serde_json::json!(numero_mezzo)
+    };
     put_field(
         &mut body,
         row,
@@ -4712,7 +4730,7 @@ fn build_automezzo_body(
             "nr_automezzo",
         ],
         "Numero_Mezzo",
-        serde_json::json!(automezzo.nr_automezzo),
+        numero_value,
     );
     put_field(
         &mut body,
@@ -4822,18 +4840,43 @@ async fn create_automezzo(automezzo: Automezzo) -> Result<Automezzo, String> {
             .await
             .map_err(|e| format_supabase_error(&e))?;
 
-        // IdAutomezzo non è serial automatico: va assegnato (max + 1),
-        // come per idservizio / IdSocio. La colonna `id` del DB è un'altra cosa.
+        // IdAutomezzo non è serial automatico. Il numero scritto in "N. MEZZO"
+        // diventa IdAutomezzo. La colonna `id` del DB è un'altra cosa.
         let mut max_id: u32 = 0;
+        let mut usati = std::collections::HashSet::new();
         for row in &rows {
-            let id = get_field_any(row, &["IdAutomezzo", "ID_AUTOMEZZO", "id_automezzo"])
-                .parse::<u32>()
-                .unwrap_or(0);
-            if id > max_id {
-                max_id = id;
+            let id = get_field_any(
+                row,
+                &[
+                    "IdAutomezzo",
+                    "ID_AUTOMEZZO",
+                    "id_automezzo",
+                    "Idmezzo",
+                    "IdMezzo",
+                    "idmezzo",
+                ],
+            )
+            .parse::<u32>()
+            .unwrap_or(0);
+            if id > 0 {
+                usati.insert(id);
+                if id > max_id {
+                    max_id = id;
+                }
             }
         }
-        let next_id = max_id.saturating_add(1);
+        let richiesto = automezzo.nr_automezzo.trim().parse::<u32>().unwrap_or(0);
+        let next_id = if richiesto > 0 {
+            if usati.contains(&richiesto) {
+                return Err(format!(
+                    "Il n. mezzo {} è già usato (campo IdAutomezzo)",
+                    richiesto
+                ));
+            }
+            richiesto
+        } else {
+            max_id.saturating_add(1)
+        };
 
         let template = rows.first();
         let mut body = build_automezzo_body(&automezzo, template);
@@ -4843,10 +4886,22 @@ async fn create_automezzo(automezzo: Automezzo) -> Result<Automezzo, String> {
 
         let id_column = template
             .and_then(|row| {
-                resolve_column_key(row, &["IdAutomezzo", "ID_AUTOMEZZO", "id_automezzo"])
+                resolve_column_key(
+                    row,
+                    &[
+                        "IdAutomezzo",
+                        "ID_AUTOMEZZO",
+                        "id_automezzo",
+                        "Idmezzo",
+                        "IdMezzo",
+                        "idmezzo",
+                    ],
+                )
             })
             .unwrap_or_else(|| "IdAutomezzo".to_string());
-        body.insert(id_column, serde_json::json!(next_id));
+        body.insert(id_column.clone(), serde_json::json!(next_id));
+        // Il numero nuovo sta in IdAutomezzo, non in Numero_Mezzo (quella colonna è vuota).
+        body.remove("Numero_Mezzo");
         // Non toccare la colonna seriale `id` / created_at del database
         body.remove("id");
         body.remove("created_at");

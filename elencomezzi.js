@@ -1,4 +1,5 @@
-// Elenco Mezzi — logica modulo (tabella Supabase Automezzi_Supa)
+// Elenco Mezzi — logica modulo (tabella Supabase Automezzi_Supa).
+// Il numero in "N. MEZZO" è il campo IdAutomezzo, non Numero_Mezzo.
 let invoke;
 
 async function initTauri() {
@@ -26,10 +27,17 @@ let nuovoMezzoModalOpen = false;
 /** IdAutomezzo in attesa di conferma eliminazione */
 let mezzoDaEliminareId = null;
 
+/** Numero mostrato in "N. MEZZO": è IdAutomezzo (il campo id del mezzo). */
+function numeroMezzoVisibile(mezzo) {
+    const id = parseInt(mezzo?.id, 10);
+    if (!Number.isNaN(id) && id > 0) return String(id);
+    return String(mezzo?.nr_automezzo || '').trim();
+}
+
 function suggestNextNumeroMezzo() {
     const numbers = allMezzi
-        .map((m) => parseInt(m.nr_automezzo, 10))
-        .filter((n) => !Number.isNaN(n));
+        .map((m) => parseInt(numeroMezzoVisibile(m), 10))
+        .filter((n) => !Number.isNaN(n) && n > 0);
     if (!numbers.length) return '1';
     return String(Math.max(...numbers) + 1);
 }
@@ -104,12 +112,12 @@ function escapeHtml(text) {
 
 function sortByNumeroMezzo(list) {
     return [...list].sort((a, b) => {
-        const na = parseInt(a.nr_automezzo, 10);
-        const nb = parseInt(b.nr_automezzo, 10);
+        const na = parseInt(numeroMezzoVisibile(a), 10);
+        const nb = parseInt(numeroMezzoVisibile(b), 10);
         if (!Number.isNaN(na) && !Number.isNaN(nb) && na !== nb) {
             return na - nb;
         }
-        return (a.nr_automezzo || '').localeCompare(b.nr_automezzo || '', 'it', { numeric: true });
+        return numeroMezzoVisibile(a).localeCompare(numeroMezzoVisibile(b), 'it', { numeric: true });
     });
 }
 
@@ -334,7 +342,7 @@ function createMezzoBlock(mezzo) {
             <div class="mezzo-form-row mezzo-form-row-principale">
                 <div class="mezzo-form-group mezzo-form-group-nr">
                     <label>N. MEZZO</label>
-                    <input type="text" data-field="nr_automezzo" value="${escapeHtml(mezzo.nr_automezzo || '')}" readonly>
+                    <input type="text" data-field="nr_automezzo" value="${escapeHtml(numeroMezzoVisibile(mezzo))}" readonly>
                 </div>
                 <div class="mezzo-form-group mezzo-form-group-marca">
                     <label>MARCA</label>
@@ -401,6 +409,11 @@ function setMezzoBlockEditMode(block, editing) {
     block.classList.toggle('mode-editing', editing);
 
     block.querySelectorAll('[data-field]').forEach((el) => {
+        // N. MEZZO è IdAutomezzo: non si cambia da qui, i servizi lo usano come riferimento.
+        if (el.dataset.field === 'nr_automezzo') {
+            setFieldEditable(el, false);
+            return;
+        }
         setFieldEditable(el, editing);
     });
 
@@ -446,12 +459,18 @@ function collectMezzoFromRoot(root, id = 0) {
 
 function collectMezzoFromBlock(block) {
     const id = parseInt(block.dataset.mezzoId, 10) || 0;
-    return collectMezzoFromRoot(block, id);
+    const data = collectMezzoFromRoot(block, id);
+    const cached = allMezzi.find((m) => String(m.id) === String(id));
+    if (cached) {
+        // Il riquadro mostra IdAutomezzo. Numero_Mezzo resta quello già salvato.
+        data.nr_automezzo = cached.nr_automezzo || '';
+    }
+    return data;
 }
 
 function applyFieldsToRoot(root, data) {
     Object.entries({
-        nr_automezzo: data.nr_automezzo,
+        nr_automezzo: numeroMezzoVisibile(data),
         marca: data.marca,
         modello: data.modello,
         targa: data.targa,
@@ -731,8 +750,8 @@ async function saveNuovoMezzoModal() {
     if (!form) return;
 
     const payload = collectMezzoFromRoot(form, 0);
-    if (!payload.nr_automezzo) {
-        setModalStatus('N. mezzo obbligatorio', true);
+    if (!/^\d+$/.test(payload.nr_automezzo) || Number(payload.nr_automezzo) <= 0) {
+        setModalStatus('N. mezzo: scrivi un numero intero maggiore di zero', true);
         return;
     }
 
@@ -922,6 +941,7 @@ function filterMezziBySearch(searchTerm) {
     return sortByNumeroMezzo(
         allMezzi.filter((m) => {
             const haystack = [
+                numeroMezzoVisibile(m),
                 m.nr_automezzo,
                 m.marca,
                 m.modello,

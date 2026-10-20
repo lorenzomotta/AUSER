@@ -47,11 +47,10 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Nuova versione v1.0.21:
-            - Agenda: caratteri più grandi e zoom con Ctrl + rotellina del mouse
-            - Elenco mezzi: creazione corretta anche senza scadenze e con IdAutomezzo automatico
-            - Elenco mezzi: in modifica si può eliminare un mezzo, con conferma
-            - Finestra Agenda leggermente più ampia
+            Nuova versione v1.0.22:
+            - Elenco mezzi: il numero N. MEZZO mostra il campo IdAutomezzo
+            - Un mezzo nuovo salva quel numero in IdAutomezzo
+            - Se il numero è già usato, il programma avvisa
 
             Gli utenti con l'app già installata riceveranno un avviso all'avvio
             e potranno aggiornare con un clic.

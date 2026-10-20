@@ -1,6 +1,6 @@
 GUIDA ALLA STRUTTURA DEL PROGRAMMA
 AUSER Asti — Gestione Operativa
-Versione descritta: 1.0.21
+Versione descritta: 1.0.22
 
 Questa guida è per chi vede il progetto per la prima volta.
 Non spiega ogni riga. Spiega dove sono le cose e come si parlano.
