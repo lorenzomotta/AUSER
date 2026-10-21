@@ -847,11 +847,27 @@ async function caricaAutomezzi() {
         return;
     }
     allAutomezzi = (data || []).map(row => ({
+        id: getFieldAny(row, ['IdAutomezzo', 'ID_AUTOMEZZO', 'id_automezzo', 'IdMezzo', 'idmezzo']),
         nr_automezzo: getFieldAny(row, ['Numero_Mezzo', 'NR_AUTOMEZZO', 'NumeroAutomezzo']),
         marca: getFieldAny(row, ['Marca', 'MARCA']),
         modello: getFieldAny(row, ['Modello', 'MODELLO']),
         targa: getFieldAny(row, ['Targa', 'TARGA'])
     }));
+}
+
+/** Il servizio salva IdAutomezzo nel campo Mezzo. Numero_Mezzo spesso è vuoto. */
+function chiaveMezzo(val) {
+    const s = String(val ?? '').trim();
+    if (!s || s === '0') return '';
+    return s.endsWith('.0') ? s.slice(0, -2) : s;
+}
+
+function trovaAutomezzoCalendario(idSalvato) {
+    const key = chiaveMezzo(idSalvato);
+    if (!key || !allAutomezzi.length) return null;
+    return allAutomezzi.find((a) => chiaveMezzo(a.id) === key)
+        || allAutomezzi.find((a) => chiaveMezzo(a.nr_automezzo) === key)
+        || null;
 }
 
 async function caricaServiziPerRange(start, endEsclusivo) {
@@ -868,23 +884,19 @@ async function caricaServiziPerRange(start, endEsclusivo) {
 }
 
 function costruisciStringaMezzo(servizio) {
-    const nrAutomezzo = normalizzaNumero(servizio.mezzo);
-    if (!nrAutomezzo || !allAutomezzi.length) return servizio.mezzo_usato || '';
-    const automezzo = allAutomezzi.find(a => normalizzaNumero(a.nr_automezzo) === nrAutomezzo);
-    if (!automezzo) return servizio.mezzo_usato || '';
+    const automezzo = trovaAutomezzoCalendario(servizio?.mezzo);
+    if (!automezzo) return servizio?.mezzo_usato || '';
     const parti = [];
     if (automezzo.marca) parti.push(automezzo.marca.trim());
     if (automezzo.modello) parti.push(automezzo.modello.trim());
-    if (nrAutomezzo) parti.push(`(${nrAutomezzo})`);
-    return parti.join(' - ') || servizio.mezzo_usato || '';
+    const id = chiaveMezzo(automezzo.id) || chiaveMezzo(automezzo.nr_automezzo);
+    if (id) parti.push(`(${id})`);
+    return parti.join(' - ') || servizio?.mezzo_usato || '';
 }
 
 /** Mezzo (marca/modello) e targa per un servizio */
 function mezzoETargaDaServizio(servizio) {
-    const nrAutomezzo = normalizzaNumero(servizio?.mezzo);
-    const automezzo = nrAutomezzo && allAutomezzi.length
-        ? allAutomezzi.find(a => normalizzaNumero(a.nr_automezzo) === nrAutomezzo)
-        : null;
+    const automezzo = trovaAutomezzoCalendario(servizio?.mezzo);
     let mezzo = '';
     if (automezzo) {
         const parti = [];
