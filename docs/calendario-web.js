@@ -1071,16 +1071,18 @@ function renderEventContent(arg) {
         const { mezzo, targa } = mezzoETargaDaServizio(s);
         const mezzoTarga = [mezzo, targa].filter(p => String(p).trim() !== '');
         const mezzoHtml = mezzoTarga.length
-            ? `<span class="cal-event-mezzo">${mezzoTarga.map(p => escapeHtml(p)).join(' · ')}</span>`
+            ? `<span class="cal-event-mezzo">${escapeHtml(mezzoTarga.join(' '))}</span>`
+            : '';
+        const rigaOra = (ora.trim() || mezzoHtml)
+            ? `<span class="cal-event-riga-ora">${ora.trim() ? `<span class="cal-event-ora">${escapeHtml(ora)}</span>` : ''}${mezzoHtml}</span>`
             : '';
         const titleDay = [ora, socio, op, ...mezzoTarga]
             .filter(p => String(p).trim() !== '')
             .join(' · ') || '—';
         const righe = [
-            ora ? `<span class="cal-event-ora">${escapeHtml(ora)}</span>` : '',
+            rigaOra,
             socioHtml ? `<span class="cal-event-socio">${socioHtml}</span>` : '',
-            opHtml ? `<span class="cal-event-op">${opHtml}</span>` : '',
-            mezzoHtml
+            opHtml ? `<span class="cal-event-op">${opHtml}</span>` : ''
         ].filter(Boolean);
         const html = righe.length
             ? `<div class="cal-event cal-event-mobile" title="${escapeHtml(titleDay)}">${righe.join('')}</div>`
