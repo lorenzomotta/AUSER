@@ -25,7 +25,7 @@ import {
     buildPayloadUpdateServizio,
     payloadSenzaMeta,
     OPZIONI_DEFAULT
-} from './calendario-web-edit.js?v=27';
+} from './calendario-web-edit.js?v=28';
 import { generaExcelCalendarioWeb } from './calendario-web-excel.js?v=1';
 
 let supabaseClient = null;
@@ -600,7 +600,7 @@ async function caricaNominativi() {
         }
         const opFlag = getFieldAny(row, ['Operatore', 'OPERATORE', 'operatore']);
         if (id && nom && isTruthyFlag(opFlag)) {
-            operatori.push({ value: id, label: nom });
+            operatori.push({ value: idOperatoreNorm(id), label: nom });
         }
     });
     allOperatori = operatori.sort((a, b) => a.label.localeCompare(b.label, 'it'));
@@ -622,11 +622,24 @@ function nomeOperatoreDaId(idOp) {
     return '';
 }
 
+function idOperatoreNorm(val) {
+    const s = String(val ?? '').trim();
+    if (!s || s === '0') return '';
+    return s.endsWith('.0') ? s.slice(0, -2) : s;
+}
+
+function testoOperatoreRiga(row) {
+    const operText = String(getFieldAny(row, ['Oper', 'OPER']) || '').trim();
+    if (operText && !/^-?\d+(\.0)?$/.test(operText)) return operText;
+    return '';
+}
+
 function resolveOperatoreNome(row) {
+    const dalTesto = testoOperatoreRiga(row);
+    if (dalTesto) return dalTesto;
     const idOp = idOperatoreDaRow(row);
     const daMappa = nomeOperatoreDaId(idOp);
     if (daMappa) return daMappa;
-    // se in mappa non c'è ancora, restituisci l'id (verrà riarricchito dopo caricaNominativi)
     return idOp;
 }
 
@@ -637,10 +650,13 @@ function resolveOperatoreId(row) {
 /** Risolve di nuovo il nominativo (utile se i servizi erano in cache prima dei tesserati) */
 function arricchisciNomeOperatore(servizio) {
     if (!servizio) return servizio;
-    const idOp = String(servizio.operatore_id || '').trim()
-        || (/^\d+$/.test(String(servizio.operatore || '').trim())
-            ? String(servizio.operatore).trim()
-            : '');
+    const attuale = String(servizio.operatore || '').trim();
+    const idOp = idOperatoreNorm(servizio.operatore_id)
+        || (/^-?\d+(\.0)?$/.test(attuale) ? idOperatoreNorm(attuale) : '');
+    if (attuale && !/^-?\d+(\.0)?$/.test(attuale)) {
+        if (servizio.operatore_id === idOp) return servizio;
+        return { ...servizio, operatore_id: idOp || servizio.operatore_id };
+    }
     const nome = nomeOperatoreDaId(idOp);
     if (!nome) return servizio;
     if (servizio.operatore === nome && servizio.operatore_id === idOp) return servizio;
@@ -649,6 +665,26 @@ function arricchisciNomeOperatore(servizio) {
         operatore_id: idOp || servizio.operatore_id,
         operatore: nome
     };
+}
+
+/** Id da selezionare nel menu: prima il nominativo scritto sul servizio, poi l'id. */
+function idOperatorePerSelect(servizio, operatori) {
+    const lista = Array.isArray(operatori) ? operatori : [];
+    const nome = String(servizio?.operatore || '').trim();
+    if (nome && !/^-?\d+(\.0)?$/.test(nome)) {
+        const nomeKey = nome.toUpperCase();
+        const perNome = lista.find((o) => String(o.label || '').trim().toUpperCase() === nomeKey);
+        if (perNome) return idOperatoreNorm(perNome.value);
+    }
+    const id = idOperatoreNorm(servizio?.operatore_id);
+    if (id && lista.some((o) => idOperatoreNorm(o.value) === id)) return id;
+    return id;
+}
+
+function nominativoOperatoreVisibile(servizio) {
+    const nome = String(servizio?.operatore || '').trim();
+    if (nome && !/^-?\d+(\.0)?$/.test(nome)) return nome;
+    return nomeOperatoreDaId(servizio?.operatore_id) || nomeOperatoreDaId(nome) || nome;
 }
 
 function buildTipoServizioDaRow(row) {
@@ -1440,7 +1476,15 @@ async function renderModalServizio(servizio) {
     const telefoni = await caricaTelefoniSocio(servizio.idsocio);
 
     if (isUtenteAdmin(permessiCorrenti)) {
-        body.innerHTML = htmlDettaglioServizioEditabile(servizio, getOpzioniModificaAdmin(), telefoni)
+        const opzioni = getOpzioniModificaAdmin();
+        const idOpSelect = idOperatorePerSelect(servizio, opzioni.operatori);
+        const nomeOp = String(servizio.operatore || '').trim();
+        if (idOpSelect && nomeOp && !/^-?\d+(\.0)?$/.test(nomeOp)
+            && !opzioni.operatori.some((o) => idOperatoreNorm(o.value) === idOpSelect)) {
+            opzioni.operatori = [{ value: idOpSelect, label: nomeOp }, ...opzioni.operatori];
+        }
+        const servizioForm = { ...servizio, operatore_id: idOpSelect || servizio.operatore_id };
+        body.innerHTML = htmlDettaglioServizioEditabile(servizioForm, opzioni, telefoni)
             + htmlRigaTrattaSePresente(servizio);
         valorizzaNoteFineEditabili(body, testoNoteFineVisibile(servizio.note_fine_servizio));
         return;
@@ -1481,7 +1525,7 @@ async function renderModalServizio(servizio) {
                 ${creaNotaDettaglio('NOTE ARRIVO', servizio.note_arrivo)}
             </div>
             <div class="dettaglio-row">
-                ${creaCampoDettaglio('OPERATORE', servizio.operatore, 'field-large')}
+                ${creaCampoDettaglio('OPERATORE', nominativoOperatoreVisibile(servizio), 'field-large')}
                 ${creaCampoDettaglio('MEZZO USATO', mezzo, 'field-large')}
                 ${creaCampoDettaglio('TEMPO', servizio.tempo, 'field-small')}
                 ${creaCampoDettaglio('KM', servizio.km, 'field-small')}

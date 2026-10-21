@@ -182,7 +182,7 @@ function normalizzaValoreMezzo(val) {
 export function htmlDettaglioServizioEditabile(servizio, opzioni = {}, telefoni = {}) {
     const s = servizio || {};
     const mezzoVal = normalizzaValoreMezzo(s.mezzo);
-    const opId = String(s.operatore_id || '').trim();
+    const opId = normalizzaValoreMezzo(s.operatore_id);
 
     return `
         <p class="dettaglio-edit-hint">Modalità amministratore: puoi modificare i campi e poi cliccare SALVA MODIFICHE.</p>
