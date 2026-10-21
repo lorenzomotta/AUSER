@@ -167,6 +167,12 @@ export function creaNotaModale(label, name, value, readonly = false) {
     });
 }
 
+function normalizzaValoreMezzo(val) {
+    const s = String(val ?? '').trim();
+    if (!s || s === '0') return '';
+    return s.endsWith('.0') ? s.slice(0, -2) : s;
+}
+
 /**
  * HTML corpo modale in modalità modifica admin.
  * @param {object} servizio
@@ -175,7 +181,7 @@ export function creaNotaModale(label, name, value, readonly = false) {
  */
 export function htmlDettaglioServizioEditabile(servizio, opzioni = {}, telefoni = {}) {
     const s = servizio || {};
-    const mezzoVal = String(s.mezzo || '').trim();
+    const mezzoVal = normalizzaValoreMezzo(s.mezzo);
     const opId = String(s.operatore_id || '').trim();
 
     return `

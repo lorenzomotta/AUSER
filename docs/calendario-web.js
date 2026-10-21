@@ -25,7 +25,7 @@ import {
     buildPayloadUpdateServizio,
     payloadSenzaMeta,
     OPZIONI_DEFAULT
-} from './calendario-web-edit.js?v=26';
+} from './calendario-web-edit.js?v=27';
 import { generaExcelCalendarioWeb } from './calendario-web-excel.js?v=1';
 
 let supabaseClient = null;
@@ -1368,17 +1368,32 @@ async function caricaTelefoniSocio(idsocio) {
     }
 }
 
+function etichettaAutomezzo(automezzo) {
+    if (!automezzo) return '';
+    const targa = String(automezzo.targa || '').trim().toUpperCase();
+    return [automezzo.marca, automezzo.modello, targa]
+        .map((p) => String(p || '').trim())
+        .filter(Boolean)
+        .join(' ');
+}
+
+function stringaMezzoVisibile(servizio) {
+    const auto = trovaAutomezzoCalendario(servizio?.mezzo);
+    const testo = etichettaAutomezzo(auto);
+    if (testo) return testo;
+    const id = chiaveMezzo(servizio?.mezzo);
+    return id ? `Mezzo ${id}` : '';
+}
+
 function getOpzioniModificaAdmin() {
     const mezzi = (allAutomezzi || [])
-        .filter((a) => a.nr_automezzo)
         .map((a) => {
-            const nr = String(a.nr_automezzo).trim();
-            const parti = [];
-            if (a.marca) parti.push(a.marca.trim());
-            if (a.modello) parti.push(a.modello.trim());
-            if (nr) parti.push(`(${nr})`);
-            return { value: nr, label: parti.join(' - ') || nr };
+            const value = chiaveMezzo(a.id) || chiaveMezzo(a.nr_automezzo);
+            if (!value) return null;
+            const label = etichettaAutomezzo(a) || `Mezzo ${value}`;
+            return { value, label };
         })
+        .filter(Boolean)
         .sort((a, b) => a.label.localeCompare(b.label, 'it'));
 
     return {
@@ -1418,7 +1433,7 @@ async function renderModalServizio(servizio) {
     if (!body) return;
 
     servizioCorrente = servizio;
-    const mezzo = costruisciStringaMezzo(servizio);
+    const mezzo = stringaMezzoVisibile(servizio);
     if (title) title.textContent = `SERVIZIO ${servizio.id || ''} — ${servizio.socio_trasportato || ''}`;
     aggiornaPulsantiFooterModale();
 
