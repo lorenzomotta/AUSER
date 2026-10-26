@@ -1,5 +1,5 @@
 // Elenco Mezzi — logica modulo (tabella Supabase Automezzi_Supa).
-// Il numero in "N. MEZZO" è il campo IdAutomezzo, non Numero_Mezzo.
+// N. MEZZO = IdAutomezzo | N. INTERNO = Numero_Mezzo | COLORE = ColoreMezzo
 let invoke;
 
 async function initTauri() {
@@ -31,7 +31,7 @@ let mezzoDaEliminareId = null;
 function numeroMezzoVisibile(mezzo) {
     const id = parseInt(mezzo?.id, 10);
     if (!Number.isNaN(id) && id > 0) return String(id);
-    return String(mezzo?.nr_automezzo || '').trim();
+    return '';
 }
 
 function suggestNextNumeroMezzo() {
@@ -45,7 +45,9 @@ function suggestNextNumeroMezzo() {
 function createEmptyMezzoTemplate() {
     return {
         id: 0,
-        nr_automezzo: suggestNextNumeroMezzo(),
+        id_display: suggestNextNumeroMezzo(),
+        nr_automezzo: '',
+        colore_mezzo: '',
         marca: '',
         modello: '',
         targa: '',
@@ -342,7 +344,15 @@ function createMezzoBlock(mezzo) {
             <div class="mezzo-form-row mezzo-form-row-principale">
                 <div class="mezzo-form-group mezzo-form-group-nr">
                     <label>N. MEZZO</label>
-                    <input type="text" data-field="nr_automezzo" value="${escapeHtml(numeroMezzoVisibile(mezzo))}" readonly>
+                    <input type="text" data-field="id_display" value="${escapeHtml(numeroMezzoVisibile(mezzo))}" readonly>
+                </div>
+                <div class="mezzo-form-group mezzo-form-group-nr-interno">
+                    <label>N. INTERNO</label>
+                    <input type="text" data-field="nr_automezzo" value="${escapeHtml(mezzo.nr_automezzo || '')}" readonly>
+                </div>
+                <div class="mezzo-form-group mezzo-form-group-colore">
+                    <label>COLORE</label>
+                    <input type="text" data-field="colore_mezzo" value="${escapeHtml(mezzo.colore_mezzo || '')}" readonly>
                 </div>
                 <div class="mezzo-form-group mezzo-form-group-marca">
                     <label>MARCA</label>
@@ -362,7 +372,6 @@ function createMezzoBlock(mezzo) {
                 </div>
                 ${scadenzaFieldHtml('SCAD. ZTL', 'scadenza_ztl', mezzo.scadenza_ztl)}
                 ${scadenzaFieldHtml('SCAD. ASSIC.', 'scadenza_assicurazione', mezzo.scadenza_assicurazione)}
-                ${scadenzaFieldHtml('SCAD. BOLLO', 'scadenza_bollo', mezzo.scadenza_bollo)}
                 <div class="mezzo-form-group mezzo-form-group-inservizio">
                     <label>IN SERV.</label>
                     <div class="mezzo-checkbox-container">
@@ -409,8 +418,8 @@ function setMezzoBlockEditMode(block, editing) {
     block.classList.toggle('mode-editing', editing);
 
     block.querySelectorAll('[data-field]').forEach((el) => {
-        // N. MEZZO è IdAutomezzo: non si cambia da qui, i servizi lo usano come riferimento.
-        if (el.dataset.field === 'nr_automezzo') {
+        // N. MEZZO (IdAutomezzo) non si cambia: i servizi lo usano come riferimento.
+        if (el.dataset.field === 'id_display') {
             setFieldEditable(el, false);
             return;
         }
@@ -429,7 +438,7 @@ function setMezzoBlockEditMode(block, editing) {
     setupDotazioneField(block, editing);
 
     if (editing) {
-        block.querySelector('[data-field="marca"]')?.focus();
+        block.querySelector('[data-field="nr_automezzo"]')?.focus();
     } else {
         const status = block.querySelector('.mezzo-block-status');
         if (status) status.textContent = '';
@@ -441,10 +450,16 @@ function setMezzoBlockEditMode(block, editing) {
 function collectMezzoFromRoot(root, id = 0) {
     const getVal = (name) => root.querySelector(`[data-field="${name}"]`)?.value?.trim() ?? '';
     const inServizioEl = root.querySelector('[data-field="in_servizio"]');
+    const idDisplay = getVal('id_display');
+    const idFromDisplay = parseInt(idDisplay, 10);
+    const resolvedId = id > 0
+        ? id
+        : (!Number.isNaN(idFromDisplay) && idFromDisplay > 0 ? idFromDisplay : 0);
 
     return {
-        id,
+        id: resolvedId,
         nr_automezzo: getVal('nr_automezzo'),
+        colore_mezzo: getVal('colore_mezzo'),
         marca: getVal('marca'),
         modello: getVal('modello'),
         targa: getVal('targa').toUpperCase(),
@@ -462,22 +477,23 @@ function collectMezzoFromBlock(block) {
     const data = collectMezzoFromRoot(block, id);
     const cached = allMezzi.find((m) => String(m.id) === String(id));
     if (cached) {
-        // Il riquadro mostra IdAutomezzo. Numero_Mezzo resta quello già salvato.
-        data.nr_automezzo = cached.nr_automezzo || '';
+        // Scadenza bollo non è più in UI: non azzerarla in salvataggio.
+        data.scadenza_bollo = cached.scadenza_bollo || '';
     }
     return data;
 }
 
 function applyFieldsToRoot(root, data) {
     Object.entries({
-        nr_automezzo: numeroMezzoVisibile(data),
+        id_display: data.id_display || numeroMezzoVisibile(data),
+        nr_automezzo: data.nr_automezzo,
+        colore_mezzo: data.colore_mezzo,
         marca: data.marca,
         modello: data.modello,
         targa: data.targa,
         dotazione: data.dotazione,
         scadenza_ztl: data.scadenza_ztl,
         scadenza_assicurazione: data.scadenza_assicurazione,
-        scadenza_bollo: data.scadenza_bollo,
         note_mezzo: data.note_mezzo
     }).forEach(([field, value]) => {
         const el = root.querySelector(`[data-field="${field}"]`);
@@ -543,8 +559,8 @@ async function saveMezzoBlock(block) {
     if (!block || !block.classList.contains('mode-editing')) return;
 
     const payload = collectMezzoFromBlock(block);
-    if (!payload.nr_automezzo) {
-        setBlockStatus(block, 'N. mezzo obbligatorio', true);
+    if (!payload.id) {
+        setBlockStatus(block, 'N. mezzo non valido', true);
         return;
     }
 
@@ -594,11 +610,13 @@ function apriDialogEliminaMezzo(block) {
         return;
     }
 
-    const nr = block.querySelector('[data-field="nr_automezzo"]')?.value?.trim() || '';
+    const nr = block.querySelector('[data-field="id_display"]')?.value?.trim() || '';
+    const nrInterno = block.querySelector('[data-field="nr_automezzo"]')?.value?.trim() || '';
+    const colore = block.querySelector('[data-field="colore_mezzo"]')?.value?.trim() || '';
     const marca = block.querySelector('[data-field="marca"]')?.value?.trim() || '';
     const modello = block.querySelector('[data-field="modello"]')?.value?.trim() || '';
     const targa = block.querySelector('[data-field="targa"]')?.value?.trim() || '';
-    const etichetta = [nr && `N. ${nr}`, marca, modello, targa && `(${targa})`]
+    const etichetta = [nr && `N. ${nr}`, nrInterno, colore, marca, modello, targa && `(${targa})`]
         .filter(Boolean)
         .join(' ');
 
@@ -706,7 +724,7 @@ function openNuovoMezzoModal() {
     modal.hidden = false;
     updateNuovoMezzoButtonState();
     setupDotazioneField(document.getElementById('form-nuovo-mezzo'), true);
-    document.getElementById('modal-nr-automezzo')?.focus();
+    document.getElementById('modal-id-display')?.focus();
 }
 
 function closeNuovoMezzoModal() {
@@ -750,7 +768,7 @@ async function saveNuovoMezzoModal() {
     if (!form) return;
 
     const payload = collectMezzoFromRoot(form, 0);
-    if (!/^\d+$/.test(payload.nr_automezzo) || Number(payload.nr_automezzo) <= 0) {
+    if (!payload.id || payload.id <= 0) {
         setModalStatus('N. mezzo: scrivi un numero intero maggiore di zero', true);
         return;
     }
@@ -872,7 +890,8 @@ async function loadAllMezzi() {
         const demo = [
             {
                 id: 1,
-                nr_automezzo: '1',
+                nr_automezzo: '101',
+                colore_mezzo: 'Bianco',
                 marca: 'FIAT',
                 modello: 'PANDA',
                 targa: 'AB123CD',
@@ -885,7 +904,8 @@ async function loadAllMezzi() {
             },
             {
                 id: 2,
-                nr_automezzo: '2',
+                nr_automezzo: '102',
+                colore_mezzo: '',
                 marca: 'FIAT',
                 modello: 'DOBLO',
                 targa: 'EF456GH',
@@ -943,6 +963,7 @@ function filterMezziBySearch(searchTerm) {
             const haystack = [
                 numeroMezzoVisibile(m),
                 m.nr_automezzo,
+                m.colore_mezzo,
                 m.marca,
                 m.modello,
                 m.targa,

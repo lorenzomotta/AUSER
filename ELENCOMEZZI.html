@@ -18,7 +18,7 @@
                         <span class="icon-search">🔍</span>
                     </button>
                     <div class="search-container" id="search-container" style="display: none;">
-                        <input type="text" id="search-input" class="search-input" placeholder="Cerca per n., marca, modello, targa...">
+                        <input type="text" id="search-input" class="search-input" placeholder="Cerca per n., interno, colore, marca, modello, targa...">
                         <button class="btn-icon-close" id="btn-hide-search" title="Chiudi ricerca" type="button">
                             <span class="icon-close">✕</span>
                         </button>
@@ -46,8 +46,16 @@
                 <div class="mezzi-modal-grid">
                     <div class="mezzi-modal-row mezzi-modal-row-principale">
                         <div class="mezzo-form-group mezzo-form-group-nr">
-                            <label for="modal-nr-automezzo">N. MEZZO</label>
-                            <input type="text" id="modal-nr-automezzo" data-field="nr_automezzo" required>
+                            <label for="modal-id-display">N. MEZZO</label>
+                            <input type="text" id="modal-id-display" data-field="id_display" required>
+                        </div>
+                        <div class="mezzo-form-group mezzo-form-group-nr-interno">
+                            <label for="modal-nr-automezzo">N. INTERNO</label>
+                            <input type="text" id="modal-nr-automezzo" data-field="nr_automezzo">
+                        </div>
+                        <div class="mezzo-form-group mezzo-form-group-colore">
+                            <label for="modal-colore-mezzo">COLORE</label>
+                            <input type="text" id="modal-colore-mezzo" data-field="colore_mezzo">
                         </div>
                         <div class="mezzo-form-group mezzo-form-group-marca">
                             <label for="modal-marca">MARCA</label>
@@ -74,10 +82,6 @@
                         <div class="mezzo-form-group mezzo-form-group-scadenza">
                             <label for="modal-scadenza-assic">SCAD. ASSIC.</label>
                             <input type="text" id="modal-scadenza-assic" data-field="scadenza_assicurazione" placeholder="gg/mm/aaaa">
-                        </div>
-                        <div class="mezzo-form-group mezzo-form-group-scadenza">
-                            <label for="modal-scadenza-bollo">SCAD. BOLLO</label>
-                            <input type="text" id="modal-scadenza-bollo" data-field="scadenza_bollo" placeholder="gg/mm/aaaa">
                         </div>
                         <div class="mezzo-form-group mezzo-form-group-inservizio">
                             <label>IN SERV.</label>

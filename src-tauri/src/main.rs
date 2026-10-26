@@ -497,6 +497,7 @@ fn supabase_row_to_automezzo(row: &serde_json::Value) -> Option<Automezzo> {
     Some(Automezzo {
         id,
         nr_automezzo,
+        colore_mezzo: get_field_any(row, &["ColoreMezzo", "Colore_Mezzo", "colore_mezzo", "COLOREMEZZO"]),
         marca: get_field_any(row, &["Marca", "MARCA"]),
         modello: get_field_any(row, &["Modello", "MODELLO"]),
         targa: get_field_any(row, &["Targa", "TARGA"]),
@@ -1383,7 +1384,9 @@ fn italian_date_to_iso(date_str: &str) -> Option<String> {
 #[derive(Debug, Serialize, Deserialize)]
 struct Automezzo {
     id: u32,              // IdAutomezzo (ID_AUTOMEZZO)
-    nr_automezzo: String, // Numero_Mezzo (NR_AUTOMEZZO)
+    nr_automezzo: String, // Numero_Mezzo → in UI "Numero_Interno"
+    #[serde(default)]
+    colore_mezzo: String, // ColoreMezzo (può essere vuoto/null)
     marca: String,        // Marca
     modello: String,      // Modello
     targa: String,        // Targa
@@ -1392,7 +1395,8 @@ struct Automezzo {
     scadenza_assicurazione: String, // Scadenza_Assicurazione
     in_servizio: String,  // InServizio (boolean → stringa)
     note_mezzo: String,   // Note_mezzo
-    scadenza_bollo: String, // Scadenza_Bollo
+    #[serde(default)]
+    scadenza_bollo: String, // Scadenza_Bollo (non più in UI, conservata in DB)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -4732,6 +4736,26 @@ fn build_automezzo_body(
         "Numero_Mezzo",
         numero_value,
     );
+    let colore = automezzo.colore_mezzo.trim();
+    let colore_value = if colore.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::json!(colore)
+    };
+    // ColoreMezzo può essere una colonna appena aggiunta: se non compare ancora
+    // nella riga template, scriviamo comunque con il nome ufficiale.
+    if let Some(r) = row {
+        if let Some(key) = resolve_column_key(
+            r,
+            &["ColoreMezzo", "Colore_Mezzo", "colore_mezzo", "COLOREMEZZO"],
+        ) {
+            body.insert(key, colore_value);
+        } else {
+            body.insert("ColoreMezzo".to_string(), colore_value);
+        }
+    } else {
+        body.insert("ColoreMezzo".to_string(), colore_value);
+    }
     put_field(
         &mut body,
         row,
@@ -4823,13 +4847,9 @@ fn build_automezzo_body(
 #[tauri::command]
 async fn create_automezzo(automezzo: Automezzo) -> Result<Automezzo, String> {
     println!(
-        "=== create_automezzo NR='{}' TARGA='{}' ===",
-        automezzo.nr_automezzo, automezzo.targa
+        "=== create_automezzo Id={} Numero_Interno='{}' TARGA='{}' ===",
+        automezzo.id, automezzo.nr_automezzo, automezzo.targa
     );
-
-    if automezzo.nr_automezzo.trim().is_empty() {
-        return Err("N. mezzo obbligatorio".to_string());
-    }
 
     ensure_supabase_client().await?;
 
@@ -4840,8 +4860,8 @@ async fn create_automezzo(automezzo: Automezzo) -> Result<Automezzo, String> {
             .await
             .map_err(|e| format_supabase_error(&e))?;
 
-        // IdAutomezzo non è serial automatico. Il numero scritto in "N. MEZZO"
-        // diventa IdAutomezzo. La colonna `id` del DB è un'altra cosa.
+        // IdAutomezzo non è serial automatico. Il numero in "N. MEZZO" (campo id)
+        // diventa IdAutomezzo. Numero_Mezzo è il "Numero_Interno" separato.
         let mut max_id: u32 = 0;
         let mut usati = std::collections::HashSet::new();
         for row in &rows {
@@ -4865,17 +4885,21 @@ async fn create_automezzo(automezzo: Automezzo) -> Result<Automezzo, String> {
                 }
             }
         }
-        let richiesto = automezzo.nr_automezzo.trim().parse::<u32>().unwrap_or(0);
-        let next_id = if richiesto > 0 {
-            if usati.contains(&richiesto) {
-                return Err(format!(
-                    "Il n. mezzo {} è già usato (campo IdAutomezzo)",
-                    richiesto
-                ));
-            }
-            richiesto
+        let richiesto = if automezzo.id > 0 {
+            automezzo.id
         } else {
-            max_id.saturating_add(1)
+            automezzo.nr_automezzo.trim().parse::<u32>().unwrap_or(0)
+        };
+        if richiesto == 0 {
+            return Err("N. mezzo obbligatorio".to_string());
+        }
+        let next_id = if usati.contains(&richiesto) {
+            return Err(format!(
+                "Il n. mezzo {} è già usato (campo IdAutomezzo)",
+                richiesto
+            ));
+        } else {
+            richiesto
         };
 
         let template = rows.first();
@@ -4900,8 +4924,6 @@ async fn create_automezzo(automezzo: Automezzo) -> Result<Automezzo, String> {
             })
             .unwrap_or_else(|| "IdAutomezzo".to_string());
         body.insert(id_column.clone(), serde_json::json!(next_id));
-        // Il numero nuovo sta in IdAutomezzo, non in Numero_Mezzo (quella colonna è vuota).
-        body.remove("Numero_Mezzo");
         // Non toccare la colonna seriale `id` / created_at del database
         body.remove("id");
         body.remove("created_at");

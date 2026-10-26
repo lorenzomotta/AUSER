@@ -275,6 +275,16 @@ body {
 
 .mezzo-form-group-nr { flex: 0 0 58px; }
 
+.mezzo-form-group-nr-interno {
+    flex: 0 0 72px;
+}
+
+.mezzo-form-group-colore {
+    flex: 0 1 130px;
+    min-width: 110px;
+    max-width: 160px;
+}
+
 .mezzo-form-group-marca {
     flex: 0 1 68px;
     min-width: 60px;
@@ -282,9 +292,9 @@ body {
 }
 
 .mezzo-form-group-modello {
-    flex: 0 1 96px;
-    min-width: 88px;
-    max-width: 108px;
+    flex: 0 1 140px;
+    min-width: 120px;
+    max-width: 180px;
 }
 
 .mezzo-form-group-targa {
@@ -544,6 +554,21 @@ body {
 .mezzi-modal-grid .mezzo-form-group-nr {
     flex: 0 1 90px;
     min-width: 80px;
+}
+
+.mezzi-modal-grid .mezzo-form-group-nr-interno {
+    flex: 0 1 100px;
+    min-width: 90px;
+}
+
+.mezzi-modal-grid .mezzo-form-group-colore {
+    flex: 0 1 150px;
+    min-width: 130px;
+}
+
+.mezzi-modal-grid .mezzo-form-group-modello {
+    flex: 1 1 180px;
+    min-width: 150px;
 }
 
 .mezzi-modal-grid .mezzo-form-group-inservizio {
