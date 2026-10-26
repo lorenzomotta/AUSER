@@ -47,7 +47,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Aggiornamento v1.0.22 (stessa versione):
+            Nuova versione v1.0.23:
             - Elenco mezzi: N. INTERNO (Numero_Mezzo) modificabile e COLORE (ColoreMezzo, anche vuoto)
             - Tolta dalla scheda la Scadenza Bollo
             - Scelta mezzo in Nuovo/Modifica servizio e calendario mobile: include n. interno e colore
