@@ -1,6 +1,17 @@
 // Elenco Mezzi — logica modulo (tabella Supabase Automezzi_Supa).
 // Il numero in "N. MEZZO" è il campo IdAutomezzo, non Numero_Mezzo.
+import {
+    initManutenzioneMezzoModal,
+    initElencoManutenzioniModal,
+    initCompletaManutenzioneModal,
+    initScaduteManutenzioniModal
+} from './manutenzioni-mezzo.js';
+
 let invoke;
+let manutenzioneModal = null;
+let elencoManutenzioniModal = null;
+let completaManutenzioneModal = null;
+let scaduteManutenzioniModal = null;
 
 async function initTauri() {
     try {
@@ -26,6 +37,8 @@ let allDotazioni = [];
 let nuovoMezzoModalOpen = false;
 /** IdAutomezzo in attesa di conferma eliminazione */
 let mezzoDaEliminareId = null;
+/** IdAutomezzo → chilometraggio di arrivo più alto trovato nei servizi */
+let ultimiKmPerMezzo = {};
 
 /** Numero mostrato in "N. MEZZO": è IdAutomezzo (il campo id del mezzo). */
 function numeroMezzoVisibile(mezzo) {
@@ -313,6 +326,49 @@ function updateMezziCount(count) {
     if (el) el.textContent = `(${count})`;
 }
 
+function chiaveMezzoKm(mezzoOrId) {
+    const raw = mezzoOrId && typeof mezzoOrId === 'object'
+        ? (mezzoOrId.id ?? mezzoOrId.nr_automezzo ?? '')
+        : mezzoOrId;
+    const s = String(raw ?? '').trim();
+    if (!s) return '';
+    return s.endsWith('.0') ? s.slice(0, -2) : s;
+}
+
+function formatUltimoKm(value) {
+    if (value === null || value === undefined || value === '') return '';
+    const n = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(n) || n <= 0) return '';
+    if (Number.isInteger(n)) return String(n);
+    return String(Math.round(n));
+}
+
+function ultimoKmDiMezzo(mezzo) {
+    const key = chiaveMezzoKm(mezzo);
+    if (!key) return '';
+    return formatUltimoKm(ultimiKmPerMezzo[key]);
+}
+
+async function loadUltimiKmMezzi() {
+    ultimiKmPerMezzo = {};
+    if (!isTauri() || !invoke) return;
+
+    try {
+        await invoke('init_supabase_from_config').catch(() => {});
+        const list = await invoke('get_ultimi_km_mezzi');
+        if (!Array.isArray(list)) return;
+        list.forEach((item) => {
+            const key = chiaveMezzoKm(item?.mezzo);
+            const km = Number(item?.km);
+            if (key && Number.isFinite(km) && km > 0) {
+                ultimiKmPerMezzo[key] = km;
+            }
+        });
+    } catch (error) {
+        console.error('Errore caricamento ultimi km mezzi:', error);
+    }
+}
+
 function updateMezzoInCache(data) {
     const index = allMezzi.findIndex(m => String(m.id) === String(data.id));
     if (index >= 0) {
@@ -369,9 +425,15 @@ function createMezzoBlock(mezzo) {
                         <input type="checkbox" data-field="in_servizio" ${inServizio ? 'checked' : ''} disabled>
                     </div>
                 </div>
+                <div class="mezzo-form-group mezzo-form-group-ultimo-km">
+                    <label>ULTIMO KM</label>
+                    <input type="text" data-field="ultimo_km" value="${escapeHtml(ultimoKmDiMezzo(mezzo))}" readonly title="Ultimo chilometraggio (valore più alto nei servizi)">
+                </div>
                 <div class="mezzo-form-group mezzo-form-group-actions">
                     <div class="mezzo-block-actions">
                         <button type="button" class="btn-mezzo-modifica">MODIFICA</button>
+                        <button type="button" class="btn-mezzo-manutenzione">NUOVA MANUTENZIONE</button>
+                        <button type="button" class="btn-mezzo-vedi-manutenzioni">VEDI MANUTENZIONI</button>
                         <button type="button" class="btn-mezzo-salva" hidden>SALVA</button>
                         <button type="button" class="btn-mezzo-elimina" hidden>ELIMINA</button>
                         <button type="button" class="btn-mezzo-annulla" hidden>ANNULLA</button>
@@ -410,7 +472,8 @@ function setMezzoBlockEditMode(block, editing) {
 
     block.querySelectorAll('[data-field]').forEach((el) => {
         // N. MEZZO è IdAutomezzo: non si cambia da qui, i servizi lo usano come riferimento.
-        if (el.dataset.field === 'nr_automezzo') {
+        // ULTIMO KM arriva dai servizi: solo lettura.
+        if (el.dataset.field === 'nr_automezzo' || el.dataset.field === 'ultimo_km') {
             setFieldEditable(el, false);
             return;
         }
@@ -418,10 +481,14 @@ function setMezzoBlockEditMode(block, editing) {
     });
 
     const btnModifica = block.querySelector('.btn-mezzo-modifica');
+    const btnManut = block.querySelector('.btn-mezzo-manutenzione');
+    const btnVediManut = block.querySelector('.btn-mezzo-vedi-manutenzioni');
     const btnSalva = block.querySelector('.btn-mezzo-salva');
     const btnElimina = block.querySelector('.btn-mezzo-elimina');
     const btnAnnulla = block.querySelector('.btn-mezzo-annulla');
     if (btnModifica) btnModifica.hidden = editing;
+    if (btnManut) btnManut.hidden = editing;
+    if (btnVediManut) btnVediManut.hidden = editing;
     if (btnSalva) btnSalva.hidden = !editing;
     if (btnElimina) btnElimina.hidden = !editing;
     if (btnAnnulla) btnAnnulla.hidden = !editing;
@@ -478,7 +545,8 @@ function applyFieldsToRoot(root, data) {
         scadenza_ztl: data.scadenza_ztl,
         scadenza_assicurazione: data.scadenza_assicurazione,
         scadenza_bollo: data.scadenza_bollo,
-        note_mezzo: data.note_mezzo
+        note_mezzo: data.note_mezzo,
+        ultimo_km: data.ultimo_km != null ? data.ultimo_km : ultimoKmDiMezzo(data)
     }).forEach(([field, value]) => {
         const el = root.querySelector(`[data-field="${field}"]`);
         if (el) el.value = value || '';
@@ -851,6 +919,14 @@ function bindMezzoContainerEvents() {
 
         if (e.target.classList.contains('btn-mezzo-modifica')) {
             enableMezzoEdit(block);
+        } else if (e.target.classList.contains('btn-mezzo-manutenzione')) {
+            const id = parseInt(block.dataset.mezzoId, 10) || 0;
+            const mezzo = allMezzi.find((m) => String(m.id) === String(id));
+            if (mezzo) manutenzioneModal?.open(mezzo);
+        } else if (e.target.classList.contains('btn-mezzo-vedi-manutenzioni')) {
+            const id = parseInt(block.dataset.mezzoId, 10) || 0;
+            const mezzo = allMezzi.find((m) => String(m.id) === String(id));
+            if (mezzo) elencoManutenzioniModal?.open(mezzo);
         } else if (e.target.classList.contains('btn-mezzo-annulla')) {
             exitMezzoEditMode(true);
         } else if (e.target.classList.contains('btn-mezzo-salva')) {
@@ -898,6 +974,7 @@ async function loadAllMezzi() {
             }
         ];
         allMezzi = sortByNumeroMezzo(demo);
+        ultimiKmPerMezzo = { '1': 45210, '2': 88102 };
         updateMezziCount(allMezzi.length);
         populateListaMezzi(allMezzi);
         await loadDotazioniMezzi();
@@ -912,7 +989,10 @@ async function loadAllMezzi() {
             console.warn('Init Supabase:', initErr);
         }
 
-        const mezzi = await invoke('get_all_automezzi');
+        const [mezzi] = await Promise.all([
+            invoke('get_all_automezzi'),
+            loadUltimiKmMezzi()
+        ]);
         allMezzi = Array.isArray(mezzi) ? sortByNumeroMezzo(mezzi) : [];
 
         if (!allMezzi.length) {
@@ -1000,12 +1080,84 @@ function hideSearch() {
     }
 }
 
+async function gestisciAperturaDaQuery() {
+    const params = new URLSearchParams(window.location.search || '');
+    const idCompleta = params.get('completaManutenzione') || params.get('completa');
+    const mostraScadute = params.get('mostraScadute') === '1' || params.get('scadute') === '1';
+
+    if (idCompleta) {
+        await completaManutenzioneModal?.openById(idCompleta);
+        return;
+    }
+
+    if (!mostraScadute || !isTauri() || !invoke) return;
+
+    try {
+        await invoke('init_supabase_from_config').catch(() => {});
+        const list = await invoke('get_manutenzioni_scadute');
+        const scadute = Array.isArray(list) ? list : [];
+        if (!scadute.length) return;
+        if (scadute.length === 1) {
+            await completaManutenzioneModal?.openById(scadute[0].id);
+        } else {
+            scaduteManutenzioniModal?.open(scadute);
+        }
+    } catch (err) {
+        console.warn('Apertura manutenzioni scadute:', err);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     bindMezzoContainerEvents();
     bindNuovoMezzoModalEvents();
     bindDialogEliminaMezzoEvents();
     await initTauri();
+
+    const etichettaMezzoFn = (mezzo) => {
+        const n = numeroMezzoVisibile(mezzo);
+        const nome = [mezzo.marca, mezzo.modello].filter(Boolean).join(' ');
+        const targa = (mezzo.targa || '').trim();
+        if (nome && targa) return `N.${n} — ${nome} (${targa})`;
+        if (nome) return `N.${n} — ${nome}`;
+        return `N. mezzo ${n}`;
+    };
+
+    completaManutenzioneModal = initCompletaManutenzioneModal({
+        getInvoke: () => invoke,
+        isTauriEnv: isTauri,
+        etichettaMezzo: etichettaMezzoFn,
+        trovaMezzo: (idMezzo) => allMezzi.find((m) => String(m.id) === String(idMezzo)) || null,
+        onSaved: (saved) => {
+            const mezzo = allMezzi.find((m) => String(m.id) === String(saved?.id_mezzo));
+            if (mezzo) elencoManutenzioniModal?.refreshIfOpen?.(mezzo);
+        }
+    });
+
+    scaduteManutenzioniModal = initScaduteManutenzioniModal({
+        onScegli: (id) => completaManutenzioneModal?.openById(id)
+    });
+
+    elencoManutenzioniModal = initElencoManutenzioniModal({
+        getInvoke: () => invoke,
+        isTauriEnv: isTauri,
+        etichettaMezzo: etichettaMezzoFn,
+        getUltimoKm: (mezzo) => ultimoKmDiMezzo(mezzo),
+        onApriCompleta: (id, mezzo) => completaManutenzioneModal?.openById(id, mezzo)
+    });
+
+    manutenzioneModal = initManutenzioneMezzoModal({
+        getInvoke: () => invoke,
+        isTauriEnv: isTauri,
+        getUltimoKm: (mezzo) => ultimoKmDiMezzo(mezzo),
+        etichettaMezzo: etichettaMezzoFn,
+        onSaved: (mezzo) => {
+            // Se l'elenco è aperto sullo stesso mezzo, lo aggiorna
+            elencoManutenzioniModal?.refreshIfOpen?.(mezzo);
+        }
+    });
+
     await loadAllMezzi();
+    await gestisciAperturaDaQuery();
 
     document.getElementById('btn-show-search')?.addEventListener('click', showSearch);
     document.getElementById('btn-hide-search')?.addEventListener('click', hideSearch);

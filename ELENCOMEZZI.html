@@ -7,6 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="responsive-app.css">
     <link rel="stylesheet" href="elencomezzi.css">
+    <link rel="stylesheet" href="manutenzioni-mezzo.css">
 </head>
 <body>
     <div class="container-fluid mezzi-container">
@@ -106,6 +107,173 @@
             <div class="mezzi-dialog-actions">
                 <button type="button" id="mezzi-dialog-elimina-si" class="mezzi-dialog-btn mezzi-dialog-btn-si">ELIMINA</button>
                 <button type="button" id="mezzi-dialog-elimina-no" class="mezzi-dialog-btn mezzi-dialog-btn-no">ANNULLA</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-manutenzione" class="manut-modal-overlay" hidden aria-hidden="true">
+        <div class="manut-modal" role="dialog" aria-labelledby="modal-manutenzione-title" aria-modal="true">
+            <div class="manut-modal-header">
+                <div>
+                    <h2 id="modal-manutenzione-title">NUOVA MANUTENZIONE</h2>
+                    <p id="modal-manutenzione-mezzo" class="manut-modal-mezzo"></p>
+                </div>
+                <button type="button" class="manut-modal-close" id="btn-modal-manut-close" title="Chiudi">&times;</button>
+            </div>
+            <form id="form-manutenzione" class="manut-modal-body" autocomplete="off">
+                <div class="manut-modal-grid">
+                    <div class="manut-form-group">
+                        <label for="manut-tipologia">TIPOLOGIA</label>
+                        <select id="manut-tipologia">
+                            <option value="Km">Km</option>
+                            <option value="Giorni">Giorni</option>
+                        </select>
+                    </div>
+                    <div class="manut-form-group">
+                        <label for="manut-delta-km">DELTA CHILOMETRI</label>
+                        <input type="text" id="manut-delta-km" inputmode="numeric" placeholder="es. 2000">
+                    </div>
+                    <div class="manut-form-group">
+                        <label for="manut-delta-giorni">DELTA GIORNI</label>
+                        <input type="text" id="manut-delta-giorni" inputmode="numeric" placeholder="es. 90">
+                    </div>
+                    <div class="manut-form-group">
+                        <label for="manut-km-riferimento">KM RIFERIMENTO (attuale)</label>
+                        <input type="text" id="manut-km-riferimento" readonly title="Preso dall'ultimo chilometraggio del mezzo">
+                    </div>
+                    <div class="manut-form-group manut-operatore-combo">
+                        <label for="manut-operatore">OPERATORE</label>
+                        <div class="manut-combo">
+                            <input type="text" id="manut-operatore" autocomplete="off" placeholder="Digita per cercare…">
+                            <ul id="manut-operatore-lista" class="manut-combo-lista" hidden role="listbox"></ul>
+                        </div>
+                    </div>
+                    <div class="manut-form-group manut-form-group-full">
+                        <label for="manut-motivazione">MOTIVAZIONE</label>
+                        <input type="text" id="manut-motivazione" placeholder="es. Controllo officina / tagliando">
+                    </div>
+                    <div class="manut-form-group">
+                        <label for="manut-eseguita-presso">ESEGUITA PRESSO</label>
+                        <input type="text" id="manut-eseguita-presso" placeholder="Officina / luogo">
+                    </div>
+                    <div class="manut-form-group">
+                        <label for="manut-pagato">PAGATO (€)</label>
+                        <input type="text" id="manut-pagato" inputmode="decimal" placeholder="opzionale">
+                    </div>
+                    <div class="manut-form-group manut-form-group-full">
+                        <label for="manut-note">NOTE MANUTENZIONE</label>
+                        <textarea id="manut-note" rows="3"></textarea>
+                    </div>
+                </div>
+                <p id="manut-hint" class="manut-hint"></p>
+                <p id="modal-manutenzione-status" class="manut-modal-status" aria-live="polite"></p>
+            </form>
+            <div class="manut-modal-footer">
+                <button type="button" class="manut-btn-annulla" id="btn-modal-manut-annulla">ANNULLA</button>
+                <button type="button" class="manut-btn-salva" id="btn-modal-manut-salva">SALVA</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-completa-manutenzione" class="manut-modal-overlay" hidden aria-hidden="true">
+        <div class="manut-modal" role="dialog" aria-labelledby="modal-completa-manut-title" aria-modal="true">
+            <div class="manut-modal-header">
+                <div>
+                    <h2 id="modal-completa-manut-title">COMPLETA MANUTENZIONE</h2>
+                    <p id="modal-completa-manut-mezzo" class="manut-modal-mezzo"></p>
+                </div>
+                <button type="button" class="manut-modal-close" id="btn-modal-completa-manut-close" title="Chiudi">&times;</button>
+            </div>
+            <form id="form-completa-manutenzione" class="manut-modal-body" autocomplete="off">
+                <input type="hidden" id="completa-manut-id" value="">
+                <p id="completa-manut-riepilogo" class="manut-hint"></p>
+                <div class="manut-modal-grid">
+                    <div class="manut-form-group">
+                        <label for="completa-manut-data">DATA ESECUZIONE</label>
+                        <input type="text" id="completa-manut-data" placeholder="gg/mm/aaaa">
+                    </div>
+                    <div class="manut-form-group">
+                        <label for="completa-manut-tipologia">TIPOLOGIA</label>
+                        <input type="text" id="completa-manut-tipologia" readonly>
+                    </div>
+                    <div class="manut-form-group">
+                        <label for="completa-manut-soglia">SOGLIA</label>
+                        <input type="text" id="completa-manut-soglia" readonly>
+                    </div>
+                    <div class="manut-form-group">
+                        <label for="completa-manut-stato">STATO</label>
+                        <input type="text" id="completa-manut-stato" readonly>
+                    </div>
+                    <div class="manut-form-group manut-form-group-full">
+                        <label for="completa-manut-motivazione">MOTIVAZIONE</label>
+                        <input type="text" id="completa-manut-motivazione">
+                    </div>
+                    <div class="manut-form-group manut-operatore-combo">
+                        <label for="completa-manut-operatore">OPERATORE</label>
+                        <div class="manut-combo">
+                            <input type="text" id="completa-manut-operatore" autocomplete="off" placeholder="Digita per cercare…">
+                            <ul id="completa-manut-operatore-lista" class="manut-combo-lista" hidden role="listbox"></ul>
+                        </div>
+                    </div>
+                    <div class="manut-form-group">
+                        <label for="completa-manut-presso">ESEGUITA PRESSO</label>
+                        <input type="text" id="completa-manut-presso" placeholder="Officina / luogo">
+                    </div>
+                    <div class="manut-form-group">
+                        <label for="completa-manut-pagato">PAGATO (€)</label>
+                        <input type="text" id="completa-manut-pagato" inputmode="decimal" placeholder="opzionale">
+                    </div>
+                    <div class="manut-form-group manut-form-group-full">
+                        <label for="completa-manut-note">NOTE MANUTENZIONE</label>
+                        <textarea id="completa-manut-note" rows="3"></textarea>
+                    </div>
+                </div>
+                <p id="modal-completa-manut-status" class="manut-modal-status" aria-live="polite"></p>
+            </form>
+            <div class="manut-modal-footer">
+                <button type="button" class="manut-btn-annulla" id="btn-modal-completa-manut-annulla">CHIUDI</button>
+                <button type="button" class="manut-btn-salva" id="btn-modal-completa-manut-salva">SALVA</button>
+                <button type="button" class="manut-btn-eseguita-footer" id="btn-modal-completa-manut-eseguita">SEGNA ESEGUITA</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-scadute-manutenzioni" class="manut-modal-overlay" hidden aria-hidden="true">
+        <div class="manut-modal manut-modal-elenco" role="dialog" aria-labelledby="modal-scadute-manut-title" aria-modal="true">
+            <div class="manut-modal-header">
+                <div>
+                    <h2 id="modal-scadute-manut-title">MANUTENZIONI IN SCADENZA</h2>
+                    <p class="manut-modal-mezzo">Scegli quale scheda aprire</p>
+                </div>
+                <button type="button" class="manut-modal-close" id="btn-modal-scadute-manut-close" title="Chiudi">&times;</button>
+            </div>
+            <div class="manut-modal-body">
+                <div id="modal-scadute-manut-lista" class="manut-elenco-lista"></div>
+            </div>
+            <div class="manut-modal-footer">
+                <button type="button" class="manut-btn-annulla" id="btn-modal-scadute-manut-chiudi">CHIUDI</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-elenco-manutenzioni" class="manut-modal-overlay" hidden aria-hidden="true">
+        <div class="manut-modal manut-modal-elenco" role="dialog" aria-labelledby="modal-elenco-manut-title" aria-modal="true">
+            <div class="manut-modal-header">
+                <div>
+                    <h2 id="modal-elenco-manut-title">MANUTENZIONI</h2>
+                    <p id="modal-elenco-manut-mezzo" class="manut-modal-mezzo"></p>
+                </div>
+                <button type="button" class="manut-modal-close" id="btn-modal-elenco-manut-close" title="Chiudi">&times;</button>
+            </div>
+            <div class="manut-modal-body">
+                <p id="modal-elenco-manut-km" class="manut-hint"></p>
+                <div id="modal-elenco-manut-lista" class="manut-elenco-lista">
+                    <div class="manut-elenco-loading">Caricamento…</div>
+                </div>
+                <p id="modal-elenco-manut-status" class="manut-modal-status" aria-live="polite"></p>
+            </div>
+            <div class="manut-modal-footer">
+                <button type="button" class="manut-btn-annulla" id="btn-modal-elenco-manut-chiudi">CHIUDI</button>
             </div>
         </div>
     </div>

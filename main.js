@@ -715,6 +715,37 @@ function oggiIsoLocale() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** Alert rosso in sidebar se ci sono manutenzioni mezzi scadute (Km o Giorni). */
+async function aggiornaAvvisoManutenzioni() {
+    const alertEl = document.getElementById('sidebar-manutenzione-alert');
+    if (!alertEl) return;
+    if (!invoke) {
+        alertEl.hidden = true;
+        return;
+    }
+
+    try {
+        await invoke('init_supabase_from_config').catch(() => {});
+        const list = await invoke('get_manutenzioni_scadute');
+        const n = Array.isArray(list) ? list.length : 0;
+        if (n > 0) {
+            alertEl.hidden = false;
+            const primo = list[0]?.etichetta_mezzo || list[0]?.etichettaMezzo || '';
+            alertEl.textContent = n === 1 ? 'MANUTENZIONE!!' : `MANUTENZIONE!! (${n})`;
+            alertEl.title = primo
+                ? `Manutenzione in scadenza: ${primo}${n > 1 ? ` e altre ${n - 1}` : ''} — apri scheda`
+                : 'Manutenzioni in scadenza — apri scheda';
+        } else {
+            alertEl.hidden = true;
+            alertEl.textContent = 'MANUTENZIONE!!';
+        }
+    } catch (err) {
+        // Tabella non ancora creata in Supabase: niente alert, non bloccare la Home
+        console.warn('Avviso manutenzioni non disponibile:', err);
+        alertEl.hidden = true;
+    }
+}
+
 /** Mostra bustina + avviso se oggi ci sono appunti in agenda per l'utente. */
 async function aggiornaAvvisoAgenda(sessione) {
     const bustina = document.getElementById('agenda-bustina');
@@ -1161,6 +1192,59 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Aggiorna quando torni sulla home (es. dopo aver usato l'Agenda)
         window.addEventListener('focus', () => {
             aggiornaAvvisoAgenda(sessione);
+        });
+    }
+
+    // Alert manutenzioni mezzi (Km / Giorni)
+    if (tauriReady) {
+        await aggiornaAvvisoManutenzioni();
+        window.addEventListener('focus', () => {
+            aggiornaAvvisoManutenzioni();
+        });
+        document.getElementById('sidebar-manutenzione-alert')?.addEventListener('click', async () => {
+            try {
+                await invoke('init_supabase_from_config').catch(() => {});
+                const list = await invoke('get_manutenzioni_scadute');
+                const scadute = Array.isArray(list) ? list : [];
+                if (!scadute.length) {
+                    aggiornaAvvisoManutenzioni();
+                    return;
+                }
+
+                let query = 'mostraScadute=1';
+                if (scadute.length === 1) {
+                    query = `completaManutenzione=${encodeURIComponent(scadute[0].id)}`;
+                }
+                const url = `ELENCOMEZZI.html?${query}`;
+
+                if (isTauri()) {
+                    const { WebviewWindow } = await import('@tauri-apps/api/window');
+                    const label = 'elenco-mezzi';
+                    const existing = WebviewWindow.getByLabel(label);
+                    if (existing) {
+                        try {
+                            await existing.close();
+                        } catch (_) { /* ignore */ }
+                        await new Promise((r) => setTimeout(r, 200));
+                    }
+                    await apriFinestraPopup(label, {
+                        url,
+                        title: 'Manutenzione mezzo',
+                        width: 1400,
+                        height: 900,
+                        resizable: true,
+                        maximized: false,
+                        decorations: true,
+                        alwaysOnTop: false,
+                        center: true
+                    });
+                } else {
+                    window.open(url, '_blank');
+                }
+            } catch (err) {
+                console.error('Apertura scheda manutenzione:', err);
+                document.getElementById('btn-elenco-mezzi')?.click();
+            }
         });
     }
     

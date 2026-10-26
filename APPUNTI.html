@@ -24,8 +24,26 @@
             <button type="button" class="ap-nav-btn" id="btn-ieri" title="Giorno precedente">◀</button>
             <div class="ap-giorno-box">
                 <label class="ap-giorno-label" for="ap-data">Giorno</label>
-                <input type="date" id="ap-data" class="ap-data-input">
+                <button type="button" class="ap-data-btn" id="btn-apri-calendario" title="Apri calendario">
+                    <span id="ap-data-btn-testo">Scegli data</span>
+                    <span class="ap-data-btn-icon" aria-hidden="true">▾</span>
+                </button>
+                <input type="date" id="ap-data" class="ap-data-input ap-data-input-hidden" tabindex="-1" aria-hidden="true">
                 <p class="ap-giorno-testo" id="ap-giorno-testo"></p>
+                <div id="ap-calendario" class="ap-calendario" hidden aria-hidden="true">
+                    <div class="ap-cal-nav">
+                        <button type="button" class="ap-cal-nav-btn" id="ap-cal-prev" title="Mese precedente">◀</button>
+                        <p class="ap-cal-mese" id="ap-cal-mese"></p>
+                        <button type="button" class="ap-cal-nav-btn" id="ap-cal-next" title="Mese successivo">▶</button>
+                    </div>
+                    <div class="ap-cal-settimana" aria-hidden="true">
+                        <span>L</span><span>M</span><span>M</span><span>G</span><span>V</span><span>S</span><span>D</span>
+                    </div>
+                    <div class="ap-cal-griglia" id="ap-cal-griglia"></div>
+                    <p class="ap-cal-legenda">
+                        <span class="ap-cal-dot"></span> con appunto
+                    </p>
+                </div>
             </div>
             <button type="button" class="ap-nav-btn" id="btn-domani" title="Giorno successivo">▶</button>
             <button type="button" class="ap-btn ap-btn-aggiungi ap-btn-lato" id="btn-apri-aggiungi">AGGIUNGI</button>

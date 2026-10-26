@@ -32,6 +32,8 @@ pub struct SupabaseTablesConfig {
     pub appunti_destinatari: String,
     /// Risposte / chat sugli appunti
     pub appunti_risposte: String,
+    /// Manutenzioni programmate mezzi
+    pub manutenzioni: String,
 }
 
 impl SupabaseTablesConfig {
@@ -58,6 +60,7 @@ impl SupabaseTablesConfig {
             "appunti" => Some(&self.appunti),
             "appunti_destinatari" => Some(&self.appunti_destinatari),
             "appunti_risposte" => Some(&self.appunti_risposte),
+            "manutenzioni" => Some(&self.manutenzioni),
             _ => None,
         }
     }
@@ -1415,6 +1418,31 @@ impl SupabaseClient {
         Err("Colonna IdSocio non trovata nella tabella servizi".to_string())
     }
 
+    /// Solo Mezzo + km di arrivo/rientro (leggero, per ultimo chilometraggio mezzi).
+    pub async fn fetch_servizi_mezzo_km(&self) -> Result<Vec<Value>, String> {
+        // Nome reale in Servizi_supa: Km_Rientro (R maiuscola)
+        let select_pairs = [
+            "Mezzo,Km_Rientro",
+            "Mezzo,Km_rientro",
+            "Mezzo,Km_Arrivo",
+        ];
+        let mut ultimo_errore = String::new();
+        for select in select_pairs {
+            match self.fetch_table("servizi", None, Some(select), None).await {
+                Ok(rows) => return Ok(rows),
+                Err(e) => {
+                    println!("⚠️ fetch_servizi_mezzo_km select {}: {}", select, e);
+                    ultimo_errore = e;
+                }
+            }
+        }
+        Err(if ultimo_errore.is_empty() {
+            "Colonne Mezzo / Km_Rientro non trovate in Servizi_supa".to_string()
+        } else {
+            ultimo_errore
+        })
+    }
+
     /// Massimo idservizio in tabella (0 se vuota o colonna non trovata)
     pub async fn fetch_max_servizio_id(&self) -> Result<u32, String> {
         let table_name = &self.config.tables.servizi;
@@ -1707,6 +1735,49 @@ impl SupabaseClient {
             Some("ordine.asc.nullslast,created_at.asc.nullslast"),
         )
         .await
+    }
+
+    /// Solo colonna `data` degli appunti di un autore in un intervallo (per evidenziare il calendario).
+    pub async fn fetch_appunti_date_owner_range(
+        &self,
+        user_id: &str,
+        da: &str,
+        a: &str,
+    ) -> Result<Vec<Value>, String> {
+        let uid = user_id.trim();
+        let from = da.trim();
+        let to = a.trim();
+        if uid.is_empty() || from.is_empty() || to.is_empty() {
+            return Err("user_id, da e a obbligatori".to_string());
+        }
+        let filter = format!(
+            "user_id=eq.{}&data=gte.{}&data=lte.{}",
+            encode_query_value(uid),
+            encode_query_value(from),
+            encode_query_value(to)
+        );
+        self.fetch_table("appunti", Some(&filter), Some("data"), None)
+            .await
+    }
+
+    /// Solo colonna `data` degli appunti visibili a tutti in un intervallo.
+    pub async fn fetch_appunti_date_tutti_range(
+        &self,
+        da: &str,
+        a: &str,
+    ) -> Result<Vec<Value>, String> {
+        let from = da.trim();
+        let to = a.trim();
+        if from.is_empty() || to.is_empty() {
+            return Err("da e a obbligatori".to_string());
+        }
+        let filter = format!(
+            "visibilita=eq.tutti&data=gte.{}&data=lte.{}",
+            encode_query_value(from),
+            encode_query_value(to)
+        );
+        self.fetch_table("appunti", Some(&filter), Some("data"), None)
+            .await
     }
 
     /// Appunti il cui testo è uguale (esatto) oppure contiene la frase cercata.
@@ -2666,6 +2737,100 @@ impl SupabaseClient {
         rows.into_iter()
             .next()
             .ok_or_else(|| "Nessuna riga restituita dopo insert automezzo".to_string())
+    }
+
+    pub async fn fetch_manutenzioni(&self, filter: Option<&str>) -> Result<Vec<Value>, String> {
+        self.fetch_table(
+            "manutenzioni",
+            filter,
+            None,
+            Some("IdManutenzione.desc"),
+        )
+        .await
+    }
+
+    pub async fn insert_manutenzione(
+        &self,
+        body: &serde_json::Map<String, Value>,
+    ) -> Result<Value, String> {
+        if body.is_empty() {
+            return Err("Nessun campo da inserire per la manutenzione".to_string());
+        }
+        let table_name = &self.config.tables.manutenzioni;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/rest/v1/{}", base, table_name);
+        println!("📡 Supabase POST [manutenzioni → {}]", table_name);
+
+        let request = self
+            .http
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .header("Prefer", "return=representation")
+            .json(body);
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Supabase POST manutenzioni: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let err_body = response.text().await.unwrap_or_default();
+            return Err(format!(
+                "Errore Supabase POST manutenzioni HTTP {}: {}",
+                status, err_body
+            ));
+        }
+
+        let rows: Vec<Value> = response
+            .json()
+            .await
+            .map_err(|e| format!("Errore parsing risposta insert manutenzione: {}", e))?;
+        rows.into_iter()
+            .next()
+            .ok_or_else(|| "Nessuna riga restituita dopo insert manutenzione".to_string())
+    }
+
+    pub async fn patch_manutenzione(
+        &self,
+        id_manutenzione: u64,
+        body: &serde_json::Map<String, Value>,
+    ) -> Result<(), String> {
+        if body.is_empty() {
+            return Ok(());
+        }
+        let table_name = &self.config.tables.manutenzioni;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!(
+            "{}/rest/v1/{}?IdManutenzione=eq.{}",
+            base, table_name, id_manutenzione
+        );
+        println!(
+            "📡 Supabase PATCH [manutenzioni → {}] IdManutenzione={}",
+            table_name, id_manutenzione
+        );
+
+        let request = self
+            .http
+            .patch(&url)
+            .header("Content-Type", "application/json")
+            .header("Prefer", "return=minimal")
+            .json(body);
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Supabase PATCH manutenzioni: {}", e))?;
+
+        if response.status().is_success() {
+            return Ok(());
+        }
+        let status = response.status();
+        let err_body = response.text().await.unwrap_or_default();
+        Err(format!(
+            "Errore Supabase PATCH manutenzioni HTTP {}: {}",
+            status, err_body
+        ))
     }
 
     /// Salva una riga in Tesseramenti_supa:

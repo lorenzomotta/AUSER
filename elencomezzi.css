@@ -331,6 +331,19 @@ body {
 
 .mezzo-form-group-inservizio { flex: 0 0 54px; }
 
+.mezzo-form-group-ultimo-km {
+    flex: 0 1 88px;
+    min-width: 80px;
+    max-width: 100px;
+}
+
+.mezzo-form-group-ultimo-km input[readonly] {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    background-color: #ebeae8;
+    cursor: default;
+}
+
 .mezzo-form-group-actions {
     flex: 0 0 auto;
     min-width: 0;
@@ -356,6 +369,24 @@ body {
 .btn-mezzo-modifica {
     background-color: #e65100;
     color: #fff;
+}
+
+.btn-mezzo-manutenzione {
+    background-color: #1565c0;
+    color: #fff;
+}
+
+.btn-mezzo-manutenzione:hover {
+    background-color: #0d47a1;
+}
+
+.btn-mezzo-vedi-manutenzioni {
+    background-color: #455a64;
+    color: #fff;
+}
+
+.btn-mezzo-vedi-manutenzioni:hover {
+    background-color: #263238;
 }
 
 .btn-mezzo-modifica:hover {

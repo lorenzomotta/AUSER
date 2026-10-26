@@ -135,6 +135,35 @@ body {
     padding-top: 4px;
 }
 
+.sidebar-manutenzione-alert {
+    width: 100%;
+    border: 2px solid #b71c1c;
+    border-radius: 6px;
+    background: #ffebee;
+    color: #b71c1c;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 10px 8px;
+    cursor: pointer;
+    line-height: 1.2;
+    animation: sidebar-manut-pulse 1.5s ease-in-out infinite;
+}
+
+.sidebar-manutenzione-alert[hidden] {
+    display: none !important;
+}
+
+.sidebar-manutenzione-alert:hover {
+    background: #ffcdd2;
+}
+
+@keyframes sidebar-manut-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(183, 28, 28, 0.35); }
+    50% { box-shadow: 0 0 0 4px rgba(183, 28, 28, 0.15); }
+}
+
 .sidebar-user {
     display: flex;
     flex-direction: column;

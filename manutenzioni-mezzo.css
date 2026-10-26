@@ -1,0 +1,447 @@
+/* Modale Nuova manutenzione (Elenco mezzi) */
+
+.manut-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1200;
+    padding: 16px;
+}
+
+.manut-modal-overlay[hidden] {
+    display: none !important;
+}
+
+.manut-modal {
+    width: min(780px, 100%);
+    max-height: min(92vh, 900px);
+    overflow: auto;
+    background: #f7f6f3;
+    border: 2px solid #9e9e9e;
+    border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+
+.manut-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    background: #37474f;
+    color: #fff;
+}
+
+.manut-modal-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.manut-modal-mezzo {
+    margin: 0;
+    font-size: 14px;
+    opacity: 0.95;
+}
+
+.manut-modal-close {
+    border: none;
+    background: transparent;
+    color: #fff;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+}
+
+.manut-modal-close:hover {
+    color: #ffcc80;
+}
+
+.manut-modal-body {
+    padding: 16px 18px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.manut-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 16px;
+}
+
+.manut-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+}
+
+.manut-form-group-full {
+    grid-column: 1 / -1;
+}
+
+.manut-form-group label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #555;
+    letter-spacing: 0.02em;
+}
+
+.manut-form-group input,
+.manut-form-group select,
+.manut-form-group textarea {
+    padding: 9px 11px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 15px;
+    line-height: 1.3;
+    min-height: 40px;
+    box-sizing: border-box;
+    background: #fff;
+}
+
+.manut-form-group select {
+    min-height: 42px;
+}
+
+.manut-form-group textarea {
+    min-height: 88px;
+    resize: vertical;
+}
+
+.manut-form-group input[readonly],
+.manut-form-group input:disabled {
+    background: #ebeae8;
+    color: #777;
+    cursor: not-allowed;
+}
+
+.manut-combo {
+    position: relative;
+}
+
+.manut-combo-lista {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 2px);
+    z-index: 5;
+    margin: 0;
+    padding: 4px 0;
+    list-style: none;
+    max-height: 200px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #9e9e9e;
+    border-radius: 3px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+}
+
+.manut-combo-lista[hidden] {
+    display: none !important;
+}
+
+.manut-combo-item {
+    padding: 9px 12px;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+.manut-combo-item:hover,
+.manut-combo-item.active {
+    background: #e3f2fd;
+}
+
+.manut-combo-empty {
+    padding: 10px 12px;
+    font-size: 14px;
+    color: #777;
+}
+
+.manut-hint {
+    margin: 0;
+    font-size: 14px;
+    color: #555;
+    line-height: 1.4;
+}
+
+.manut-modal-status {
+    min-height: 1.2em;
+    margin: 0;
+    font-size: 14px;
+    color: #2e7d32;
+}
+
+.manut-modal-status.error {
+    color: #c62828;
+}
+
+.manut-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 12px 18px 16px;
+}
+
+.manut-btn-annulla,
+.manut-btn-salva {
+    padding: 9px 18px;
+    font-size: 14px;
+    font-weight: 700;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.manut-btn-annulla {
+    background: #78909c;
+    color: #fff;
+}
+
+.manut-btn-annulla:hover {
+    background: #546e7a;
+}
+
+.manut-btn-salva {
+    background: #2e7d32;
+    color: #fff;
+}
+
+.manut-btn-salva:hover {
+    background: #1b5e20;
+}
+
+.manut-btn-salva:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+    .manut-modal-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Elenco manutenzioni del mezzo */
+.manut-modal-elenco {
+    width: min(900px, 100%);
+}
+
+.manut-elenco-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: min(55vh, 480px);
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.manut-elenco-loading,
+.manut-elenco-empty {
+    text-align: center;
+    padding: 28px 12px;
+    color: #666;
+    font-size: 15px;
+}
+
+.manut-card {
+    background: #fff;
+    border: 1px solid #cfcfcf;
+    border-radius: 6px;
+    padding: 10px 12px;
+}
+
+.manut-card.stato-aperta {
+    border-left: 4px solid #1565c0;
+}
+
+.manut-card.stato-eseguita {
+    border-left: 4px solid #2e7d32;
+    opacity: 0.92;
+}
+
+.manut-card.stato-annullata {
+    border-left: 4px solid #9e9e9e;
+    opacity: 0.75;
+}
+
+.manut-card-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px 12px;
+    margin-bottom: 6px;
+}
+
+.manut-card-titolo {
+    font-size: 14px;
+    font-weight: 700;
+    color: #263238;
+}
+
+.manut-card-stato {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+.manut-card-stato.stato-aperta {
+    background: #e3f2fd;
+    color: #0d47a1;
+}
+
+.manut-card-stato.stato-eseguita {
+    background: #e8f5e9;
+    color: #1b5e20;
+}
+
+.manut-card-stato.stato-annullata {
+    background: #eeeeee;
+    color: #616161;
+}
+
+.manut-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 4px 12px;
+    font-size: 12px;
+    color: #444;
+}
+
+.manut-card-grid span {
+    color: #777;
+    font-weight: 600;
+    margin-right: 4px;
+}
+
+.manut-card-note {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #555;
+}
+
+.manut-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.manut-card-actions button {
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    color: #fff;
+}
+
+.manut-btn-eseguita {
+    background: #2e7d32;
+}
+
+.manut-btn-eseguita:hover {
+    background: #1b5e20;
+}
+
+.manut-btn-annulla-manut {
+    background: #78909c;
+}
+
+.manut-btn-annulla-manut:hover {
+    background: #546e7a;
+}
+
+.manut-btn-riapri {
+    background: #1565c0;
+}
+
+.manut-btn-riapri:hover {
+    background: #0d47a1;
+}
+
+.manut-btn-completa {
+    background: #e65100;
+}
+
+.manut-btn-completa:hover {
+    background: #bf360c;
+}
+
+.manut-btn-eseguita-footer {
+    padding: 9px 18px;
+    font-size: 14px;
+    font-weight: 700;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    background: #2e7d32;
+    color: #fff;
+}
+
+.manut-btn-eseguita-footer:hover {
+    background: #1b5e20;
+}
+
+.manut-btn-eseguita-footer:disabled,
+.manut-btn-salva:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.manut-scaduta-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: #fff;
+    border: 1px solid #cfcfcf;
+    border-left: 4px solid #c62828;
+    border-radius: 6px;
+    padding: 10px 12px;
+}
+
+.manut-scaduta-item-testo {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+
+.manut-scaduta-item-testo strong {
+    display: block;
+    font-size: 14px;
+    color: #263238;
+}
+
+.manut-scaduta-item-testo span {
+    display: block;
+    font-size: 12px;
+    color: #666;
+    margin-top: 2px;
+}
+
+.manut-scaduta-item button {
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    background: #e65100;
+    color: #fff;
+}
+
+.manut-scaduta-item button:hover {
+    background: #bf360c;
+}

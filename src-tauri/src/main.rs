@@ -71,6 +71,9 @@ struct SupabaseTablesConfigSection {
     appunti_destinatari: Option<String>,
     #[serde(default)]
     appunti_risposte: Option<String>,
+    /// Manutenzioni programmate mezzi
+    #[serde(default)]
+    manutenzioni: Option<String>,
     /// Legacy: non esiste tabella operatori — filtrare tesserati.Operatore
     #[serde(alias = "operatori")]
     operatori: Option<String>,
@@ -637,6 +640,9 @@ async fn setup_supabase_from_config(config: &AppConfig) {
             appunti_risposte: cfg
                 .and_then(|t| t.appunti_risposte.clone())
                 .unwrap_or_else(|| "appunti_risposte".to_string()),
+            manutenzioni: cfg
+                .and_then(|t| t.manutenzioni.clone())
+                .unwrap_or_else(|| "Manutenzioni_supa".to_string()),
         };
 
         let sb_config = SupabaseConfig {
@@ -648,7 +654,7 @@ async fn setup_supabase_from_config(config: &AppConfig) {
         *guard = Some(SupabaseClient::new(sb_config));
         println!(
             "✓ Client Supabase inizializzato ({} tabelle configurate)",
-            20
+            21
         );
         println!(
             "  tesserati={}, tesseramenti={}, servizi={}, automezzi={}, tipo_socio={}",
@@ -1373,7 +1379,15 @@ fn tesseramento_from_tesserato_row(row: &serde_json::Value) -> Option<Tesseramen
 }
 
 fn italian_date_to_iso(date_str: &str) -> Option<String> {
-    let parts: Vec<&str> = date_str.trim().split('/').collect();
+    let s = date_str.trim();
+    if s.is_empty() {
+        return None;
+    }
+    // Già ISO (yyyy-mm-dd…)
+    if s.len() >= 10 && s.as_bytes().get(4) == Some(&b'-') && s.as_bytes().get(7) == Some(&b'-') {
+        return Some(s[..10].to_string());
+    }
+    let parts: Vec<&str> = s.split('/').collect();
     if parts.len() != 3 {
         return None;
     }
@@ -4635,6 +4649,635 @@ async fn delete_socio_email(email: SocioEmail) -> Result<(), String> {
     Ok(())
 }
 
+/// Ultimo chilometraggio (max km arrivo) per mezzo, da Servizi_supa.
+#[derive(Debug, Serialize, Deserialize)]
+struct UltimoKmMezzo {
+    mezzo: String,
+    km: f64,
+}
+
+fn parse_km_value(raw: &str) -> Option<f64> {
+    let s = raw.trim().replace(' ', "");
+    if s.is_empty() {
+        return None;
+    }
+    // IT con migliaia: 125.430,5 → 125430.5; solo virgola: 12,5 → 12.5;
+    // numero DB/JSON: 125430.0 resta com'è.
+    let normalized = if s.contains('.') && s.contains(',') {
+        s.replace('.', "").replace(',', ".")
+    } else if s.contains(',') {
+        s.replace(',', ".")
+    } else {
+        s
+    };
+    let n = normalized.parse::<f64>().ok()?;
+    if n.is_finite() && n > 0.0 {
+        Some(n)
+    } else {
+        None
+    }
+}
+
+/// Per ogni mezzo: il chilometraggio di arrivo più alto trovato nei servizi.
+#[tauri::command]
+async fn get_ultimi_km_mezzi() -> Result<Vec<UltimoKmMezzo>, String> {
+    println!("=== get_ultimi_km_mezzi chiamato (Supabase / Servizi_supa) ===");
+    ensure_supabase_client().await?;
+
+    let rows = {
+        let guard = get_supabase_client().lock().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+        client
+            .fetch_servizi_mezzo_km()
+            .await
+            .map_err(|e| format_supabase_error(&e))?
+    };
+
+    let mut max_per_mezzo: std::collections::HashMap<String, f64> =
+        std::collections::HashMap::new();
+
+    for row in &rows {
+        let mezzo = normalize_mezzo_key(&get_field_any(row, &["Mezzo", "MEZZO"]));
+        if mezzo.is_empty() {
+            continue;
+        }
+        let km_raw = get_field_any(
+            row,
+            &[
+                "Km_Rientro",
+                "Km_rientro",
+                "KM_RIENTRO",
+                "km_rientro",
+                "KmRientro",
+                "Km_Arrivo",
+                "KM_ARRIVO",
+                "km_arrivo",
+                "Chiusura_Km_Arrivo",
+            ],
+        );
+        let Some(km) = parse_km_value(&km_raw) else {
+            continue;
+        };
+        max_per_mezzo
+            .entry(mezzo)
+            .and_modify(|cur| {
+                if km > *cur {
+                    *cur = km;
+                }
+            })
+            .or_insert(km);
+    }
+
+    let mut list: Vec<UltimoKmMezzo> = max_per_mezzo
+        .into_iter()
+        .map(|(mezzo, km)| UltimoKmMezzo { mezzo, km })
+        .collect();
+    list.sort_by(|a, b| {
+        a.mezzo
+            .parse::<u64>()
+            .unwrap_or(0)
+            .cmp(&b.mezzo.parse::<u64>().unwrap_or(0))
+    });
+
+    println!(
+        "✓ Ultimi km mezzi: {} mezzi con chilometraggio (da {} servizi)",
+        list.len(),
+        rows.len()
+    );
+    Ok(list)
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct Manutenzione {
+    id: u64,
+    id_mezzo: u32,
+    data: String,
+    tipologia: String,
+    motivazione: String,
+    eseguita_presso: String,
+    pagato: String,
+    note_manutenzione: String,
+    operatore: String,
+    delta_giorni: String,
+    delta_chilometri: String,
+    km_riferimento: String,
+    km_previsto: String,
+    data_prevista: String,
+    stato: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct ManutenzioneInput {
+    id_mezzo: u32,
+    data: Option<String>,
+    tipologia: String,
+    motivazione: Option<String>,
+    eseguita_presso: Option<String>,
+    pagato: Option<String>,
+    note_manutenzione: Option<String>,
+    operatore: Option<String>,
+    delta_giorni: Option<String>,
+    delta_chilometri: Option<String>,
+    /// Se assente, il backend usa l'ultimo km del mezzo
+    km_riferimento: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct ManutenzioneScaduta {
+    id: u64,
+    id_mezzo: u32,
+    tipologia: String,
+    motivazione: String,
+    km_previsto: String,
+    data_prevista: String,
+    ultimo_km: String,
+    etichetta_mezzo: String,
+}
+
+fn supabase_row_to_manutenzione(row: &serde_json::Value) -> Option<Manutenzione> {
+    let id = get_field_any(
+        row,
+        &["IdManutenzione", "IDMANUTENZIONE", "id_manutenzione", "id"],
+    )
+    .parse::<u64>()
+    .unwrap_or(0);
+    let id_mezzo = get_field_any(row, &["IdMezzo", "IDMEZZO", "id_mezzo", "Mezzo"])
+        .parse::<u32>()
+        .unwrap_or(0);
+    if id == 0 || id_mezzo == 0 {
+        return None;
+    }
+    Some(Manutenzione {
+        id,
+        id_mezzo,
+        data: format_date_sharepoint_rust(&get_field_any(row, &["Data", "DATA", "data"])),
+        tipologia: get_field_any(row, &["Tipologia", "TIPOLOGIA", "tipologia"]),
+        motivazione: get_field_any(row, &["Motivazione", "MOTIVAZIONE", "motivazione"]),
+        eseguita_presso: get_field_any(
+            row,
+            &["EseguitaPresso", "ESEGUITAPRESSO", "eseguita_presso"],
+        ),
+        pagato: get_field_any(row, &["Pagato", "PAGATO", "pagato"]),
+        note_manutenzione: get_field_any(
+            row,
+            &["NoteManutenzione", "NOTEMANUTENZIONE", "note_manutenzione"],
+        ),
+        operatore: get_field_any(row, &["Operatore", "OPERATORE", "operatore"]),
+        delta_giorni: get_field_any(row, &["DeltaGiorni", "DELTAGIORNI", "delta_giorni"]),
+        delta_chilometri: get_field_any(
+            row,
+            &["DeltaChilometri", "DELTACHILOMETRI", "delta_chilometri"],
+        ),
+        km_riferimento: get_field_any(
+            row,
+            &["KmRiferimento", "KMRIFERIMENTO", "km_riferimento"],
+        ),
+        km_previsto: get_field_any(row, &["KmPrevisto", "KMPREVISTO", "km_previsto"]),
+        data_prevista: format_date_sharepoint_rust(&get_field_any(
+            row,
+            &["DataPrevista", "DATAPREVISTA", "data_prevista"],
+        )),
+        stato: {
+            let s = get_field_any(row, &["Stato", "STATO", "stato"]);
+            if s.is_empty() {
+                "aperta".to_string()
+            } else {
+                s
+            }
+        },
+    })
+}
+
+fn parse_optional_number(raw: &str) -> Option<f64> {
+    let s = raw.trim();
+    if s.is_empty() {
+        return None;
+    }
+    parse_km_value(s).or_else(|| {
+        let normalized = if s.contains('.') && s.contains(',') {
+            s.replace('.', "").replace(',', ".")
+        } else if s.contains(',') {
+            s.replace(',', ".")
+        } else {
+            s.to_string()
+        };
+        normalized.parse::<f64>().ok().filter(|n| n.is_finite())
+    })
+}
+
+fn add_days_iso(iso: &str, days: i64) -> Option<String> {
+    use chrono::{Duration, NaiveDate};
+    let slice = if iso.len() >= 10 { &iso[..10] } else { iso };
+    let d = NaiveDate::parse_from_str(slice, "%Y-%m-%d").ok()?;
+    let next = d.checked_add_signed(Duration::days(days))?;
+    Some(next.format("%Y-%m-%d").to_string())
+}
+
+fn today_iso_local() -> String {
+    Local::now().format("%Y-%m-%d").to_string()
+}
+
+async fn map_ultimi_km_mezzi() -> Result<std::collections::HashMap<String, f64>, String> {
+    let list = get_ultimi_km_mezzi().await?;
+    let mut map = std::collections::HashMap::new();
+    for item in list {
+        map.insert(item.mezzo, item.km);
+    }
+    Ok(map)
+}
+
+fn manutenzione_e_scaduta(m: &Manutenzione, ultimi_km: &std::collections::HashMap<String, f64>) -> bool {
+    let stato = m.stato.trim().to_ascii_lowercase();
+    if stato != "aperta" {
+        return false;
+    }
+    let tip = m.tipologia.trim().to_ascii_lowercase();
+    if tip == "km" {
+        let previsto = parse_optional_number(&m.km_previsto).or_else(|| {
+            let rif = parse_optional_number(&m.km_riferimento)?;
+            let delta = parse_optional_number(&m.delta_chilometri)?;
+            Some(rif + delta)
+        });
+        let Some(soglia) = previsto else {
+            return false;
+        };
+        let key = normalize_mezzo_key(&m.id_mezzo.to_string());
+        let attuale = ultimi_km.get(&key).copied().unwrap_or(0.0);
+        return attuale + f64::EPSILON >= soglia && soglia > 0.0;
+    }
+    if tip == "giorni" {
+        // Alert solo su DataPrevista (Data = data di esecuzione, non di programmazione)
+        let Some(data_prev) = italian_date_to_iso(&m.data_prevista) else {
+            return false;
+        };
+        return today_iso_local() >= data_prev;
+    }
+    false
+}
+
+#[tauri::command]
+async fn create_manutenzione(input: ManutenzioneInput) -> Result<Manutenzione, String> {
+    println!(
+        "=== create_manutenzione IdMezzo={} Tipologia='{}' ===",
+        input.id_mezzo, input.tipologia
+    );
+    if input.id_mezzo == 0 {
+        return Err("Mezzo obbligatorio".to_string());
+    }
+    let tip = input.tipologia.trim();
+    let tip_norm = if tip.eq_ignore_ascii_case("km") {
+        "Km"
+    } else if tip.eq_ignore_ascii_case("giorni") {
+        "Giorni"
+    } else {
+        return Err("Tipologia non valida: usa Km o Giorni".to_string());
+    };
+
+    // Data = data di esecuzione (vuota alla programmazione).
+    // Per tipologia Giorni la soglia usa oggi + DeltaGiorni → DataPrevista.
+    let oggi = today_iso_local();
+
+    let mut km_riferimento = input
+        .km_riferimento
+        .as_deref()
+        .and_then(parse_optional_number);
+    if tip_norm == "Km" && km_riferimento.is_none() {
+        let map = map_ultimi_km_mezzi().await?;
+        let key = normalize_mezzo_key(&input.id_mezzo.to_string());
+        km_riferimento = map.get(&key).copied();
+    }
+
+    let delta_km = input
+        .delta_chilometri
+        .as_deref()
+        .and_then(parse_optional_number);
+    let delta_giorni = input
+        .delta_giorni
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .and_then(|s| s.parse::<i64>().ok());
+
+    if tip_norm == "Km" {
+        if delta_km.map(|n| n <= 0.0).unwrap_or(true) {
+            return Err("Per tipologia Km inserisci DeltaChilometri > 0".to_string());
+        }
+        if km_riferimento.is_none() {
+            return Err(
+                "Nessun chilometraggio disponibile per questo mezzo: completa un servizio con Km_Rientro oppure inserisci Km riferimento"
+                    .to_string(),
+            );
+        }
+    }
+    if tip_norm == "Giorni" && delta_giorni.map(|n| n <= 0).unwrap_or(true) {
+        return Err("Per tipologia Giorni inserisci DeltaGiorni > 0".to_string());
+    }
+
+    let km_previsto = match (km_riferimento, delta_km) {
+        (Some(rif), Some(delta)) if tip_norm == "Km" => Some(rif + delta),
+        _ => None,
+    };
+    let data_prevista = if tip_norm == "Giorni" {
+        add_days_iso(&oggi, delta_giorni.unwrap_or(0))
+    } else {
+        None
+    };
+
+    let mut body = serde_json::Map::new();
+    body.insert("IdMezzo".to_string(), serde_json::json!(input.id_mezzo));
+    // Data di esecuzione: si valorizza solo quando si completa/segna eseguita
+    body.insert("Data".to_string(), serde_json::Value::Null);
+    body.insert("Tipologia".to_string(), serde_json::json!(tip_norm));
+    body.insert(
+        "Motivazione".to_string(),
+        serde_json::json!(input.motivazione.clone().unwrap_or_default()),
+    );
+    body.insert(
+        "EseguitaPresso".to_string(),
+        serde_json::json!(input.eseguita_presso.clone().unwrap_or_default()),
+    );
+    if let Some(p) = input.pagato.as_deref().and_then(parse_optional_number) {
+        body.insert("Pagato".to_string(), serde_json::json!(p));
+    } else {
+        body.insert("Pagato".to_string(), serde_json::Value::Null);
+    }
+    body.insert(
+        "NoteManutenzione".to_string(),
+        serde_json::json!(input.note_manutenzione.clone().unwrap_or_default()),
+    );
+    body.insert(
+        "Operatore".to_string(),
+        serde_json::json!(input.operatore.clone().unwrap_or_default()),
+    );
+    match delta_giorni {
+        Some(d) => body.insert("DeltaGiorni".to_string(), serde_json::json!(d)),
+        None => body.insert("DeltaGiorni".to_string(), serde_json::Value::Null),
+    };
+    match delta_km {
+        Some(d) => body.insert("DeltaChilometri".to_string(), serde_json::json!(d)),
+        None => body.insert("DeltaChilometri".to_string(), serde_json::Value::Null),
+    };
+    match km_riferimento {
+        Some(k) => body.insert("KmRiferimento".to_string(), serde_json::json!(k)),
+        None => body.insert("KmRiferimento".to_string(), serde_json::Value::Null),
+    };
+    match km_previsto {
+        Some(k) => body.insert("KmPrevisto".to_string(), serde_json::json!(k)),
+        None => body.insert("KmPrevisto".to_string(), serde_json::Value::Null),
+    };
+    match data_prevista {
+        Some(d) => body.insert("DataPrevista".to_string(), serde_json::json!(d)),
+        None => body.insert("DataPrevista".to_string(), serde_json::Value::Null),
+    };
+    body.insert("Stato".to_string(), serde_json::json!("aperta"));
+
+    ensure_supabase_client().await?;
+    let inserted = {
+        let guard = get_supabase_client().lock().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+        client
+            .insert_manutenzione(&body)
+            .await
+            .map_err(|e| format_supabase_error(&e))?
+    };
+
+    supabase_row_to_manutenzione(&inserted)
+        .ok_or_else(|| "Manutenzione salvata ma risposta non interpretabile".to_string())
+}
+
+#[tauri::command]
+async fn get_manutenzioni_mezzo(id_mezzo: u32) -> Result<Vec<Manutenzione>, String> {
+    println!("=== get_manutenzioni_mezzo IdMezzo={} ===", id_mezzo);
+    ensure_supabase_client().await?;
+    let filter = format!("IdMezzo=eq.{}", id_mezzo);
+    let rows = {
+        let guard = get_supabase_client().lock().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+        client
+            .fetch_manutenzioni(Some(&filter))
+            .await
+            .map_err(|e| format_supabase_error(&e))?
+    };
+    Ok(rows.iter().filter_map(supabase_row_to_manutenzione).collect())
+}
+
+#[tauri::command]
+async fn get_manutenzioni_scadute() -> Result<Vec<ManutenzioneScaduta>, String> {
+    println!("=== get_manutenzioni_scadute chiamato ===");
+    ensure_supabase_client().await?;
+
+    let rows = {
+        let guard = get_supabase_client().lock().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+        client
+            .fetch_manutenzioni(Some("Stato=eq.aperta"))
+            .await
+            .map_err(|e| format_supabase_error(&e))?
+    };
+
+    let ultimi_km = map_ultimi_km_mezzi().await.unwrap_or_default();
+    let automezzi = get_all_automezzi().await.unwrap_or_default();
+    let mut etichette: std::collections::HashMap<u32, String> = std::collections::HashMap::new();
+    for a in &automezzi {
+        let nome = [a.marca.trim(), a.modello.trim()]
+            .into_iter()
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let label = if !nome.is_empty() && !a.targa.trim().is_empty() {
+            format!("{} ({})", nome, a.targa.trim())
+        } else if !nome.is_empty() {
+            nome
+        } else {
+            format!("Mezzo {}", a.id)
+        };
+        etichette.insert(a.id, label);
+    }
+
+    let mut scadute = Vec::new();
+    for row in &rows {
+        let Some(m) = supabase_row_to_manutenzione(row) else {
+            continue;
+        };
+        if !manutenzione_e_scaduta(&m, &ultimi_km) {
+            continue;
+        }
+        let key = normalize_mezzo_key(&m.id_mezzo.to_string());
+        let ultimo = ultimi_km.get(&key).copied().unwrap_or(0.0);
+        scadute.push(ManutenzioneScaduta {
+            id: m.id,
+            id_mezzo: m.id_mezzo,
+            tipologia: m.tipologia.clone(),
+            motivazione: m.motivazione.clone(),
+            km_previsto: m.km_previsto.clone(),
+            data_prevista: m.data_prevista.clone(),
+            ultimo_km: if ultimo > 0.0 {
+                format!("{:.0}", ultimo)
+            } else {
+                String::new()
+            },
+            etichetta_mezzo: etichette
+                .get(&m.id_mezzo)
+                .cloned()
+                .unwrap_or_else(|| format!("Mezzo {}", m.id_mezzo)),
+        });
+    }
+
+    println!("✓ Manutenzioni scadute: {}", scadute.len());
+    Ok(scadute)
+}
+
+#[tauri::command]
+async fn aggiorna_stato_manutenzione(id: u64, stato: String) -> Result<(), String> {
+    let s = stato.trim().to_ascii_lowercase();
+    let stato_db = match s.as_str() {
+        "aperta" => "aperta",
+        "eseguita" => "eseguita",
+        "annullata" => "annullata",
+        _ => return Err("Stato non valido (aperta, eseguita, annullata)".to_string()),
+    };
+    println!(
+        "=== aggiorna_stato_manutenzione Id={} Stato={} ===",
+        id, stato_db
+    );
+    ensure_supabase_client().await?;
+    let mut body = serde_json::Map::new();
+    body.insert("Stato".to_string(), serde_json::json!(stato_db));
+    // Se eseguita: valorizza Data (esecuzione) con oggi se ancora vuota
+    if stato_db == "eseguita" {
+        body.insert("Data".to_string(), serde_json::json!(today_iso_local()));
+    }
+    let guard = get_supabase_client().lock().await;
+    let client = guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+    client
+        .patch_manutenzione(id, &body)
+        .await
+        .map_err(|e| format_supabase_error(&e))
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct ManutenzioneUpdate {
+    id: u64,
+    /// Data di esecuzione (gg/mm/aaaa o yyyy-mm-dd)
+    data: Option<String>,
+    motivazione: Option<String>,
+    eseguita_presso: Option<String>,
+    pagato: Option<String>,
+    note_manutenzione: Option<String>,
+    operatore: Option<String>,
+    /// Se presente: aperta | eseguita | annullata
+    stato: Option<String>,
+}
+
+#[tauri::command]
+async fn get_manutenzione(id: u64) -> Result<Manutenzione, String> {
+    println!("=== get_manutenzione Id={} ===", id);
+    if id == 0 {
+        return Err("Id manutenzione non valido".to_string());
+    }
+    ensure_supabase_client().await?;
+    let filter = format!("IdManutenzione=eq.{}", id);
+    let rows = {
+        let guard = get_supabase_client().lock().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+        client
+            .fetch_manutenzioni(Some(&filter))
+            .await
+            .map_err(|e| format_supabase_error(&e))?
+    };
+    rows.iter()
+        .find_map(supabase_row_to_manutenzione)
+        .ok_or_else(|| format!("Manutenzione {} non trovata", id))
+}
+
+#[tauri::command]
+async fn salva_manutenzione(input: ManutenzioneUpdate) -> Result<Manutenzione, String> {
+    println!(
+        "=== salva_manutenzione Id={} Stato={:?} ===",
+        input.id, input.stato
+    );
+    if input.id == 0 {
+        return Err("Id manutenzione non valido".to_string());
+    }
+
+    let mut body = serde_json::Map::new();
+    let mut stato_db: Option<String> = None;
+    if let Some(stato) = input.stato {
+        let s = stato.trim().to_ascii_lowercase();
+        let norm = match s.as_str() {
+            "aperta" => "aperta",
+            "eseguita" => "eseguita",
+            "annullata" => "annullata",
+            _ => return Err("Stato non valido (aperta, eseguita, annullata)".to_string()),
+        };
+        stato_db = Some(norm.to_string());
+        body.insert("Stato".to_string(), serde_json::json!(norm));
+    }
+
+    // Data = esecuzione. Se segni eseguita e non c'è data, usa oggi.
+    let data_raw = input.data.as_deref().map(str::trim).unwrap_or("");
+    if !data_raw.is_empty() {
+        let Some(iso) = italian_date_to_iso(data_raw) else {
+            return Err("Data esecuzione non valida (usa gg/mm/aaaa)".to_string());
+        };
+        body.insert("Data".to_string(), serde_json::json!(iso));
+    } else if stato_db.as_deref() == Some("eseguita") {
+        body.insert("Data".to_string(), serde_json::json!(today_iso_local()));
+    } else if input.data.is_some() {
+        // stringa vuota esplicita → azzera
+        body.insert("Data".to_string(), serde_json::Value::Null);
+    }
+
+    if let Some(v) = input.motivazione {
+        body.insert("Motivazione".to_string(), serde_json::json!(v));
+    }
+    if let Some(v) = input.eseguita_presso {
+        body.insert("EseguitaPresso".to_string(), serde_json::json!(v));
+    }
+    if let Some(v) = input.note_manutenzione {
+        body.insert("NoteManutenzione".to_string(), serde_json::json!(v));
+    }
+    if let Some(v) = input.operatore {
+        body.insert("Operatore".to_string(), serde_json::json!(v));
+    }
+    if let Some(raw) = input.pagato {
+        if let Some(n) = parse_optional_number(&raw) {
+            body.insert("Pagato".to_string(), serde_json::json!(n));
+        } else if raw.trim().is_empty() {
+            body.insert("Pagato".to_string(), serde_json::Value::Null);
+        }
+    }
+
+    if body.is_empty() {
+        return Err("Nessun campo da aggiornare".to_string());
+    }
+
+    ensure_supabase_client().await?;
+    {
+        let guard = get_supabase_client().lock().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+        client
+            .patch_manutenzione(input.id, &body)
+            .await
+            .map_err(|e| format_supabase_error(&e))?;
+    }
+    get_manutenzione(input.id).await
+}
+
 // Comando per ottenere tutti gli automezzi da Supabase
 #[tauri::command]
 async fn get_all_automezzi() -> Result<Vec<Automezzo>, String> {
@@ -5849,6 +6492,98 @@ fn pulisci_testo_ricerca(raw: &str) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// Giorni (YYYY-MM-DD) con almeno un appunto visibile all'utente nell'intervallo.
+/// Include: propri, condivisi con lui (selezionati), visibili a tutti.
+#[tauri::command]
+async fn get_giorni_con_appunti(
+    user_id: String,
+    da: String,
+    a: String,
+) -> Result<Vec<String>, String> {
+    let uid = user_id.trim().to_string();
+    let from = normalize_appunto_data(&da)?;
+    let to = normalize_appunto_data(&a)?;
+    if uid.is_empty() {
+        return Err("user_id obbligatorio".to_string());
+    }
+    if from > to {
+        return Err("Intervallo date non valido".to_string());
+    }
+    println!(
+        "=== get_giorni_con_appunti user={} da={} a={} ===",
+        uid, from, to
+    );
+
+    ensure_supabase_client().await?;
+    let client_guard = get_supabase_client().lock().await;
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+
+    let mut giorni: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    let push_date = |set: &mut std::collections::HashSet<String>, row: &serde_json::Value| {
+        let raw = get_field_any(row, &["data", "Data", "DATA"]);
+        if let Ok(d) = normalize_appunto_data(&raw) {
+            if d >= from && d <= to {
+                set.insert(d);
+            }
+        }
+    };
+
+    // 1) I miei appunti nel periodo
+    match client
+        .fetch_appunti_date_owner_range(&uid, &from, &to)
+        .await
+    {
+        Ok(rows) => {
+            for row in &rows {
+                push_date(&mut giorni, row);
+            }
+        }
+        Err(e) => println!("⚠️ date appunti owner: {}", e),
+    }
+
+    // 2) Visibili a tutti
+    match client.fetch_appunti_date_tutti_range(&from, &to).await {
+        Ok(rows) => {
+            for row in &rows {
+                push_date(&mut giorni, row);
+            }
+        }
+        Err(e) => println!("⚠️ date appunti tutti: {}", e),
+    }
+
+    // 3) Dove sono destinatario (selezionati)
+    match client.fetch_appunti_destinatari_for_user(&uid).await {
+        Ok(dest_rows) => {
+            let mut ids: Vec<String> = dest_rows
+                .iter()
+                .map(|r| get_field_any(r, &["appunto_id", "AppuntoId", "appuntoId"]))
+                .filter(|s| !s.is_empty())
+                .collect();
+            ids.sort();
+            ids.dedup();
+            if !ids.is_empty() {
+                match client.fetch_appunti_by_ids(&ids).await {
+                    Ok(shared) => {
+                        for row in &shared {
+                            push_date(&mut giorni, row);
+                        }
+                    }
+                    Err(e) => println!("⚠️ date appunti condivisi: {}", e),
+                }
+            }
+        }
+        Err(e) => println!("⚠️ destinatari per date appunti: {}", e),
+    }
+
+    let mut list: Vec<String> = giorni.into_iter().collect();
+    list.sort();
+    println!("✓ Giorni con appunti: {}", list.len());
+    Ok(list)
 }
 
 /// Cerca negli appunti visibili all'utente (propri, per tutti, o dove è destinatario).
@@ -9374,6 +10109,7 @@ fn main() {
             get_all_tesserati,
             get_all_tesseramenti,
             get_appunti_giorno,
+            get_giorni_con_appunti,
             cerca_appunti,
             get_utenti_per_appunti,
             save_appunto,
@@ -9393,6 +10129,13 @@ fn main() {
             save_socio_email,
             delete_socio_email,
             get_all_automezzi,
+            get_ultimi_km_mezzi,
+            create_manutenzione,
+            get_manutenzione,
+            salva_manutenzione,
+            get_manutenzioni_mezzo,
+            get_manutenzioni_scadute,
+            aggiorna_stato_manutenzione,
             save_automezzo,
             create_automezzo,
             delete_automezzo,

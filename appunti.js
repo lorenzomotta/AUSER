@@ -13,6 +13,11 @@ let utenti = [];
 let giornoCorrente = '';
 /** Appunto da evidenziare dopo un salto dalla ricerca */
 let evidenziaId = '';
+/** Mese mostrato nel calendario personalizzato: { anno, mese 0-11 } */
+let calMeseVista = { anno: 0, mese: 0 };
+/** Giorni YYYY-MM-DD con appunto nel mese corrente della griglia */
+let giorniConAppunto = new Set();
+let calAperto = false;
 
 async function initTauri() {
     try {
@@ -38,10 +43,22 @@ const ZOOM_MAX = 2;
 const ZOOM_STEP = 0.1;
 let zoomCorrente = ZOOM_DEFAULT;
 
+function adattaAltezzaTextarea(ta) {
+    if (!ta) return;
+    const minH = ta.classList.contains('ap-chat-input') ? 28 : 32;
+    ta.style.height = 'auto';
+    ta.style.height = `${Math.max(ta.scrollHeight, minH)}px`;
+}
+
+function adattaAltezzaTuttiAppunti() {
+    document.querySelectorAll('.ap-item-testo').forEach(adattaAltezzaTextarea);
+}
+
 function applicaZoomAgenda(valore) {
     const arrotondato = Math.round(valore * 10) / 10;
     zoomCorrente = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, arrotondato));
     document.documentElement.style.zoom = String(zoomCorrente);
+    adattaAltezzaTuttiAppunti();
 }
 
 function initZoomAgenda() {
@@ -356,8 +373,131 @@ function setStato(testo) {
 function aggiornaEtichettaGiorno() {
     const testo = document.getElementById('ap-giorno-testo');
     const input = document.getElementById('ap-data');
+    const btnTesto = document.getElementById('ap-data-btn-testo');
     if (input && input.value !== giornoCorrente) input.value = giornoCorrente;
     if (testo) testo.textContent = formatGiornoItaliano(giornoCorrente);
+    if (btnTesto) {
+        // Versione corta sul pulsante: gg/mm/aaaa
+        const parts = String(giornoCorrente).split('-');
+        btnTesto.textContent = parts.length === 3
+            ? `${parts[2]}/${parts[1]}/${parts[0]}`
+            : giornoCorrente;
+    }
+}
+
+function nomeMeseIt(anno, mese0) {
+    try {
+        return new Date(anno, mese0, 1).toLocaleDateString('it-IT', {
+            month: 'long',
+            year: 'numeric'
+        });
+    } catch (_) {
+        return `${mese0 + 1}/${anno}`;
+    }
+}
+
+function rangeMeseIso(anno, mese0) {
+    const da = `${anno}-${String(mese0 + 1).padStart(2, '0')}-01`;
+    const ultimo = new Date(anno, mese0 + 1, 0).getDate();
+    const a = `${anno}-${String(mese0 + 1).padStart(2, '0')}-${String(ultimo).padStart(2, '0')}`;
+    return { da, a };
+}
+
+async function caricaGiorniConAppuntoMese() {
+    giorniConAppunto = new Set();
+    if (!invoke || !sessione?.user_id) return;
+    const { da, a } = rangeMeseIso(calMeseVista.anno, calMeseVista.mese);
+    try {
+        await invoke('init_supabase_from_config').catch(() => {});
+        const list = await invoke('get_giorni_con_appunti', {
+            userId: sessione.user_id,
+            user_id: sessione.user_id,
+            da,
+            a
+        });
+        if (Array.isArray(list)) {
+            list.forEach((d) => {
+                if (d) giorniConAppunto.add(String(d).slice(0, 10));
+            });
+        }
+    } catch (err) {
+        console.warn('Giorni con appunti non disponibili:', err);
+    }
+}
+
+function renderCalendario() {
+    const meseEl = document.getElementById('ap-cal-mese');
+    const griglia = document.getElementById('ap-cal-griglia');
+    if (!meseEl || !griglia) return;
+
+    const { anno, mese } = calMeseVista;
+    meseEl.textContent = nomeMeseIt(anno, mese);
+
+    // Lunedì = primo giorno colonna (getDay: 0=dom…6=sab → lun=0)
+    const primo = new Date(anno, mese, 1);
+    let offset = (primo.getDay() + 6) % 7;
+    const oggi = oggiIso();
+    const celle = [];
+
+    // Parti dal lunedì della settimana che contiene il 1°
+    const start = new Date(anno, mese, 1 - offset);
+    for (let i = 0; i < 42; i++) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        const y = d.getFullYear();
+        const m = d.getMonth();
+        const day = d.getDate();
+        const iso = `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const altro = m !== mese;
+        const classi = ['ap-cal-giorno'];
+        if (altro) classi.push('is-altro-mese');
+        if (iso === oggi) classi.push('is-oggi');
+        if (iso === giornoCorrente) classi.push('is-selezionato');
+        if (giorniConAppunto.has(iso)) classi.push('has-appunto');
+        celle.push(
+            `<button type="button" class="${classi.join(' ')}" data-data="${iso}" title="${iso}">${day}</button>`
+        );
+    }
+    griglia.innerHTML = celle.join('');
+}
+
+async function aggiornaCalendarioVista() {
+    await caricaGiorniConAppuntoMese();
+    renderCalendario();
+}
+
+function apriCalendario() {
+    const panel = document.getElementById('ap-calendario');
+    if (!panel) return;
+    const base = giornoCorrente && /^\d{4}-\d{2}-\d{2}$/.test(giornoCorrente)
+        ? new Date(`${giornoCorrente}T12:00:00`)
+        : new Date();
+    calMeseVista = { anno: base.getFullYear(), mese: base.getMonth() };
+    calAperto = true;
+    panel.hidden = false;
+    panel.setAttribute('aria-hidden', 'false');
+    aggiornaCalendarioVista();
+}
+
+function chiudiCalendario() {
+    const panel = document.getElementById('ap-calendario');
+    if (!panel) return;
+    calAperto = false;
+    panel.hidden = true;
+    panel.setAttribute('aria-hidden', 'true');
+}
+
+function toggleCalendario() {
+    if (calAperto) chiudiCalendario();
+    else apriCalendario();
+}
+
+async function selezionaGiornoCalendario(iso) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    giornoCorrente = iso;
+    aggiornaEtichettaGiorno();
+    chiudiCalendario();
+    await caricaGiorno();
 }
 
 function getVisibilitaScelta() {
@@ -473,6 +613,11 @@ async function caricaGiorno() {
             }
             evidenziaId = '';
         }
+        // Se il calendario è aperto, aggiorna i verdi (utile dopo salva/elimina)
+        if (calAperto) {
+            await caricaGiorniConAppuntoMese();
+            renderCalendario();
+        }
     } catch (error) {
         console.error('Errore caricamento appunti:', error);
         const msg = String(error?.message || error || '');
@@ -557,7 +702,10 @@ function renderLista() {
 
     box.querySelectorAll('.ap-item').forEach((el, i) => {
         const ta = el.querySelector('.ap-item-testo');
-        if (ta) ta.value = appunti[i]?.testo || '';
+        if (ta) {
+            ta.value = appunti[i]?.testo || '';
+            adattaAltezzaTextarea(ta);
+        }
     });
 
     // Se ci sono risposte, apri subito il thread e carica i messaggi
@@ -991,20 +1139,58 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-oggi')?.addEventListener('click', () => {
         giornoCorrente = oggiIso();
         caricaGiorno();
+        if (calAperto) {
+            const d = new Date(`${giornoCorrente}T12:00:00`);
+            calMeseVista = { anno: d.getFullYear(), mese: d.getMonth() };
+            aggiornaCalendarioVista();
+        }
     });
     document.getElementById('btn-ieri')?.addEventListener('click', () => {
         giornoCorrente = shiftGiorno(giornoCorrente, -1);
         caricaGiorno();
+        if (calAperto) renderCalendario();
     });
     document.getElementById('btn-domani')?.addEventListener('click', () => {
         giornoCorrente = shiftGiorno(giornoCorrente, 1);
         caricaGiorno();
+        if (calAperto) renderCalendario();
     });
     dataInput?.addEventListener('change', () => {
         if (dataInput.value) {
             giornoCorrente = dataInput.value;
             caricaGiorno();
+            if (calAperto) renderCalendario();
         }
+    });
+
+    document.getElementById('btn-apri-calendario')?.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        toggleCalendario();
+    });
+    document.getElementById('ap-cal-prev')?.addEventListener('click', () => {
+        let { anno, mese } = calMeseVista;
+        mese -= 1;
+        if (mese < 0) {
+            mese = 11;
+            anno -= 1;
+        }
+        calMeseVista = { anno, mese };
+        aggiornaCalendarioVista();
+    });
+    document.getElementById('ap-cal-next')?.addEventListener('click', () => {
+        let { anno, mese } = calMeseVista;
+        mese += 1;
+        if (mese > 11) {
+            mese = 0;
+            anno += 1;
+        }
+        calMeseVista = { anno, mese };
+        aggiornaCalendarioVista();
+    });
+    document.getElementById('ap-cal-griglia')?.addEventListener('click', (ev) => {
+        const btn = ev.target.closest('.ap-cal-giorno[data-data]');
+        if (!btn) return;
+        selezionaGiornoCalendario(btn.dataset.data);
     });
 
     document.getElementById('btn-apri-aggiungi')?.addEventListener('click', apriModaleAggiungi);
@@ -1029,6 +1215,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const cerca = document.getElementById('ap-dialog-cerca');
         if (aggiungi && !aggiungi.hidden) chiudiModale('ap-dialog-aggiungi');
         else if (cerca && !cerca.hidden) chiudiModale('ap-dialog-cerca');
+        else if (calAperto) chiudiCalendario();
     });
 
     document.getElementById('btn-cerca')?.addEventListener('click', cercaAppunti);
@@ -1071,6 +1258,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (ev.target?.matches?.('.ap-item-check')) {
             const article = ev.target.closest('.ap-item');
             if (article) toggleFatto(article);
+        }
+    });
+
+    document.getElementById('ap-lista')?.addEventListener('input', (ev) => {
+        if (ev.target?.matches?.('.ap-item-testo, .ap-chat-input')) {
+            adattaAltezzaTextarea(ev.target);
         }
     });
 
