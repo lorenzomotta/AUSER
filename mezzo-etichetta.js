@@ -1,6 +1,7 @@
 /**
  * Etichetta e ricerca mezzo.
- * Nel servizio il campo Mezzo contiene IdAutomezzo (non Numero_Mezzo, che è vuoto).
+ * Nel servizio il campo Mezzo contiene IdAutomezzo.
+ * Numero_Mezzo = "Numero_Interno"; ColoreMezzo è opzionale.
  */
 
 export function idMezzo(mezzo) {
@@ -13,14 +14,25 @@ export function idMezzo(mezzo) {
 
 export function etichettaMezzo(mezzo) {
     if (!mezzo) return '';
+    const nrInterno = String(mezzo.nr_automezzo || '').trim();
     const nome = [mezzo.marca, mezzo.modello]
         .map((p) => String(p || '').trim())
         .filter(Boolean)
         .join(' - ');
     const targa = String(mezzo.targa || '').trim();
-    if (nome && targa) return `${nome} (${targa})`;
-    if (nome) return nome;
-    if (targa) return `(${targa})`;
+    const colore = String(mezzo.colore_mezzo || '').trim();
+
+    let base = '';
+    if (nome && targa) base = `${nome} (${targa})`;
+    else if (nome) base = nome;
+    else if (targa) base = `(${targa})`;
+
+    const parti = [];
+    if (nrInterno) parti.push(nrInterno);
+    if (base) parti.push(base);
+    if (colore) parti.push(colore);
+
+    if (parti.length) return parti.join(' · ');
     const id = idMezzo(mezzo);
     return id ? `Mezzo ${id}` : 'Mezzo';
 }

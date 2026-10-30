@@ -885,6 +885,7 @@ async function caricaAutomezzi() {
     allAutomezzi = (data || []).map(row => ({
         id: getFieldAny(row, ['IdAutomezzo', 'ID_AUTOMEZZO', 'id_automezzo', 'IdMezzo', 'idmezzo']),
         nr_automezzo: getFieldAny(row, ['Numero_Mezzo', 'NR_AUTOMEZZO', 'NumeroAutomezzo']),
+        colore_mezzo: getFieldAny(row, ['ColoreMezzo', 'Colore_Mezzo', 'colore_mezzo', 'COLOREMEZZO']),
         marca: getFieldAny(row, ['Marca', 'MARCA']),
         modello: getFieldAny(row, ['Modello', 'MODELLO']),
         targa: getFieldAny(row, ['Targa', 'TARGA'])
@@ -921,30 +922,17 @@ async function caricaServiziPerRange(start, endEsclusivo) {
 
 function costruisciStringaMezzo(servizio) {
     const automezzo = trovaAutomezzoCalendario(servizio?.mezzo);
-    if (!automezzo) return servizio?.mezzo_usato || '';
-    const parti = [];
-    if (automezzo.marca) parti.push(automezzo.marca.trim());
-    if (automezzo.modello) parti.push(automezzo.modello.trim());
-    const id = chiaveMezzo(automezzo.id) || chiaveMezzo(automezzo.nr_automezzo);
-    if (id) parti.push(`(${id})`);
-    return parti.join(' - ') || servizio?.mezzo_usato || '';
+    const testo = etichettaAutomezzo(automezzo);
+    if (testo) return testo;
+    return servizio?.mezzo_usato || '';
 }
 
-/** Mezzo (marca/modello) e targa per un servizio */
+/** Mezzo completo (n. interno, marca/modello, targa, colore) per la vista giorno mobile */
 function mezzoETargaDaServizio(servizio) {
     const automezzo = trovaAutomezzoCalendario(servizio?.mezzo);
-    let mezzo = '';
-    if (automezzo) {
-        const parti = [];
-        if (automezzo.marca) parti.push(String(automezzo.marca).trim());
-        if (automezzo.modello) parti.push(String(automezzo.modello).trim());
-        mezzo = parti.join(' ').trim();
-    }
-    if (!mezzo) {
-        mezzo = String(servizio?.mezzo_usato || '').trim();
-    }
-    const targa = String(automezzo?.targa || '').trim().toUpperCase();
-    return { mezzo, targa };
+    const mezzo = etichettaAutomezzo(automezzo) || String(servizio?.mezzo_usato || '').trim();
+    // targa e colore sono già nella stringa unica
+    return { mezzo, targa: '' };
 }
 
 // ─── UI Calendario ───────────────────────────────────────────────────────────
@@ -1406,11 +1394,24 @@ async function caricaTelefoniSocio(idsocio) {
 
 function etichettaAutomezzo(automezzo) {
     if (!automezzo) return '';
-    const targa = String(automezzo.targa || '').trim().toUpperCase();
-    return [automezzo.marca, automezzo.modello, targa]
+    const nrInterno = String(automezzo.nr_automezzo || '').trim();
+    const nome = [automezzo.marca, automezzo.modello]
         .map((p) => String(p || '').trim())
         .filter(Boolean)
-        .join(' ');
+        .join(' - ');
+    const targa = String(automezzo.targa || '').trim();
+    const colore = String(automezzo.colore_mezzo || '').trim();
+
+    let base = '';
+    if (nome && targa) base = `${nome} (${targa})`;
+    else if (nome) base = nome;
+    else if (targa) base = `(${targa})`;
+
+    const parti = [];
+    if (nrInterno) parti.push(nrInterno);
+    if (base) parti.push(base);
+    if (colore) parti.push(colore);
+    return parti.join(' · ');
 }
 
 function stringaMezzoVisibile(servizio) {

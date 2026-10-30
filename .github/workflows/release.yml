@@ -12,12 +12,12 @@ jobs:
     # App Windows: build su runner Windows (installer NSIS + aggiornamenti)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -47,10 +47,11 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'AUSER Gestione Operativa v__VERSION__'
           releaseBody: |
-            Nuova versione v1.0.22:
-            - Elenco mezzi: il numero N. MEZZO mostra il campo IdAutomezzo
-            - Un mezzo nuovo salva quel numero in IdAutomezzo
-            - Se il numero è già usato, il programma avvisa
+            Nuova versione v1.0.23:
+            - Elenco mezzi: N. INTERNO (Numero_Mezzo) modificabile e COLORE (ColoreMezzo, anche vuoto)
+            - Tolta dalla scheda la Scadenza Bollo
+            - Scelta mezzo in Nuovo/Modifica servizio e calendario mobile: include n. interno e colore
+            - N. MEZZO resta IdAutomezzo (riferimento servizi)
 
             Gli utenti con l'app già installata riceveranno un avviso all'avvio
             e potranno aggiornare con un clic.
