@@ -220,7 +220,8 @@ export function htmlDettaglioServizioEditabile(servizio, opzioni = {}, telefoni 
                 ${creaNotaModale('NOTE ARRIVO', 'note_arrivo', s.note_arrivo)}
             </div>
             <div class="dettaglio-row">
-                ${creaCampoModale({ label: 'OPERATORE', name: 'operatore_id', value: opId, classe: 'field-large', options: opzioni.operatori || [], emptyLabel: '— Nessuno —' })}
+                ${creaCampoModale({ label: 'OPERATORE', name: 'operatore_id', value: opId, classe: 'field-half', options: opzioni.operatori || [], emptyLabel: '— Nessuno —' })}
+                ${creaCampoModale({ label: 'ACCOMPAGNATORE', name: 'operatore_2', value: s.operatore_2 || '', classe: 'field-half', options: opzioni.accompagnatori || [], emptyLabel: '— Nessuno —' })}
                 ${creaCampoModale({ label: 'MEZZO', name: 'mezzo', value: mezzoVal, classe: 'field-large', options: opzioni.mezzi || [], emptyLabel: '— Nessuno —' })}
                 ${creaCampoModale({ label: 'TEMPO', name: 'tempo', value: s.tempo, classe: 'field-small', type: 'text' })}
                 ${creaCampoModale({ label: 'KM', name: 'km', value: s.km, classe: 'field-small' })}
@@ -378,6 +379,17 @@ export function buildPayloadUpdateServizio(servizio, dati, mergeNoteFineFn) {
         const op = String(dati.operatore_id || '').trim();
         const opVal = !op ? null : (Number.isNaN(parseInt(op, 10)) ? op : parseInt(op, 10));
         setCampo(payload, row, ['IdOperatore', 'IDOPERATORE', 'Id_Operatore'], 'IdOperatore', opVal);
+    }
+
+    if (dati.operatore_2 !== undefined) {
+        const acc = String(dati.operatore_2 || '').trim();
+        setCampo(
+            payload,
+            row,
+            ['Accompagnatore', 'ACCOMPAGNATORE', 'accompagnatore', 'Oper2', 'OPER2'],
+            'Accompagnatore',
+            acc || null
+        );
     }
 
     if (dati.mezzo !== undefined) {

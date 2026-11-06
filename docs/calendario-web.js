@@ -25,13 +25,15 @@ import {
     buildPayloadUpdateServizio,
     payloadSenzaMeta,
     OPZIONI_DEFAULT
-} from './calendario-web-edit.js?v=28';
+} from './calendario-web-edit.js?v=29';
 import { generaExcelCalendarioWeb } from './calendario-web-excel.js?v=1';
 
 let supabaseClient = null;
 let publicConfig = null;
 let nominativiMap = {};
 let allOperatori = [];
+/** Soci con mansione ACCOMPAGNATORE (per select in scheda servizio). */
+let allAccompagnatori = [];
 let calendar = null;
 let allAutomezzi = [];
 const serviziPerRangeCache = new Map();
@@ -562,6 +564,7 @@ async function gestisciLogout() {
     serviziVistaCorrente = [];
     nominativiMap = {};
     allOperatori = [];
+    allAccompagnatori = [];
     permessiCorrenti = null;
     utenteAuthCorrente = null;
     mostraSchermataLogin();
@@ -586,10 +589,18 @@ async function controllaSessioneEsistente() {
 
 // ─── Dati Supabase ───────────────────────────────────────────────────────────
 
+function haMansioneAccompagnatore(disponibilita) {
+    return String(disponibilita || '')
+        .split(/[,;]/)
+        .map((s) => s.trim().toUpperCase())
+        .includes('ACCOMPAGNATORE');
+}
+
 async function caricaNominativi() {
     if (Object.keys(nominativiMap).length) return;
     const { data } = await supabaseClient.from(tabella('tesserati')).select('*').limit(5000);
     const operatori = [];
+    const accompagnatori = [];
     (data || []).forEach(row => {
         const id = String(getFieldAny(row, ['IdSocio', 'IDSOCIO', 'idsocio']) || '').trim();
         const nom = getFieldAny(row, ['NominativoSocio', 'NOMINATIVO', 'Nominativo', 'nominativo']);
@@ -602,8 +613,13 @@ async function caricaNominativi() {
         if (id && nom && isTruthyFlag(opFlag)) {
             operatori.push({ value: idOperatoreNorm(id), label: nom });
         }
+        const disp = getFieldAny(row, ['Disponibilita', 'DISPONIBILITA', 'disponibilita']);
+        if (nom && haMansioneAccompagnatore(disp)) {
+            accompagnatori.push({ value: nom, label: nom });
+        }
     });
     allOperatori = operatori.sort((a, b) => a.label.localeCompare(b.label, 'it'));
+    allAccompagnatori = accompagnatori.sort((a, b) => a.label.localeCompare(b.label, 'it'));
 }
 
 /** Solo colonne ID operatore (non il flag/testo Operatore) */
@@ -773,7 +789,13 @@ function rowToServizioCompleto(row) {
         stato_incasso: incassato || 'DA INCASSARE',
         operatore: resolveOperatoreNome(row),
         operatore_id: resolveOperatoreId(row),
-        operatore_2: getFieldAny(row, ['Oper2', 'OPER2']),
+        operatore_2: (() => {
+            const raw = getFieldAny(row, [
+                'Accompagnatore', 'ACCOMPAGNATORE', 'accompagnatore', 'Oper2', 'OPER2'
+            ]);
+            if (!raw) return '';
+            return nomeOperatoreDaId(raw) || raw;
+        })(),
         mezzo_usato: '',
         mezzo: getFieldAny(row, ['Mezzo', 'MEZZO']),
         tempo: formatTempoDaRow(row),
@@ -1091,16 +1113,41 @@ function renderEventContent(arg) {
 
     const socioHtml = htmlTestoConIcona(socio, iconaTrasportato);
     const opHtml = htmlTestoConIcona(op, iconaOperatore);
-    const titleText = [ora, socio, op].filter(p => String(p).trim() !== '').join(' · ') || '—';
+    const acc = String(s.operatore_2 || '').trim();
+    const isSettimana = vista === 'dayGridWeek' || isVistaListaMobile(vista);
+    const titleText = [ora, socio, op, isSettimana || isGiorno ? acc : '']
+        .filter(p => String(p).trim() !== '')
+        .join(' · ') || '—';
     const titleAttr = escapeHtml(titleText);
 
-    if (isVistaMobileCalendario() && isVistaListaMobile(arg.view?.type)) {
-        const parti = [];
-        if (ora.trim()) parti.push(escapeHtml(ora));
-        if (socioHtml) parti.push(socioHtml);
-        if (op.trim()) parti.push(`<span class="cal-event-op">${escapeHtml(op)}</span>`);
-        const riga = parti.length ? parti.join(' · ') : '—';
-        return { html: `<div class="cal-event cal-event-week-row" title="${titleAttr}">${riga}</div>` };
+    if (isSettimana) {
+        const { mezzo, targa } = mezzoETargaDaServizio(s);
+        const mezzoTarga = [mezzo, targa].filter(p => String(p).trim() !== '');
+        const mezzoHtml = mezzoTarga.length
+            ? `<span class="cal-event-mezzo">${escapeHtml(mezzoTarga.join(' '))}</span>`
+            : '';
+        const partiSinistra = [];
+        if (ora.trim()) partiSinistra.push(`<span class="cal-event-ora">${escapeHtml(ora)}</span>`);
+        if (socioHtml) partiSinistra.push(socioHtml);
+        const sinistraHtml = partiSinistra.length
+            ? `<span class="cal-event-week-main">${partiSinistra.join(' · ')}</span>`
+            : '';
+        const riga1 = (sinistraHtml || mezzoHtml)
+            ? `<span class="cal-event-riga-settimana">${sinistraHtml}${mezzoHtml}</span>`
+            : '';
+        const accHtml = acc
+            ? `<span class="cal-event-acc">${escapeHtml(acc)}</span>`
+            : '';
+        const riga2 = (op.trim() || acc)
+            ? `<span class="cal-event-riga-op">${op.trim() ? `<span class="cal-event-op">${escapeHtml(op)}</span>` : '<span class="cal-event-op"></span>'}${accHtml}</span>`
+            : '';
+        const titleWeek = [ora, socio, op, acc, ...mezzoTarga]
+            .filter(p => String(p).trim() !== '')
+            .join(' · ') || '—';
+        const righe = [riga1, riga2].filter(Boolean);
+        return {
+            html: `<div class="cal-event cal-event-week" title="${escapeHtml(titleWeek)}">${righe.length ? righe.join('') : '—'}</div>`
+        };
     }
 
     if (isVistaMobileCalendario() && isGiorno) {
@@ -1112,13 +1159,19 @@ function renderEventContent(arg) {
         const rigaOra = (ora.trim() || mezzoHtml)
             ? `<span class="cal-event-riga-ora">${ora.trim() ? `<span class="cal-event-ora">${escapeHtml(ora)}</span>` : ''}${mezzoHtml}</span>`
             : '';
-        const titleDay = [ora, socio, op, ...mezzoTarga]
+        const accHtml = acc
+            ? `<span class="cal-event-acc">${escapeHtml(acc)}</span>`
+            : '';
+        const rigaOp = (op.trim() || acc)
+            ? `<span class="cal-event-riga-op">${opHtml || '<span class="cal-event-op"></span>'}${accHtml}</span>`
+            : '';
+        const titleDay = [ora, socio, op, acc, ...mezzoTarga]
             .filter(p => String(p).trim() !== '')
             .join(' · ') || '—';
         const righe = [
             rigaOra,
             socioHtml ? `<span class="cal-event-socio">${socioHtml}</span>` : '',
-            opHtml ? `<span class="cal-event-op">${opHtml}</span>` : ''
+            rigaOp
         ].filter(Boolean);
         const html = righe.length
             ? `<div class="cal-event cal-event-mobile" title="${escapeHtml(titleDay)}">${righe.join('')}</div>`
@@ -1436,6 +1489,7 @@ function getOpzioniModificaAdmin() {
     return {
         ...OPZIONI_DEFAULT,
         operatori: allOperatori.length ? allOperatori : [],
+        accompagnatori: allAccompagnatori.length ? allAccompagnatori : [],
         mezzi
     };
 }
@@ -1484,6 +1538,10 @@ async function renderModalServizio(servizio) {
             && !opzioni.operatori.some((o) => idOperatoreNorm(o.value) === idOpSelect)) {
             opzioni.operatori = [{ value: idOpSelect, label: nomeOp }, ...opzioni.operatori];
         }
+        const nomeAcc = String(servizio.operatore_2 || '').trim();
+        if (nomeAcc && !opzioni.accompagnatori.some((o) => o.value === nomeAcc)) {
+            opzioni.accompagnatori = [{ value: nomeAcc, label: nomeAcc }, ...opzioni.accompagnatori];
+        }
         const servizioForm = { ...servizio, operatore_id: idOpSelect || servizio.operatore_id };
         body.innerHTML = htmlDettaglioServizioEditabile(servizioForm, opzioni, telefoni)
             + htmlRigaTrattaSePresente(servizio);
@@ -1526,7 +1584,8 @@ async function renderModalServizio(servizio) {
                 ${creaNotaDettaglio('NOTE ARRIVO', servizio.note_arrivo)}
             </div>
             <div class="dettaglio-row">
-                ${creaCampoDettaglio('OPERATORE', nominativoOperatoreVisibile(servizio), 'field-large')}
+                ${creaCampoDettaglio('OPERATORE', nominativoOperatoreVisibile(servizio), 'field-half')}
+                ${creaCampoDettaglio('ACCOMPAGNATORE', servizio.operatore_2 || '', 'field-half')}
                 ${creaCampoDettaglio('MEZZO USATO', mezzo, 'field-large')}
                 ${creaCampoDettaglio('TEMPO', servizio.tempo, 'field-small')}
                 ${creaCampoDettaglio('KM', servizio.km, 'field-small')}
