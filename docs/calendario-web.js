@@ -2027,11 +2027,23 @@ function initCalendario() {
     calendarioInizializzato = true;
 }
 
+function aggiornaPulsanteRifornimento() {
+    const footer = document.querySelector('.rif-mobile-footer');
+    if (!footer) return;
+    const giorno = vistaCorrente === 'dayGridDay';
+    footer.hidden = !giorno;
+    if (!giorno) {
+        const overlay = document.getElementById('rif-mobile-overlay');
+        if (overlay) overlay.hidden = true;
+    }
+}
+
 function impostaVista(nomeVista) {
     vistaCorrente = nomeVista;
     document.querySelectorAll('.btn-vista').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.vista === nomeVista);
     });
+    aggiornaPulsanteRifornimento();
     if (calendar) {
         calendar.changeView(vistaCalendarioEffettiva(nomeVista));
         requestAnimationFrame(() => applicaIntestazioniGiornoListaMobile());
@@ -2110,6 +2122,7 @@ async function avviaCalendario(user, perm) {
     console.log('Calendario permessi:', permessiCorrenti, 'admin=', isUtenteAdmin(permessiCorrenti));
     mostraCalendario(etichettaUtente(user, perm));
     configuraVistaInizialeMobile();
+    aggiornaPulsanteRifornimento();
     setLoading(true, 'Caricamento anagrafiche...');
     await caricaNominativi();
     await caricaAutomezzi();
@@ -2195,6 +2208,7 @@ function mostraAnteprimaMobile() {
     ];
     mostraCalendario('Anteprima · dati di esempio');
     configuraVistaInizialeMobile();
+    aggiornaPulsanteRifornimento();
     avviaMascheraRifornimento({
         getClient: clientSoloAnteprima,
         nomeTabella: 'Rifornimenti',

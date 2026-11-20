@@ -5,6 +5,7 @@
     display: none;
 }
 
+.rif-mobile-footer[hidden],
 .rif-nuovo-wrap[hidden],
 .rif-mobile-errore[hidden],
 .rif-mobile-ok[hidden] {
@@ -12,8 +13,8 @@
 }
 
 @media (max-width: 768px) {
-    .web-calendario-app .calendario-container {
-        padding-bottom: 76px;
+    .web-calendario-app:has(.rif-mobile-footer:not([hidden])) .calendario-container {
+        padding-bottom: 58px;
     }
 
     .web-calendario-app .rif-mobile-footer {
@@ -26,7 +27,7 @@
         right: 0;
         bottom: 0;
         z-index: 40;
-        padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+        padding: 6px 16px calc(6px + env(safe-area-inset-bottom));
         background: #37474f;
         box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.18);
     }
@@ -34,19 +35,19 @@
     .rif-mobile-btn {
         flex: 1;
         max-width: 420px;
-        min-height: 48px;
+        min-height: 38px;
         border: none;
         border-radius: 6px;
-        background: #6a1b9a;
+        background: #722F37;
         color: #fff;
-        font-size: 16px;
+        font-size: 14px;
         font-weight: 700;
         letter-spacing: 0.04em;
         cursor: pointer;
     }
 
     .rif-mobile-btn:active {
-        background: #4a148c;
+        background: #561F28;
     }
 
     .rif-mobile-ok {
@@ -185,7 +186,7 @@
     }
 
     .rif-btn-salva {
-        background: #6a1b9a;
+        background: #722F37;
         color: #fff;
     }
 
