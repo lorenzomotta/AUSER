@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS public."Manutenzioni_supa" (
     "KmRiferimento" numeric,
     "KmPrevisto" numeric,
     "DataPrevista" date,
+    -- Quanti giorni/km PRIMA della soglia iniziare l'avviso giallo
+    "Preavviso" numeric,
     "Stato" text NOT NULL DEFAULT 'aperta',
     created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -51,6 +53,8 @@ COMMENT ON COLUMN public."Manutenzioni_supa"."KmPrevisto" IS
     'Soglia km (KmRiferimento + DeltaChilometri)';
 COMMENT ON COLUMN public."Manutenzioni_supa"."DataPrevista" IS
     'Data soglia alert tipo Giorni (giorno programmazione + DeltaGiorni)';
+COMMENT ON COLUMN public."Manutenzioni_supa"."Preavviso" IS
+    'Quanto prima avvisare: giorni (tipologia Giorni) o km (tipologia Km). NULL = solo alert a scadenza (rosso)';
 COMMENT ON COLUMN public."Manutenzioni_supa"."Stato" IS
     'aperta | eseguita | annullata — solo le aperte generano alert';
 

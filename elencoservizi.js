@@ -13,6 +13,13 @@ import { testoNoteFineVisibile, parseTrattaDaNote, htmlContenutoRiepilogoTratta,
 import { parseTariffaDaNote, htmlContenutoRiepilogoTariffa } from './calcola-tariffa.js';
 import { initStampaPdfElencoServizi } from './elencoservizi-pdf.js';
 import { testoMezzoServizio } from './mezzo-etichetta.js';
+import {
+    initPagamentoCumulativo,
+    setupPagamentoCumulativo,
+    htmlCheckboxPagamentoCumulativo,
+    collegaCheckboxPagamentoCumulativo,
+    isPagamentoCumulativo
+} from './pagamento-cumulativo.js';
 
 function escapeHtmlElenco(str) {
     if (str === undefined || str === null) return '';
@@ -21,6 +28,23 @@ function escapeHtmlElenco(str) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+/** Icone SVG per i pulsanti compatti dell'elenco. */
+const ICONA_FILTRO = `<svg class="es-icona" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>`;
+const ICONA_FILTRO_ATTIVO = `<svg class="es-icona" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/><path fill="currentColor" d="M19.1 4.1 4.1 19.1l1.4 1.4L20.5 5.5z"/></svg>`;
+const ICONA_STAMPANTE = `<svg class="es-icona" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>`;
+const ICONA_MATITA = `<svg class="es-icona" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/></svg>`;
+const ICONA_COMPLETA = `<svg class="es-icona" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>`;
+
+function htmlBtnFiltraIcona({ attrName, attrValue, attivo, disabled = false, titoloFiltra, titoloTutti }) {
+    const valore = escapeHtmlElenco(attrValue || '');
+    const title = attivo ? (titoloTutti || 'Mostra tutti') : (titoloFiltra || 'Filtra');
+    const aria = attivo ? 'Mostra tutti' : 'Filtra';
+    const icona = attivo ? ICONA_FILTRO_ATTIVO : ICONA_FILTRO;
+    const classeAttivo = attivo ? ' is-attivo' : '';
+    const disabledAttr = disabled ? ' disabled' : '';
+    return `<button type="button" class="btn btn-filtra btn-icona${classeAttivo}" ${attrName}="${valore}" title="${escapeHtmlElenco(title)}" aria-label="${escapeHtmlElenco(aria)}"${disabledAttr}>${icona}</button>`;
 }
 
 // Import Tauri API
@@ -220,7 +244,13 @@ async function applicaFiltroInizialeDaUrl() {
     const operatore = getOperatoreFromUrl();
     if (!idsocio && !operatore) return;
 
-    await caricaTuttiAnniSeFiltroUrl();
+    // Socio: storico completo (tutti gli anni). Operatore: di default anno corrente.
+    if (idsocio) {
+        await caricaTuttiAnniSeFiltroUrl();
+    } else if (operatore) {
+        filtroAnnoModo = 'corrente';
+        updateAnnoHeaderUI();
+    }
 
     const titleEl = document.getElementById('servizi-title-text');
     const nominativoSocio = getNominativoFromUrl();
@@ -578,6 +608,8 @@ let filtroTrasportatoAttivo = false; // Stato del filtro TRASPORTATO
 let valoreFiltroTrasportato = null; // Valore del filtro TRASPORTATO attualmente attivo
 let filtroOperatoreAttivo = false; // Stato del filtro OPERATORE
 let valoreFiltroOperatore = null; // Valore del filtro OPERATORE attualmente attivo
+let filtroAccompagnatoreAttivo = false; // Stato del filtro ACCOMPAGNATORE
+let valoreFiltroAccompagnatore = null; // Valore del filtro ACCOMPAGNATORE attualmente attivo
 let filtroStatoAttivo = false; // Stato del filtro STATO DEL SERVIZIO
 let valoreFiltroStato = null; // Valore del filtro STATO DEL SERVIZIO attualmente attivo ('DA ESEGUIRE', 'ESEGUITO', 'ANNULLATO')
 let filtroRichiedenteAttivo = false; // Stato del filtro RICHIEDENTE
@@ -595,7 +627,10 @@ let filtriRicerca = {
     tipoServizio: null,
     carrozzina: null,
     richiedente: null,
-    operatore: null
+    operatore: null,
+    accompagnatore: null,
+    pagamentoCumulativo: null,
+    pagamentoCumulativoNumero: null
 };
 
 // Cache per tesserati e operatori
@@ -704,7 +739,19 @@ function updateAnnoHeaderUI() {
     }
 
     if (titleEl) {
-        titleEl.textContent = titleText;
+        // Se la finestra è aperta da Socio/Operatore, non sovrascrivere il titolo dedicato
+        const operatore = getOperatoreFromUrl() || testoONull(filtriRicerca?.operatore);
+        const idsocio = getIdsocioFromUrl() || testoONull(filtriRicerca?.idsocio);
+        if (operatore && !idsocio) {
+            titleEl.textContent = `SERVIZI OPERATORE — ${operatore}`;
+        } else if (idsocio) {
+            const nominativoSocio = getNominativoFromUrl() || testoONull(filtriRicerca?.nominativo);
+            titleEl.textContent = nominativoSocio
+                ? `SERVIZI SOCIO ${idsocio} — ${nominativoSocio}`
+                : `SERVIZI SOCIO ${idsocio}`;
+        } else {
+            titleEl.textContent = titleText;
+        }
     }
     if (btnCorrente) {
         btnCorrente.classList.toggle('active', filtroAnnoModo === 'corrente');
@@ -757,7 +804,18 @@ function costruisciRichiestaElenco(offset, limite) {
         tipoServizio: testoONull(filtriRicerca.tipoServizio),
         carrozzina: testoONull(filtriRicerca.carrozzina),
         operatoreIds: operatore.ids,
-        operatoreNome: operatore.nome
+        operatoreNome: operatore.nome,
+        accompagnatoreNome: testoONull(filtriRicerca.accompagnatore)
+            || (filtroAccompagnatoreAttivo ? testoONull(valoreFiltroAccompagnatore) : null),
+        pagamentoCumulativo: filtriRicerca.pagamentoCumulativo === 'SI'
+            ? true
+            : filtriRicerca.pagamentoCumulativo === 'NO'
+                ? false
+                : null,
+        pagamentoCumulativoNumero: (() => {
+            const n = Number(filtriRicerca.pagamentoCumulativoNumero || 0);
+            return Number.isFinite(n) && n > 0 ? n : null;
+        })()
     };
 }
 
@@ -836,6 +894,7 @@ async function switchAnnoModo(modo) {
     applicaFiltroArchiviaIniziale = false;
     filtroAnnoModo = modo;
     updateAnnoHeaderUI();
+    updateFilterWarning();
     currentPage = 1;
     await caricaLista(1);
 }
@@ -913,6 +972,14 @@ function createServizioBlock(servizio) {
     const servizioBlock = document.createElement('div');
     servizioBlock.className = 'servizio-block';
     servizioBlock.dataset.servizioId = servizio.id || '';
+    if (isPagamentoCumulativo(servizio)) {
+        servizioBlock.classList.add('is-pcum-selezionato');
+    }
+
+    const pcumWrap = document.createElement('div');
+    pcumWrap.className = 'pcum-check-wrap';
+    pcumWrap.innerHTML = htmlCheckboxPagamentoCumulativo(servizio);
+    servizioBlock.appendChild(pcumWrap);
 
     const formSections = document.createElement('div');
     formSections.className = 'form-sections';
@@ -974,14 +1041,21 @@ function createServizioBlock(servizio) {
 
     const trasportatoValue = servizio.socio_trasportato || '';
     const isFiltroTrasportatoAttivoPerQuesto = filtroTrasportatoAttivo && valoreFiltroTrasportato === trasportatoValue.trim();
-    const labelFiltraTrasportato = isFiltroTrasportatoAttivoPerQuesto ? 'TUTTI' : 'FILTRA';
+    const btnFiltraTrasportato = htmlBtnFiltraIcona({
+        attrName: 'data-filtra-trasportato',
+        attrValue: trasportatoValue,
+        attivo: isFiltroTrasportatoAttivoPerQuesto,
+        disabled: !String(trasportatoValue).trim(),
+        titoloFiltra: 'Filtra per questo trasportato',
+        titoloTutti: 'Mostra tutti i trasportati'
+    });
 
     formRow2.innerHTML = `
         <div class="form-group form-group-name form-group-with-filtra">
             <label>TRASPORTATO</label>
             <div class="input-button-group">
-                <input type="text" value="${servizio.socio_trasportato || ''}" readonly>
-                <button class="btn btn-filtra" data-filtra-trasportato="${servizio.socio_trasportato || ''}">${labelFiltraTrasportato}</button>
+                <input type="text" value="${escapeHtmlElenco(servizio.socio_trasportato || '')}" readonly>
+                ${btnFiltraTrasportato}
             </div>
         </div>
         <div class="form-group form-group-ora">
@@ -1015,19 +1089,47 @@ function createServizioBlock(servizio) {
 
     const operatoreValue = servizio.operatore || '';
     const isFiltroOperatoreAttivoPerQuesto = filtroOperatoreAttivo && valoreFiltroOperatore === operatoreValue.trim();
-    const labelFiltraOperatore = isFiltroOperatoreAttivoPerQuesto ? 'TUTTI' : 'FILTRA';
 
+    const accompagnatoreValue = String(servizio.operatore_2 || '').trim();
+    const isFiltroAccompagnatoreAttivoPerQuesto = filtroAccompagnatoreAttivo
+        && valoreFiltroAccompagnatore === accompagnatoreValue;
+
+    const btnFiltraOperatore = htmlBtnFiltraIcona({
+        attrName: 'data-filtra-operatore',
+        attrValue: operatoreValue,
+        attivo: isFiltroOperatoreAttivoPerQuesto,
+        disabled: !String(operatoreValue).trim(),
+        titoloFiltra: 'Filtra per questo operatore',
+        titoloTutti: 'Mostra tutti gli operatori'
+    });
+    const btnFiltraAccompagnatore = htmlBtnFiltraIcona({
+        attrName: 'data-filtra-accompagnatore',
+        attrValue: accompagnatoreValue,
+        attivo: isFiltroAccompagnatoreAttivoPerQuesto,
+        disabled: !accompagnatoreValue,
+        titoloFiltra: 'Filtra per questo accompagnatore',
+        titoloTutti: 'Mostra tutti gli accompagnatori'
+    });
+
+    formRow3.className = 'form-row form-row-operatore-mezzo';
     formRow3.innerHTML = `
-        <div class="form-group form-group-name form-group-with-filtra">
+        <div class="form-group form-group-with-filtra form-group-operatore-filtra">
             <label>OPERATORE</label>
             <div class="input-button-group operatore-name">
-                <input type="text" value="${servizio.operatore || ''}" readonly>
-                <button class="btn btn-filtra" data-filtra-operatore="${servizio.operatore || ''}">${labelFiltraOperatore}</button>
+                <input type="text" value="${escapeHtmlElenco(servizio.operatore || '')}" readonly>
+                ${btnFiltraOperatore}
+            </div>
+        </div>
+        <div class="form-group form-group-with-filtra form-group-accompagnatore">
+            <label>ACCOMPAGNATORE</label>
+            <div class="input-button-group">
+                <input type="text" value="${escapeHtmlElenco(accompagnatoreValue)}" readonly>
+                ${btnFiltraAccompagnatore}
             </div>
         </div>
         <div class="form-group form-group-mezzo">
             <label>MEZZO USATO</label>
-            <input type="text" value="${costruisciStringaMezzo(servizio)}" readonly>
+            <input type="text" value="${escapeHtmlElenco(costruisciStringaMezzo(servizio))}" readonly>
         </div>
         <div class="form-group form-group-small">
             <label>TEMPO</label>
@@ -1049,10 +1151,10 @@ function createServizioBlock(servizio) {
             <label>STATO DEL SERVIZIO</label>
             <input type="text" value="${servizio.stato_servizio || ''}" readonly>
         </div>
-        <div class="form-actions-inline">
-            <button class="btn btn-stampa">STAMPA</button>
-            <button class="btn btn-modifica">MODIFICA</button>
-            <button class="btn btn-completa">COMPLETA</button>
+        <div class="form-actions-inline form-actions-icone">
+            <button type="button" class="btn btn-stampa btn-icona" title="Stampa scheda servizio" aria-label="Stampa">${ICONA_STAMPANTE}</button>
+            <button type="button" class="btn btn-modifica btn-icona" title="Modifica servizio" aria-label="Modifica">${ICONA_MATITA}</button>
+            <button type="button" class="btn btn-completa btn-icona" title="Completa servizio" aria-label="Completa">${ICONA_COMPLETA}</button>
         </div>
     `;
 
@@ -1202,6 +1304,7 @@ function renderServiziView(resetPage = false) {
     }
     containerBody.innerHTML = '';
     containerBody.appendChild(fragment);
+    collegaCheckboxPagamentoCumulativo(containerBody);
     updatePaginationBar(totalItems, currentPage, totalPages);
 }
 
@@ -1220,19 +1323,100 @@ function updateServiziCount() {
     countElement.textContent = `(${count})`;
 }
 
+/** Elenco leggibile dei filtri attivi (per l'etichetta di attenzione). */
+function descrizioniFiltriAttivi() {
+    const parti = [];
+
+    const opRicerca = testoONull(filtriRicerca.operatore);
+    const opBtn = filtroOperatoreAttivo ? testoONull(valoreFiltroOperatore) : null;
+    const operatore = opRicerca || opBtn;
+    if (operatore) {
+        const opt = document.getElementById('ricerca-operatore')?.selectedOptions?.[0];
+        const nome = (opt?.dataset?.nominativo || opt?.textContent || '').trim();
+        parti.push(`Operatore: ${nome || operatore}`);
+    }
+
+    if (testoONull(filtriRicerca.idsocio)) {
+        parti.push(`IdSocio: ${filtriRicerca.idsocio}`);
+    }
+    if (testoONull(filtriRicerca.nominativo)) {
+        parti.push(`Nominativo: ${filtriRicerca.nominativo}`);
+    }
+    if (testoONull(filtriRicerca.idservizio)) {
+        parti.push(`IdServizio: ${filtriRicerca.idservizio}`);
+    }
+    if (filtroTrasportatoAttivo && testoONull(valoreFiltroTrasportato)) {
+        parti.push(`Trasportato: ${valoreFiltroTrasportato}`);
+    }
+    const accRicerca = testoONull(filtriRicerca.accompagnatore);
+    const accBtn = filtroAccompagnatoreAttivo ? testoONull(valoreFiltroAccompagnatore) : null;
+    const accompagnatore = accRicerca || accBtn;
+    if (accompagnatore) {
+        parti.push(`Accompagnatore: ${accompagnatore}`);
+    }
+    if (filtroStatoAttivo && testoONull(valoreFiltroStato)) {
+        parti.push(`Stato: ${valoreFiltroStato}`);
+    }
+    const rich = testoONull(filtriRicerca.richiedente)
+        || (filtroRichiedenteAttivo ? testoONull(valoreFiltroRichiedente) : null);
+    if (rich) {
+        parti.push(`Richiedente: ${rich}`);
+    }
+    if (testoONull(filtriRicerca.statoIncasso)) {
+        parti.push(`Incasso: ${filtriRicerca.statoIncasso}`);
+    }
+    if (testoONull(filtriRicerca.tipoPagamento)) {
+        parti.push(`Pagamento: ${filtriRicerca.tipoPagamento}`);
+    }
+    if (testoONull(filtriRicerca.tipoServizio)) {
+        parti.push(`Tipo servizio: ${filtriRicerca.tipoServizio}`);
+    }
+    if (testoONull(filtriRicerca.carrozzina)) {
+        parti.push(`Carrozzina: ${filtriRicerca.carrozzina}`);
+    }
+    if (filtriRicerca.pagamentoCumulativo === 'SI') {
+        parti.push('Solo pagamento cumulativo');
+    } else if (filtriRicerca.pagamentoCumulativo === 'NO') {
+        parti.push('Senza pagamento cumulativo');
+    }
+    if (Number(filtriRicerca.pagamentoCumulativoNumero) > 0) {
+        parti.push(`Pagamento cumulativo n. ${filtriRicerca.pagamentoCumulativoNumero}`);
+    }
+    if (testoONull(filtriRicerca.dataDa) || testoONull(filtriRicerca.dataA)) {
+        const da = filtriRicerca.dataDa || '…';
+        const a = filtriRicerca.dataA || '…';
+        parti.push(`Date: ${da} → ${a}`);
+    }
+
+    if (filtroAnnoModo === 'precedente') {
+        parti.push(`Anno ${getAnnoPrecedente()}`);
+    } else if (filtroAnnoModo === 'tutti') {
+        parti.push('Tutti gli anni');
+    } else {
+        parti.push(`Anno ${getAnnoCorrente()}`);
+    }
+
+    return parti;
+}
+
 // Funzione per aggiornare il messaggio di attenzione filtro
 function updateFilterWarning() {
     const filterWarning = document.getElementById('filter-warning');
     if (!filterWarning) return;
-    
+
     // Controlla se ci sono filtri ricerca attivi
     const hasRicercaFilters = Object.values(filtriRicerca).some(val => val !== null && val !== '');
-    
+
     // Mostra il messaggio se almeno un filtro è attivo
-    if (filtroTrasportatoAttivo || filtroOperatoreAttivo || filtroStatoAttivo || filtroRichiedenteAttivo || hasRicercaFilters) {
+    if (filtroTrasportatoAttivo || filtroOperatoreAttivo || filtroAccompagnatoreAttivo || filtroStatoAttivo || filtroRichiedenteAttivo || hasRicercaFilters) {
+        const dettagli = descrizioniFiltriAttivi().join(' · ');
+        filterWarning.textContent = dettagli
+            ? `(Attenzione visualizzazione filtrata: ${dettagli})`
+            : '(Attenzione visualizzazione filtrata)';
         filterWarning.style.display = 'inline';
     } else {
         filterWarning.style.display = 'none';
+        filterWarning.textContent = '(Attenzione visualizzazione filtrata)';
     }
 }
 
@@ -1366,6 +1550,25 @@ function filtraPerOperatore(operatoreValue) {
     }
 }
 
+// Filtra i servizi per ACCOMPAGNATORE o rimuove il filtro
+function filtraPerAccompagnatore(accompagnatoreValue) {
+    const valore = String(accompagnatoreValue || '').trim();
+    if (!valore) return;
+
+    if (filtroAccompagnatoreAttivo && valoreFiltroAccompagnatore === valore) {
+        console.log('Rimozione filtro ACCOMPAGNATORE - mostro tutti i servizi');
+        filtroAccompagnatoreAttivo = false;
+        valoreFiltroAccompagnatore = null;
+    } else {
+        console.log(`Filtro per ACCOMPAGNATORE: "${valore}"`);
+        filtroAccompagnatoreAttivo = true;
+        valoreFiltroAccompagnatore = valore;
+    }
+
+    applyAllFilters();
+    updateFilterWarning();
+}
+
 // Funzione per filtrare i servizi per STATO DEL SERVIZIO o rimuovere il filtro
 function filtraPerStato(statoValue) {
     const containerBody = document.getElementById('servizi-container-body');
@@ -1445,6 +1648,8 @@ function rimuoviTuttiFiltri() {
     valoreFiltroTrasportato = null;
     filtroOperatoreAttivo = false;
     valoreFiltroOperatore = null;
+    filtroAccompagnatoreAttivo = false;
+    valoreFiltroAccompagnatore = null;
     filtroStatoAttivo = false;
     valoreFiltroStato = null;
     filtroRichiedenteAttivo = false;
@@ -1462,7 +1667,10 @@ function rimuoviTuttiFiltri() {
         tipoServizio: null,
         carrozzina: null,
         richiedente: null,
-        operatore: null
+        operatore: null,
+        accompagnatore: null,
+        pagamentoCumulativo: null,
+        pagamentoCumulativoNumero: null
     };
     
     // Reset form modale
@@ -1483,8 +1691,26 @@ function rimuoviTuttiFiltri() {
     console.log('✓ Tutti i filtri rimossi');
 }
 
+/** Filtra l'elenco per numero gruppo pagamento cumulativo (toggle se già attivo). */
+async function filtraPerPagamentoCumulativoNumero(numero) {
+    const n = Number(numero || 0);
+    if (!Number.isFinite(n) || n <= 0) return;
+
+    if (Number(filtriRicerca.pagamentoCumulativoNumero) === n) {
+        filtriRicerca.pagamentoCumulativoNumero = null;
+    } else {
+        filtriRicerca.pagamentoCumulativoNumero = n;
+    }
+
+    currentPage = 1;
+    applyAllFilters();
+    updateFilterWarning();
+    updateServiziCount();
+}
+
 // Funzione helper per applicare tutti i filtri attivi
 function applyAllFilters() {
+    updateFilterWarning();
     if (elencoPaginatoSulServer || (isTauri() && invoke)) {
         caricaLista(1);
         return;
@@ -1510,6 +1736,17 @@ function applyAllFilters() {
         serviziFiltrati = serviziFiltrati.filter(servizio =>
             servizioMatchaOperatore(servizio, valoreFiltroOperatore)
         );
+    }
+
+    // Applica filtro ACCOMPAGNATORE (ricerca avanzata o pulsante riga)
+    const accFiltro = testoONull(filtriRicerca.accompagnatore)
+        || (filtroAccompagnatoreAttivo ? testoONull(valoreFiltroAccompagnatore) : null);
+    if (accFiltro) {
+        const target = accFiltro.trim().toUpperCase();
+        serviziFiltrati = serviziFiltrati.filter((servizio) => {
+            const nome = String(servizio.operatore_2 || '').trim().toUpperCase();
+            return nome === target;
+        });
     }
     
     // Applica filtro STATO DEL SERVIZIO se attivo
@@ -1636,6 +1873,22 @@ function applyAllFilters() {
         serviziFiltrati = serviziFiltrati.filter(servizio =>
             servizioMatchaOperatore(servizio, filtriRicerca.operatore)
         );
+    }
+
+    if (filtriRicerca.pagamentoCumulativo === 'SI') {
+        serviziFiltrati = serviziFiltrati.filter((servizio) => isPagamentoCumulativo(servizio));
+    } else if (filtriRicerca.pagamentoCumulativo === 'NO') {
+        serviziFiltrati = serviziFiltrati.filter((servizio) => !isPagamentoCumulativo(servizio));
+    }
+
+    const numGruppo = Number(filtriRicerca.pagamentoCumulativoNumero || 0);
+    if (Number.isFinite(numGruppo) && numGruppo > 0) {
+        serviziFiltrati = serviziFiltrati.filter((servizio) => {
+            const n = Number(servizio.pagamento_cumulativo_numero || 0);
+            if (n === numGruppo) return true;
+            const g = String(servizio.pagamento_cumulativo_gruppo || '').trim();
+            return g === String(numGruppo);
+        });
     }
     
     console.log(`✓ Servizi filtrati: ${serviziFiltrati.length} di ${serviziOriginali.length}`);
@@ -1770,6 +2023,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     setupModaleModifica();
 
+    initPagamentoCumulativo({
+        getInvoke: () => invoke,
+        isTauriEnv: isTauri,
+        getServizioById: trovaServizioById,
+        getTipiPagamento: getTipiPagamentoUnici,
+        onServiziAggiornati: async (lista) => {
+            (lista || []).forEach((s) => aggiornaServizioInCache(s));
+            renderServiziView(false);
+        },
+        onFiltraGruppo: async (numero) => {
+            await filtraPerPagamentoCumulativoNumero(numero);
+        }
+    });
+    setupPagamentoCumulativo();
+
     // Soci, telefoni e tendine dei popup: dopo che la lista è già visibile, una volta sola.
     caricaDatiPerDropdown()
         .then(() => {
@@ -1801,51 +2069,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     const containerBody = document.getElementById('servizi-container-body');
     if (containerBody) {
         containerBody.addEventListener('click', (e) => {
-            if (e.target.classList.contains('btn-stampa')) {
+            const btnStampaRiga = e.target.closest?.('.btn-stampa');
+            if (btnStampaRiga && containerBody.contains(btnStampaRiga)) {
                 e.stopPropagation();
-                const block = e.target.closest('.servizio-block');
-                const servizioId = block?.dataset?.servizioId;
-                if (servizioId) {
-                    apriSchedaServizioStampa(servizioId);
-                }
+                const servizioId = btnStampaRiga.closest('.servizio-block')?.dataset?.servizioId;
+                if (servizioId) apriSchedaServizioStampa(servizioId);
                 return;
             }
 
-            if (e.target.classList.contains('btn-modifica')) {
+            const btnModificaRiga = e.target.closest?.('.btn-modifica');
+            if (btnModificaRiga && containerBody.contains(btnModificaRiga)) {
                 e.stopPropagation();
-                const block = e.target.closest('.servizio-block');
-                const servizioId = block?.dataset?.servizioId;
-                if (servizioId) {
-                    apriModalModifica(servizioId);
-                }
+                const servizioId = btnModificaRiga.closest('.servizio-block')?.dataset?.servizioId;
+                if (servizioId) apriModalModifica(servizioId);
                 return;
             }
 
-            if (e.target.classList.contains('btn-completa')) {
+            const btnCompletaRiga = e.target.closest?.('.btn-completa');
+            if (btnCompletaRiga && containerBody.contains(btnCompletaRiga)) {
                 e.stopPropagation();
-                const block = e.target.closest('.servizio-block');
-                const servizioId = block?.dataset?.servizioId;
-                if (servizioId) {
-                    apriModalCompleta(servizioId);
-                }
+                const servizioId = btnCompletaRiga.closest('.servizio-block')?.dataset?.servizioId;
+                if (servizioId) apriModalCompleta(servizioId);
                 return;
             }
 
-            if (e.target.classList.contains('btn-filtra')) {
-                e.stopPropagation(); // Evita event bubbling
-                
-                // Controlla se è il filtro TRASPORTATO
-                if (e.target.hasAttribute('data-filtra-trasportato')) {
-                    const trasportatoValue = e.target.getAttribute('data-filtra-trasportato');
+            const btnFiltra = e.target.closest?.('.btn-filtra');
+            if (btnFiltra && containerBody.contains(btnFiltra)) {
+                e.stopPropagation();
+                if (btnFiltra.hasAttribute('data-filtra-trasportato')) {
+                    const trasportatoValue = btnFiltra.getAttribute('data-filtra-trasportato');
                     if (trasportatoValue !== null && trasportatoValue !== undefined) {
                         filtraPerTrasportato(trasportatoValue);
                     }
-                }
-                // Controlla se è il filtro OPERATORE
-                else if (e.target.hasAttribute('data-filtra-operatore')) {
-                    const operatoreValue = e.target.getAttribute('data-filtra-operatore');
+                } else if (btnFiltra.hasAttribute('data-filtra-operatore')) {
+                    const operatoreValue = btnFiltra.getAttribute('data-filtra-operatore');
                     if (operatoreValue !== null && operatoreValue !== undefined) {
                         filtraPerOperatore(operatoreValue);
+                    }
+                } else if (btnFiltra.hasAttribute('data-filtra-accompagnatore')) {
+                    const accompagnatoreValue = btnFiltra.getAttribute('data-filtra-accompagnatore');
+                    if (accompagnatoreValue !== null && accompagnatoreValue !== undefined) {
+                        filtraPerAccompagnatore(accompagnatoreValue);
                     }
                 }
             }
@@ -2047,6 +2311,35 @@ function popolaDropdownOperatori() {
     });
     
     if (currentValue) selectOperatore.value = currentValue;
+    popolaDropdownAccompagnatori();
+}
+
+/** Nomi accompagnatore presenti sui servizi (campo operatore_2). */
+function popolaDropdownAccompagnatori() {
+    const select = document.getElementById('ricerca-accompagnatore');
+    if (!select) return;
+
+    const currentValue = select.value;
+    const nomi = new Set();
+    (serviziOriginali || []).forEach((s) => {
+        const nome = String(s.operatore_2 || '').trim();
+        if (nome) nomi.add(nome);
+    });
+    (serviziCache || []).forEach((s) => {
+        const nome = String(s.operatore_2 || '').trim();
+        if (nome) nomi.add(nome);
+    });
+
+    select.innerHTML = '<option value="">Tutti</option>';
+    [...nomi].sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' })).forEach((nome) => {
+        const option = document.createElement('option');
+        option.value = nome;
+        option.textContent = nome;
+        select.appendChild(option);
+    });
+    if (currentValue && [...select.options].some((o) => o.value === currentValue)) {
+        select.value = currentValue;
+    }
 }
 
 // Setup autocomplete per nominativo
@@ -2147,6 +2440,8 @@ function chiudiModaleRicerca() {
 function resetFormRicerca() {
     document.getElementById('ricerca-idservizio').value = '';
     document.getElementById('ricerca-idsocio').value = '';
+    const pcum = document.getElementById('ricerca-pagamento-cumulativo');
+    if (pcum) pcum.value = '';
     document.getElementById('ricerca-nominativo').value = '';
     document.getElementById('ricerca-data-da').value = '';
     document.getElementById('ricerca-data-a').value = '';
@@ -2156,6 +2451,8 @@ function resetFormRicerca() {
     document.getElementById('ricerca-carrozzina').value = '';
     document.getElementById('ricerca-richiedente').value = '';
     document.getElementById('ricerca-operatore').value = '';
+    const acc = document.getElementById('ricerca-accompagnatore');
+    if (acc) acc.value = '';
 }
 
 // Applica filtri ricerca
@@ -2172,7 +2469,11 @@ async function applicaFiltriRicerca() {
         tipoServizio: document.getElementById('ricerca-tipo-servizio').value || null,
         carrozzina: document.getElementById('ricerca-carrozzina').value || null,
         richiedente: document.getElementById('ricerca-richiedente').value || null,
-        operatore: document.getElementById('ricerca-operatore').value || null
+        operatore: document.getElementById('ricerca-operatore').value || null,
+        accompagnatore: document.getElementById('ricerca-accompagnatore')?.value || null,
+        pagamentoCumulativo: document.getElementById('ricerca-pagamento-cumulativo')?.value || null,
+        // Il filtro per numero gruppo resta se attivo (si toglie con TUTTI o cliccando di nuovo il n.)
+        pagamentoCumulativoNumero: filtriRicerca.pagamentoCumulativoNumero || null
     };
     
     console.log('Applicazione filtri ricerca:', JSON.stringify(filtriRicerca));

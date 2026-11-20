@@ -304,11 +304,237 @@ async function openChilometraggioTotali() {
 // Cache globale per gli operatori (prima del filtro di ricerca)
 let allOperatori = [];
 
+/** Usate se la tabella Mansioni_supa non è raggiungibile. */
+const MANSIONI_PREDEFINITE = [
+    { mansione: 'Autista', codice: 'AUTISTA' },
+    { mansione: 'Centralista', codice: 'CENTRALISTA' },
+    { mansione: 'Nonno Vigile', codice: 'NONNO_VIGILE' },
+    { mansione: 'Scuolabus', codice: 'SCUOLABUS' }
+];
+
+/** Mansioni attive (da Impostazioni → Mansioni). */
+let mansioniAttive = [...MANSIONI_PREDEFINITE];
+
+/** Codici mansione spuntati nel filtro (vuoto = nessun filtro, mostra tutti). */
+let mansioniFiltroSelezionate = [];
+
+/** true = mostra solo operatori con ATTIVO spuntato. */
+let filtroSoloAttivi = false;
+
+/** IdSocio della riga in modifica (null = nessuna). */
+let editingIdsocio = null;
+
+/** Bozza delle spunte mentre si modifica (sopravvive a un refresh della lista). */
+let editingDraft = null;
+
 // Ordina per nominativo (A→Z, regole italiane)
 function sortByNominativo(list) {
     return [...list].sort((a, b) =>
         (a.nominativo || '').localeCompare(b.nominativo || '', 'it', { sensitivity: 'base' })
     );
+}
+
+/** Spezza il campo disponibilita (es. "AUTISTA,CENTRALISTA") in codici. */
+function parseDisponibilita(value) {
+    if (!value) return [];
+    return String(value)
+        .split(/[,;]/)
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+}
+
+async function loadMansioni() {
+    if (isTauri() && invoke) {
+        try {
+            try {
+                await invoke('init_supabase_from_config');
+            } catch (initErr) {
+                console.warn('Init Supabase mansioni:', initErr);
+            }
+            const list = await invoke('get_mansioni');
+            const attive = (Array.isArray(list) ? list : [])
+                .filter((m) => m && m.attiva !== false && m.codice && m.mansione)
+                .map((m) => ({
+                    mansione: m.mansione,
+                    codice: String(m.codice).toUpperCase()
+                }));
+            mansioniAttive = attive.length ? attive : [...MANSIONI_PREDEFINITE];
+        } catch (error) {
+            console.error('Errore caricamento mansioni:', error);
+            mansioniAttive = [...MANSIONI_PREDEFINITE];
+        }
+    } else {
+        mansioniAttive = [...MANSIONI_PREDEFINITE];
+    }
+
+    // Se una mansione è stata eliminata dalle impostazioni, toglila anche dal filtro
+    const codiciValidi = new Set(mansioniAttive.map((m) => m.codice));
+    const prima = mansioniFiltroSelezionate.length;
+    mansioniFiltroSelezionate = mansioniFiltroSelezionate.filter((c) => codiciValidi.has(c));
+    if (mansioniFiltroSelezionate.length !== prima) {
+        applicaFiltriOperatori();
+    }
+    aggiornaStatoBottoneFiltraMansioni();
+}
+
+function renderFiltraMansioniFlags() {
+    const lista = document.getElementById('filtra-mansioni-lista');
+    if (!lista) return;
+
+    if (!mansioniAttive.length) {
+        lista.innerHTML = '<p class="op-modal-empty">Nessuna mansione attiva in Impostazioni.</p>';
+        return;
+    }
+
+    const selezionati = new Set(mansioniFiltroSelezionate);
+    lista.innerHTML = mansioniAttive.map(({ mansione, codice }) => `
+        <label class="op-modal-flag">
+            <input type="checkbox" value="${escapeHtml(codice)}"${selezionati.has(codice) ? ' checked' : ''}>
+            <span>${escapeHtml(mansione)}</span>
+        </label>
+    `).join('');
+}
+
+function aggiornaStatoBottoneFiltraMansioni() {
+    const btn = document.getElementById('btn-filtra-mansioni');
+    if (!btn) return;
+    const attivo = mansioniFiltroSelezionate.length > 0;
+    btn.classList.toggle('is-active', attivo);
+    btn.title = attivo
+        ? `Filtro attivo: ${mansioniFiltroSelezionate.length} mansioni`
+        : 'Filtra per mansioni';
+}
+
+function apriModaleFiltraMansioni() {
+    const modal = document.getElementById('modal-filtra-mansioni');
+    if (!modal) return;
+    // Ricarica sempre le mansioni da Impostazioni così le caselle restano aggiornate
+    loadMansioni().then(() => {
+        renderFiltraMansioniFlags();
+        // Aggiorna anche le caselle mansioni nelle righe operatori
+        applicaFiltriOperatori();
+        modal.hidden = false;
+        modal.setAttribute('aria-hidden', 'false');
+    });
+}
+
+function chiudiModaleFiltraMansioni() {
+    const modal = document.getElementById('modal-filtra-mansioni');
+    if (!modal) return;
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+}
+
+function syncMansioniFiltroDaModale() {
+    const checks = document.querySelectorAll('#filtra-mansioni-lista input[type="checkbox"]');
+    mansioniFiltroSelezionate = [...checks]
+        .filter((el) => el.checked)
+        .map((el) => String(el.value).toUpperCase());
+    aggiornaStatoBottoneFiltraMansioni();
+    applicaFiltriOperatori();
+}
+
+function azzeraFiltroMansioni() {
+    mansioniFiltroSelezionate = [];
+    document.querySelectorAll('#filtra-mansioni-lista input[type="checkbox"]').forEach((el) => {
+        el.checked = false;
+    });
+    aggiornaStatoBottoneFiltraMansioni();
+    applicaFiltriOperatori();
+}
+
+/** Filtra per mansioni: almeno una delle spunte deve essere nella disponibilita dell'operatore. */
+function filterOperatoriByMansioni(lista) {
+    if (!mansioniFiltroSelezionate.length) {
+        return lista;
+    }
+    const volute = new Set(mansioniFiltroSelezionate);
+    return lista.filter((operatore) => {
+        const sue = parseDisponibilita(operatore.disponibilita);
+        return sue.some((codice) => volute.has(codice));
+    });
+}
+
+/** Filtra solo chi ha la spunta ATTIVO. */
+function filterOperatoriByAttivi(lista) {
+    if (!filtroSoloAttivi) return lista;
+    return lista.filter((operatore) => isAttivo(operatore));
+}
+
+function aggiornaBottoneFiltroAttivi() {
+    const btn = document.getElementById('btn-filtro-attivi');
+    if (!btn) return;
+    if (filtroSoloAttivi) {
+        btn.textContent = 'TUTTI';
+        btn.title = 'Mostra di nuovo tutti gli operatori';
+        btn.classList.add('is-filtrato');
+        btn.setAttribute('aria-pressed', 'true');
+    } else {
+        btn.textContent = 'ATTIVI';
+        btn.title = 'Mostra solo operatori attivi';
+        btn.classList.remove('is-filtrato');
+        btn.setAttribute('aria-pressed', 'false');
+    }
+}
+
+function toggleFiltroAttivi() {
+    filtroSoloAttivi = !filtroSoloAttivi;
+    aggiornaBottoneFiltroAttivi();
+    applicaFiltriOperatori();
+}
+
+/** Applica ricerca testo + filtro mansioni + filtro attivi e aggiorna la lista a video. */
+function applicaFiltriOperatori() {
+    const searchInput = document.getElementById('search-input');
+    const containerBody = document.getElementById('soci-container-body');
+    if (!containerBody) return;
+
+    const searchTerm = searchInput ? searchInput.value : '';
+    let filtrati = filterOperatoriByNominativo(searchTerm);
+    filtrati = filterOperatoriByMansioni(filtrati);
+    filtrati = filterOperatoriByAttivi(filtrati);
+
+    updateOperatoriCount(filtrati.length);
+    populateListaOperatori(filtrati);
+
+    if (filtrati.length === 0) {
+        const pezzi = [];
+        if (searchTerm.trim()) pezzi.push(`nominativo "${escapeHtml(searchTerm.trim())}"`);
+        if (mansioniFiltroSelezionate.length) pezzi.push('mansioni selezionate');
+        if (filtroSoloAttivi) pezzi.push('solo attivi');
+        const motivo = pezzi.length ? ` per: ${pezzi.join(' + ')}` : '';
+        containerBody.innerHTML = `<div class="soci-lista-empty">Nessun operatore trovato${motivo}</div>`;
+    }
+}
+
+function setupFiltraMansioniModal() {
+    document.getElementById('btn-filtra-mansioni')?.addEventListener('click', () => {
+        apriModaleFiltraMansioni();
+    });
+    document.getElementById('btn-filtra-mansioni-chiudi')?.addEventListener('click', chiudiModaleFiltraMansioni);
+    document.getElementById('btn-filtra-mansioni-ok')?.addEventListener('click', chiudiModaleFiltraMansioni);
+    document.getElementById('btn-filtra-mansioni-azzera')?.addEventListener('click', azzeraFiltroMansioni);
+
+    const modal = document.getElementById('modal-filtra-mansioni');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) chiudiModaleFiltraMansioni();
+        });
+    }
+
+    document.getElementById('filtra-mansioni-lista')?.addEventListener('change', (e) => {
+        if (e.target && e.target.matches('input[type="checkbox"]')) {
+            syncMansioniFiltroDaModale();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        const m = document.getElementById('modal-filtra-mansioni');
+        if (m && !m.hidden) {
+            chiudiModaleFiltraMansioni();
+        }
+    });
 }
 
 // Carica tutti i tesserati, filtra solo quelli con operatore = "SI" e popola la lista
@@ -450,11 +676,24 @@ function populateListaOperatori(operatori) {
             console.log(`[DEBUG] Elemento ${index + 1} - ID: ${operatore.id}, OPERATORE: ${JSON.stringify(operatore.operatore)} (checked: ${isOperatoreChecked}), ATTIVO: ${JSON.stringify(operatore.attivo)} (checked: ${isAttivoChecked})`);
         }
         
-        // Prima riga: IDSOCIO, NOMINATIVO, COD. FISC., TIPOLOGIASOCIO, OPERATORE, ATTIVO, DISPONIBILITA, TELEFONO, NUMEROTESSERA, SCADENZATESSERA
+        // Codici mansione dell'operatore (campo disponibilita)
+        const mansioniOperatore = new Set(parseDisponibilita(operatore.disponibilita));
+        const codiciConCasella = new Set(mansioniAttive.map((m) => m.codice));
+        const mansioniOrfane = [...mansioniOperatore].filter((c) => !codiciConCasella.has(c));
+        const mansioniFlagsHtml = mansioniAttive.length
+            ? mansioniAttive.map(({ mansione, codice }) => `
+                <label class="op-mansione-flag${mansioniOperatore.has(codice) ? ' is-on' : ''}">
+                    <input type="checkbox" value="${escapeHtml(codice)}" ${mansioniOperatore.has(codice) ? 'checked' : ''} disabled>
+                    <span>${escapeHtml(mansione)}</span>
+                </label>
+            `).join('')
+            : '<span class="op-mansioni-vuoto">—</span>';
+
+        // Prima riga: IDSOCIO … ATTIVO, MANSIONI, pulsante MODIFICA (a destra)
         const formSection1 = document.createElement('div');
         formSection1.className = 'socio-form-section';
         const formRow1 = document.createElement('div');
-        formRow1.className = 'socio-form-row';
+        formRow1.className = 'socio-form-row socio-form-row-prima';
         
         formRow1.innerHTML = `
             <div class="socio-form-group socio-form-group-idsocio">
@@ -476,19 +715,41 @@ function populateListaOperatori(operatori) {
             <div class="socio-form-group socio-form-group-operatore">
                 <label>OPERATORE</label>
                 <div class="socio-checkbox-container">
-                    <input type="checkbox" ${isOperatoreChecked ? 'checked' : ''} disabled>
+                    <input type="checkbox" class="op-flag-operatore" ${isOperatoreChecked ? 'checked' : ''} disabled>
                 </div>
             </div>
             <div class="socio-form-group socio-form-group-attivo">
                 <label>ATTIVO</label>
                 <div class="socio-checkbox-container">
-                    <input type="checkbox" ${isAttivoChecked ? 'checked' : ''} disabled>
+                    <input type="checkbox" class="op-flag-attivo" ${isAttivoChecked ? 'checked' : ''} disabled>
                 </div>
             </div>
-            <div class="socio-form-group socio-form-group-disponibilita">
-                <label>DISPONIBILITA</label>
-                <input type="text" value="${escapeHtml(operatore.disponibilita || '')}" readonly>
+            <div class="socio-form-group socio-form-group-mansioni">
+                <label>MANSIONI</label>
+                <div class="op-mansioni-flags">
+                    ${mansioniFlagsHtml}
+                </div>
             </div>
+            <div class="socio-form-actions socio-form-actions-riga1">
+                <button type="button" class="btn btn-modifica-operatore" data-idsocio="${escapeHtml(operatore.idsocio || '')}">MODIFICA</button>
+            </div>
+        `;
+        
+        formSection1.appendChild(formRow1);
+        socioBlock.dataset.idsocio = operatore.idsocio || '';
+        if (mansioniOrfane.length) {
+            socioBlock.dataset.mansioniOrfane = mansioniOrfane.join(',');
+        }
+
+        const nominativo = String(operatore.nominativo || '').trim();
+
+        // Seconda riga: TELEFONO, NUMERO TESSERA, SCADENZA TESSERA, NOTA (stretta), pulsanti
+        const formSection2 = document.createElement('div');
+        formSection2.className = 'socio-form-section';
+        const formRow2 = document.createElement('div');
+        formRow2.className = 'socio-form-row socio-form-row-seconda';
+
+        formRow2.innerHTML = `
             <div class="socio-form-group socio-form-group-telefono">
                 <label>TELEFONO</label>
                 <input type="text" value="${escapeHtml(operatore.telefono || '')}" readonly>
@@ -501,19 +762,6 @@ function populateListaOperatori(operatori) {
                 <label>SCADENZA TESSERA</label>
                 <input type="text" value="${escapeHtml(operatore.scadenzatessera || '')}" readonly>
             </div>
-        `;
-        
-        formSection1.appendChild(formRow1);
-
-        const nominativo = String(operatore.nominativo || '').trim();
-
-        // Seconda riga: NOTAAGGIUNTIVA e pulsanti ANAGRAFICA e SERVIZI
-        const formSection2 = document.createElement('div');
-        formSection2.className = 'socio-form-section';
-        const formRow2 = document.createElement('div');
-        formRow2.className = 'socio-form-row';
-
-        formRow2.innerHTML = `
             <div class="socio-form-group socio-form-group-nota">
                 <label>NOTA AGGIUNTIVA</label>
                 <textarea readonly>${escapeHtml(operatore.notaaggiuntiva || '')}</textarea>
@@ -536,6 +784,199 @@ function populateListaOperatori(operatori) {
     });
     
     console.log(`✓ Aggiunti ${operatori.length} blocchi operatore`);
+
+    // Se stavi modificando una riga e la lista si è ricreata, ripristina la bozza
+    if (editingIdsocio) {
+        const blocco = containerBody.querySelector(`.socio-block[data-idsocio="${CSS.escape(String(editingIdsocio))}"]`);
+        if (blocco && editingDraft) {
+            applyDraftToBlocco(blocco, editingDraft);
+            setBloccoEditMode(blocco, true);
+        } else {
+            editingIdsocio = null;
+            editingDraft = null;
+        }
+    }
+}
+
+function getCheckboxFlagsFromBlocco(blocco) {
+    const operatore = !!blocco.querySelector('.op-flag-operatore')?.checked;
+    const attivo = !!blocco.querySelector('.op-flag-attivo')?.checked;
+    const mansioni = [...blocco.querySelectorAll('.op-mansioni-flags input[type="checkbox"]:checked')]
+        .map((el) => String(el.value || '').toUpperCase())
+        .filter(Boolean);
+    const orfane = parseDisponibilita(blocco.dataset.mansioniOrfane || '');
+    orfane.forEach((c) => {
+        if (!mansioni.includes(c)) mansioni.push(c);
+    });
+    return {
+        operatore,
+        attivo: operatore ? attivo : false,
+        disponibilita: operatore ? mansioni.join(',') : '',
+        mansioniSpuntate: mansioni
+    };
+}
+
+function readDraftFromBlocco(blocco) {
+    return {
+        operatore: !!blocco.querySelector('.op-flag-operatore')?.checked,
+        attivo: !!blocco.querySelector('.op-flag-attivo')?.checked,
+        mansioni: [...blocco.querySelectorAll('.op-mansioni-flags input[type="checkbox"]')]
+            .filter((el) => el.checked)
+            .map((el) => String(el.value || '').toUpperCase())
+    };
+}
+
+function applyDraftToBlocco(blocco, draft) {
+    if (!blocco || !draft) return;
+    const op = blocco.querySelector('.op-flag-operatore');
+    const at = blocco.querySelector('.op-flag-attivo');
+    if (op) op.checked = !!draft.operatore;
+    if (at) at.checked = !!draft.attivo;
+    const setMansioni = new Set((draft.mansioni || []).map((c) => String(c).toUpperCase()));
+    blocco.querySelectorAll('.op-mansioni-flags input[type="checkbox"]').forEach((el) => {
+        el.checked = setMansioni.has(String(el.value || '').toUpperCase());
+        el.closest('.op-mansione-flag')?.classList.toggle('is-on', el.checked);
+    });
+    syncFlagsOperatoreNelBlocco(blocco);
+}
+
+function syncFlagsOperatoreNelBlocco(blocco) {
+    const op = blocco.querySelector('.op-flag-operatore');
+    const at = blocco.querySelector('.op-flag-attivo');
+    const mansioniInputs = [...blocco.querySelectorAll('.op-mansioni-flags input[type="checkbox"]')];
+    if (!op) return;
+
+    const isOp = op.checked;
+    if (!isOp) {
+        if (at) at.checked = false;
+        mansioniInputs.forEach((el) => {
+            el.checked = false;
+            el.closest('.op-mansione-flag')?.classList.remove('is-on');
+        });
+    }
+
+    const editing = blocco.classList.contains('is-editing');
+    if (at) {
+        at.disabled = !editing || !isOp;
+    }
+    mansioniInputs.forEach((el) => {
+        el.disabled = !editing || !isOp;
+        el.closest('.op-mansione-flag')?.classList.toggle('is-disabled', !isOp);
+    });
+}
+
+function setBloccoEditMode(blocco, editing) {
+    if (!blocco) return;
+    blocco.classList.toggle('is-editing', editing);
+
+    const op = blocco.querySelector('.op-flag-operatore');
+    if (op) op.disabled = !editing;
+
+    const btn = blocco.querySelector('.btn-modifica-operatore');
+    if (btn) {
+        btn.textContent = editing ? 'SALVA' : 'MODIFICA';
+        btn.classList.toggle('is-salva', editing);
+        btn.disabled = false;
+        btn.title = editing ? 'Salva le spunte' : 'Modifica le spunte';
+    }
+
+    syncFlagsOperatoreNelBlocco(blocco);
+}
+
+function aggiornaStileMansioniFlags(blocco) {
+    blocco.querySelectorAll('.op-mansioni-flags input[type="checkbox"]').forEach((el) => {
+        el.closest('.op-mansione-flag')?.classList.toggle('is-on', el.checked);
+    });
+}
+
+async function avviaModificaOperatore(blocco) {
+    const idsocio = blocco?.dataset?.idsocio;
+    if (!idsocio) {
+        alert('ID socio non disponibile');
+        return;
+    }
+
+    if (editingIdsocio && editingIdsocio !== idsocio) {
+        alert('Hai già una modifica in corso su un altro operatore.\nPremi SALVA lì prima di modificarne un altro.');
+        return;
+    }
+
+    editingIdsocio = idsocio;
+    editingDraft = readDraftFromBlocco(blocco);
+    setBloccoEditMode(blocco, true);
+}
+
+async function salvaModificaOperatore(blocco) {
+    const idsocio = blocco?.dataset?.idsocio;
+    if (!idsocio) {
+        alert('ID socio non disponibile');
+        return;
+    }
+
+    const flags = getCheckboxFlagsFromBlocco(blocco);
+    const btn = blocco.querySelector('.btn-modifica-operatore');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'SALVO…';
+    }
+
+    try {
+        if (!isTauri() || !invoke) {
+            // Modalità demo: aggiorna solo in memoria
+            applyOperatoreUpdateFromAnagrafica({
+                idsocio,
+                operatore: flags.operatore,
+                attivo: flags.attivo,
+                disponibilita: flags.disponibilita
+            });
+            editingIdsocio = null;
+            editingDraft = null;
+            return;
+        }
+
+        try {
+            await invoke('init_supabase_from_config');
+        } catch (initErr) {
+            console.warn('Init Supabase salvataggio:', initErr);
+        }
+
+        const result = await invoke('get_socio_anagrafica', { idsocio });
+        const anag = result?.anagrafica;
+        if (!anag) {
+            throw new Error('Anagrafica non trovata');
+        }
+
+        const payload = {
+            ...anag,
+            operatore: flags.operatore,
+            attivo: flags.attivo,
+            disponibilita: flags.disponibilita
+        };
+
+        await invoke('save_socio_anagrafica', { anagrafica: payload });
+
+        try {
+            const { emit } = await import('@tauri-apps/api/event');
+            await emit('socio-anagrafica-saved', payload);
+        } catch (emitErr) {
+            console.warn('Emit aggiornamento anagrafica:', emitErr);
+            applyOperatoreUpdateFromAnagrafica(payload);
+        }
+
+        editingIdsocio = null;
+        editingDraft = null;
+        // Se l'evento non ha già aggiornato, applyOperatoreUpdateFromAnagrafica lo fa via listener.
+        // In ogni caso togli modalità modifica sulla riga se è ancora in lista.
+        const ancora = document.querySelector(`.socio-block[data-idsocio="${CSS.escape(String(idsocio))}"]`);
+        if (ancora) setBloccoEditMode(ancora, false);
+    } catch (error) {
+        console.error('Errore salvataggio spunte operatore:', error);
+        alert(`Impossibile salvare: ${error.message || error}`);
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'SALVA';
+        }
+    }
 }
 
 // Funzione helper per escape HTML (evita XSS)
@@ -573,28 +1014,7 @@ function filterOperatoriByNominativo(searchTerm) {
 
 // Funzione per gestire la ricerca in tempo reale
 function handleSearch() {
-    const searchInput = document.getElementById('search-input');
-    const containerBody = document.getElementById('soci-container-body');
-    
-    if (!searchInput || !containerBody) {
-        return;
-    }
-    
-    const searchTerm = searchInput.value;
-    const filteredOperatori = filterOperatoriByNominativo(searchTerm);
-    
-    console.log(`Ricerca: "${searchTerm}" - Trovati ${filteredOperatori.length} operatori su ${allOperatori.length} totali`);
-    
-    // Aggiorna il conteggio nel titolo
-    updateOperatoriCount(filteredOperatori.length);
-    
-    // Ripopola la lista con i risultati filtrati
-    populateListaOperatori(filteredOperatori);
-    
-    // Mostra messaggio se non ci sono risultati
-    if (filteredOperatori.length === 0 && searchTerm.trim() !== '') {
-        containerBody.innerHTML = '<div class="soci-lista-empty">Nessun operatore trovato per: "' + escapeHtml(searchTerm) + '"</div>';
-    }
+    applicaFiltriOperatori();
 }
 
 // Funzione per mostrare la casella di ricerca
@@ -626,39 +1046,27 @@ function hideSearch() {
         searchContainer.style.display = 'none';
         btnShowSearch.style.display = 'flex';
         
-        // Cancella il filtro
+        // Cancella solo il filtro testo (il filtro mansioni resta attivo)
         if (searchInput) {
             searchInput.value = '';
         }
-        
-        // Aggiorna il conteggio nel titolo
-        updateOperatoriCount(allOperatori.length);
-        
-        // Ripristina tutti gli operatori
-        console.log('Ricerca cancellata - Ripristino di tutti gli operatori');
-        populateListaOperatori(allOperatori);
+
+        console.log('Ricerca cancellata - Ripristino operatori (con eventuale filtro mansioni)');
+        applicaFiltriOperatori();
     }
 }
 
 function refreshOperatoriView() {
-    const searchInput = document.getElementById('search-input');
-    const searchTerm = searchInput ? searchInput.value.trim() : '';
-
-    if (searchTerm) {
-        handleSearch();
-        return;
-    }
-
-    updateOperatoriCount(allOperatori.length);
     const containerBody = document.getElementById('soci-container-body');
     if (!containerBody) return;
 
     if (allOperatori.length === 0) {
+        updateOperatoriCount(0);
         containerBody.innerHTML = '<div class="soci-lista-empty">Nessun operatore trovato</div>';
         return;
     }
 
-    populateListaOperatori(allOperatori);
+    applicaFiltriOperatori();
 }
 
 function applyOperatoreUpdateFromAnagrafica(data) {
@@ -740,8 +1148,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Inizializza Tauri
     await initTauri();
     await setupSocioAnagraficaListener();
+    setupFiltraMansioniModal();
 
+    // Mansioni da Impostazioni (le caselle del filtro usano questa lista)
+    await loadMansioni();
     await loadAllOperatori();
+
+    document.getElementById('btn-filtro-attivi')?.addEventListener('click', () => {
+        toggleFiltroAttivi();
+    });
+    aggiornaBottoneFiltroAttivi();
 
     document.getElementById('btn-chilometri-totali')?.addEventListener('click', () => {
         openChilometraggioTotali();
@@ -778,10 +1194,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     
-    // Event listener per i pulsanti ANAGRAFICA e SERVIZI usando event delegation
+    // Event listener per i pulsanti usando event delegation
     const containerBody = document.getElementById('soci-container-body');
     if (containerBody) {
         containerBody.addEventListener('click', (e) => {
+            const btnModifica = e.target.closest?.('.btn-modifica-operatore');
+            if (btnModifica) {
+                e.stopPropagation();
+                const blocco = btnModifica.closest('.socio-block');
+                if (!blocco) return;
+                if (btnModifica.classList.contains('is-salva')) {
+                    salvaModificaOperatore(blocco);
+                } else {
+                    avviaModificaOperatore(blocco);
+                }
+                return;
+            }
+
             if (e.target.classList.contains('btn-anagrafica')) {
                 e.stopPropagation();
                 const idsocio = e.target.getAttribute('data-idsocio');
@@ -807,6 +1236,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.log('Pulsante CHILOMETRAGGIO cliccato, operatore:', nominativo, 'IDSOCIO:', idsocio);
                 openChilometraggioOperatore(nominativo, idsocio);
             }
+        });
+
+        // Durante la modifica: aggiorna bozza e stile caselle mansioni
+        containerBody.addEventListener('change', (e) => {
+            const blocco = e.target.closest?.('.socio-block.is-editing');
+            if (!blocco) return;
+            if (!e.target.matches('input[type="checkbox"]')) return;
+
+            if (e.target.classList.contains('op-flag-operatore')) {
+                syncFlagsOperatoreNelBlocco(blocco);
+            }
+            aggiornaStileMansioniFlags(blocco);
+            editingDraft = readDraftFromBlocco(blocco);
         });
     }
     

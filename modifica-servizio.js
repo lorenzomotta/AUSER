@@ -20,6 +20,7 @@ import { apriCalcolaTariffa, ensureCalcolaTariffaMarkup, formatEuroCalcolaTariff
 import { collegaHintKmOperatore, avvisaSeLimiteKmOperatore, aggiornaHintKmOperatore } from './operatore-km-mese.js';
 import { etichettaMezzo, idMezzo, trovaAutomezzo, testoMezzoServizio } from './mezzo-etichetta.js';
 import { ensureTariffeDonazione, getTariffeDonazione, testoPulsanteTariffa } from './tariffe-donazione.js';
+import { infoPagamentoCumulativo } from './pagamento-cumulativo.js';
 
 let getInvokeFn = () => null;
 let isTauriEnv = () => false;
@@ -28,7 +29,10 @@ let onDeleteSuccess = async () => {};
 let getTipiPagamentoExtra = () => [];
 let trovaServizioLocal = () => null;
 
+/** Soci con caselle Operatore, Attivo e Autista tutte spuntate. */
 let allOperatori = [];
+/** Soci con mansione ACCOMPAGNATORE spuntata. */
+let allAccompagnatori = [];
 let allAutomezzi = [];
 let allStatiServizio = [];
 let allRichiedenti = [];
@@ -812,6 +816,31 @@ function creaSelectNs(id, label, value, options, fieldClass = '', extraHtml = ''
     </div>`;
 }
 
+/** Etichetta "Cumulativo n. X" se il servizio è in un pagamento cumulativo. */
+function htmlEtichettaCumulativo(servizio) {
+    const info = infoPagamentoCumulativo(servizio);
+    if (!info) return '';
+    const n = Number(info.numero || 0);
+    const testo = Number.isFinite(n) && n > 0 ? `Cumulativo n. ${Math.trunc(n)}` : 'Cumulativo';
+    return `<span class="ns-pcum-etichetta" title="Pagamento cumulativo">${escapeHtmlModifica(testo)}</span>`;
+}
+
+/** STATO INCASSO + eventuale etichetta cumulativo sulla stessa riga dell'etichetta. */
+function creaSelectStatoIncassoNs(id, value, servizio) {
+    const opts = ['DA INCASSARE', 'INCASSATO', 'GRATIS', 'ANNULLATO'].map((opt) => {
+        const selected = String(opt) === String(value || '') ? ' selected' : '';
+        return `<option value="${escapeHtmlModifica(opt)}"${selected}>${escapeHtmlModifica(opt)}</option>`;
+    }).join('');
+    const badge = htmlEtichettaCumulativo(servizio);
+    return `<div class="ns-field ns-field-stato-incasso">
+        <div class="ns-label-con-pcum">
+            <label for="${id}">STATO INCASSO</label>
+            ${badge}
+        </div>
+        <select id="${id}" class="ns-input">${opts}</select>
+    </div>`;
+}
+
 /** Select TIPO SERVIZIO con pulsanti rapidi STANDARD / SOLLEVATORE. */
 function creaSelectTipoServizioNs(idPrefix, value) {
     const id = `${idPrefix}-tipo-servizio`;
@@ -884,6 +913,17 @@ export function costruisciFormServizio(
     );
     if (servizio.operatore && !operatoriOpts.some(o => o.value === servizio.operatore)) {
         operatoriOpts.push({ value: servizio.operatore, label: servizio.operatore });
+    }
+
+    const accompagnatoreCorrente = String(servizio.operatore_2 || servizio.accompagnatore || '').trim();
+    const accompagnatoriOpts = [{ value: '', label: '— Seleziona accompagnatore —' }].concat(
+        allAccompagnatori.map((acc) => ({
+            value: acc.nominativo || '',
+            label: acc.nominativo || ''
+        }))
+    );
+    if (accompagnatoreCorrente && !accompagnatoriOpts.some((o) => o.value === accompagnatoreCorrente)) {
+        accompagnatoriOpts.push({ value: accompagnatoreCorrente, label: accompagnatoreCorrente });
     }
 
     const mezziOpts = [{ value: '', label: '— Nessuno —' }].concat(
@@ -982,15 +1022,14 @@ export function costruisciFormServizio(
                         <p class="ns-km-operatore-hint" id="${p}-operatore-km-hint" hidden></p>
                     </div>
                 </div>
-                <div class="ns-grid ns-grid-operatore">
+                <div class="ns-grid ns-grid-operatore-mezzo">
                     ${creaSelectNs(`${p}-operatore`, 'OPERATORE', servizio.operatore, operatoriOpts, 'ns-field-operatore')}
                     ${creaSelectNs(`${p}-mezzo`, 'MEZZO USATO', mezzoCorrente, mezziOpts, 'ns-field-mezzo')}
                     ${creaInputNs(`${p}-dotazione`, 'DOTAZIONE', risolviDotazioneDaMezzo(mezzoCorrente), 'ns-field-dotazioni', { readonly: true })}
-                </div>
-                <div class="ns-grid ns-grid-mezzo-dettagli mod-mezzo-dettagli-row">
                     ${creaInputScadenzaModifica(`${p}-scadenza-ztl`, 'SCADENZA ZTL', automezzoCorrente?.scadenza_ztl || '', 'mod-field-scadenza-ztl')}
                     ${creaInputScadenzaModifica(`${p}-scadenza-assicurazione`, 'SCADENZA ASSICURAZIONE', automezzoCorrente?.scadenza_assicurazione || '', 'mod-field-scadenza-assic')}
-                    ${creaTextareaNs(`${p}-note-mezzo`, 'NOTE MEZZO', automezzoCorrente?.note_mezzo || '', 'mod-field-note-mezzo ns-field-note-mezzo-compact', 1, { readonly: true, textareaClass: 'ns-textarea-note-mezzo-riga' })}
+                    ${creaSelectNs(`${p}-accompagnatore`, 'ACCOMPAGNATORE', accompagnatoreCorrente, accompagnatoriOpts, 'ns-field-accompagnatore')}
+                    ${creaTextareaNs(`${p}-note-mezzo`, 'NOTE MEZZO', automezzoCorrente?.note_mezzo || '', 'mod-field-note-mezzo ns-field-note-mezzo-compact ns-field-note-mezzo-span', 1, { readonly: true, textareaClass: 'ns-textarea-note-mezzo-riga' })}
                 </div>
             </section>`;
 
@@ -1018,7 +1057,7 @@ export function costruisciFormServizio(
                         <button type="button" class="ns-btn-tratta-fuori-asti" id="${p}-btn-tratta-fuori-asti">TRATTA FUORI ASTI</button>
                     </div>
                     <div class="ns-grid ns-grid-pagamento">
-                        ${creaSelectNs(`${p}-stato-incasso`, 'STATO INCASSO', servizio.stato_incasso, ['DA INCASSARE', 'INCASSATO', 'GRATIS', 'ANNULLATO'], 'ns-field-stato-incasso')}
+                        ${creaSelectStatoIncassoNs(`${p}-stato-incasso`, servizio.stato_incasso, servizio)}
                         ${creaSelectNs(`${p}-tipo-pagamento`, 'TIPO DI PAGAMENTO', servizio.tipo_pagamento, tipiPagamentoOpts, 'ns-field-tipo-pagamento')}
                         ${creaInputNs(`${p}-pagamento`, 'DONAZIONE / PAGAMENTO', servizio.pagamento, 'ns-field-donazione')}
                         ${creaInputNs(`${p}-numero-ricevuta`, 'NUMERO RICEVUTA', servizio.numero_ricevuta || '', 'ns-field-numero-ricevuta')}
@@ -1520,6 +1559,7 @@ export function raccogliPayloadServizio(idPrefix = 'mod') {
         pagamento: get('pagamento'),
         stato_incasso: get('stato-incasso'),
         operatore: get('operatore'),
+        operatore_2: get('accompagnatore'),
         mezzo: get('mezzo'),
         tempo: get('tempo'),
         km: get('km'),
@@ -1553,6 +1593,29 @@ function raccogliPayloadModifica() {
         data_ricevuta: servizioInModifica.data_ricevuta || '',
         numero_ricevuta: servizioInModifica.numero_ricevuta || ''
     };
+}
+
+function codiciDisponibilita(value) {
+    if (!value) return [];
+    return String(value)
+        .split(/[,;]/)
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+}
+
+/** La casella è spuntata se il valore arriva come true, SI, 1, e simili. */
+function isFlagSpuntato(value) {
+    if (value === true || value === 1) return true;
+    const s = String(value ?? '').trim().toUpperCase();
+    return s === 'SI' || s === 'SÌ' || s === 'TRUE' || s === '1'
+        || s === 'YES' || s === 'Y' || s === 'S' || s === 'ATTIVO';
+}
+
+/** Operatore del servizio: caselle Operatore, Attivo e Autista tutte spuntate. */
+function isAutistaAttivo(tesserato) {
+    return isFlagSpuntato(tesserato?.operatore)
+        && isFlagSpuntato(tesserato?.attivo)
+        && codiciDisponibilita(tesserato?.disponibilita).includes('AUTISTA');
 }
 
 let caricaDatiInCorso = null;
@@ -1589,9 +1652,13 @@ async function eseguiCaricaDatiModificaServizio() {
             })
         ]);
 
-        allOperatori = (tesserati || []).filter(t => {
-            const op = String(t.operatore || '').trim().toUpperCase();
-            return op === 'SI' || op === 'TRUE' || op === '1';
+        allOperatori = (tesserati || []).filter((t) => isAutistaAttivo(t) && String(t.nominativo || '').trim());
+        allAccompagnatori = (tesserati || []).filter((t) => {
+            const codici = String(t.disponibilita || '')
+                .split(/[,;]/)
+                .map((s) => s.trim().toUpperCase())
+                .filter(Boolean);
+            return codici.includes('ACCOMPAGNATORE');
         });
         allAutomezzi = Array.isArray(automezzi) ? automezzi : [];
         allStatiServizio = Array.isArray(statiServizio)
@@ -1604,7 +1671,7 @@ async function eseguiCaricaDatiModificaServizio() {
             ? tipiPagamento.filter(t => String(t || '').trim())
             : [];
 
-        console.log(`Modifica servizio: ${allOperatori.length} operatori, ${allAutomezzi.length} mezzi, ${allStatiServizio.length} stati, ${allRichiedenti.length} richiedenti, ${allTipiPagamento.length} tipi pagamento`);
+        console.log(`Modifica servizio: ${allOperatori.length} operatori, ${allAccompagnatori.length} accompagnatori, ${allAutomezzi.length} mezzi, ${allStatiServizio.length} stati, ${allRichiedenti.length} richiedenti, ${allTipiPagamento.length} tipi pagamento`);
     } catch (error) {
         console.error('Errore caricamento dati modifica servizio:', error);
     }

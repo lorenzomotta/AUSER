@@ -500,7 +500,8 @@ async function apriModalServizio(servizio) {
                 ${creaNotaDettaglio('NOTE ARRIVO', servizio.note_arrivo)}
             </div>
             <div class="dettaglio-row">
-                ${creaCampoDettaglio('OPERATORE', servizio.operatore, 'field-large')}
+                ${creaCampoDettaglio('OPERATORE', servizio.operatore, 'field-half')}
+                ${creaCampoDettaglio('ACCOMPAGNATORE', servizio.operatore_2 || '', 'field-half')}
                 ${creaCampoDettaglio('MEZZO USATO', mezzo, 'field-large')}
                 ${creaCampoDettaglio('TEMPO', servizio.tempo, 'field-small')}
                 ${creaCampoDettaglio('KM', servizio.km, 'field-small')}

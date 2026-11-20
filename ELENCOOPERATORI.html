@@ -12,6 +12,9 @@
     <div class="container-fluid soci-container">
         <div class="page-header-wrapper">
             <div class="page-title-row">
+                <div class="page-header-left">
+                    <button type="button" class="btn btn-filtra-mansioni" id="btn-filtra-mansioni" title="Filtra per mansioni">FILTRA MANSIONI</button>
+                </div>
                 <div class="page-title-center">
                     <h1 class="page-title">ELENCO OPERATORI <span id="operatori-count" style="font-size: 0.8em; color: #666;">(0)</span></h1>
                     <button class="btn-icon-search" id="btn-show-search" title="Cerca">
@@ -25,6 +28,7 @@
                     </div>
                 </div>
                 <div class="page-header-actions">
+                    <button type="button" class="btn btn-filtro-attivi" id="btn-filtro-attivi" title="Mostra solo operatori attivi" aria-pressed="false">ATTIVI</button>
                     <button type="button" class="btn btn-chilometri-totali" id="btn-chilometri-totali" title="Chilometri di tutti gli operatori">CHILOMETRI TOTALI</button>
                     <button type="button" class="btn btn-chiudi" id="btn-chiudi">CHIUDI</button>
                 </div>
@@ -34,6 +38,27 @@
         <!-- Container scrollabile con tutti gli operatori -->
         <div class="soci-container-scrollabile" id="soci-container-body">
             <div class="soci-lista-loading">Caricamento operatori...</div>
+        </div>
+    </div>
+
+    <!-- Modale filtro mansioni -->
+    <div id="modal-filtra-mansioni" class="op-modal-overlay" hidden aria-hidden="true">
+        <div class="op-modal" role="dialog" aria-labelledby="modal-filtra-mansioni-title" aria-modal="true">
+            <div class="op-modal-header">
+                <h2 id="modal-filtra-mansioni-title">Filtra per mansioni</h2>
+                <button type="button" class="op-modal-close" id="btn-filtra-mansioni-chiudi" title="Chiudi" aria-label="Chiudi">&times;</button>
+            </div>
+            <p class="op-modal-intro">
+                Spunta le mansioni da mostrare. Se non ne selezioni nessuna, vedi tutti gli operatori.
+                L’elenco delle caselle viene preso da Impostazioni → Mansioni.
+            </p>
+            <div id="filtra-mansioni-lista" class="op-modal-flags">
+                <p class="op-modal-empty">Caricamento mansioni…</p>
+            </div>
+            <div class="op-modal-actions">
+                <button type="button" class="btn btn-filtra-mansioni-azzera" id="btn-filtra-mansioni-azzera">AZZERA FILTRO</button>
+                <button type="button" class="btn btn-filtra-mansioni-ok" id="btn-filtra-mansioni-ok">CHIUDI</button>
+            </div>
         </div>
     </div>
     

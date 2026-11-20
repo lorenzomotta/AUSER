@@ -1,0 +1,282 @@
+/* Pagamento cumulativo — Elenco Servizi */
+
+.btn-paga-tutti-header {
+    padding: 6px 10px;
+    font-size: 12px;
+    background-color: #2f6b4f;
+    color: #fff;
+    border: 1px solid #24553e;
+    font-weight: 700;
+    white-space: nowrap;
+    width: auto;
+    min-width: 0;
+}
+
+.btn-paga-tutti-header:hover:not(:disabled) {
+    background-color: #3a825f;
+}
+
+.btn-paga-tutti-header:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.pcum-selezione-hint {
+    display: inline;
+    margin-left: 3px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
+}
+
+.pcum-check-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    padding: 4px 2px;
+}
+
+.pcum-check-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.pcum-check-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #333;
+    cursor: pointer;
+    user-select: none;
+}
+
+.pcum-check-inner.is-pagato .pcum-check-label {
+    color: #1f5a3d;
+}
+
+.pcum-check {
+    width: 16px;
+    height: 16px;
+    accent-color: #2f6b4f;
+    cursor: pointer;
+}
+
+.pcum-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 2px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: #d8efe3;
+    border: 1px solid #8fbfa4;
+    color: #1f5a3d;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.pcum-gruppo-num {
+    border: 1px solid #2f6b4f;
+    background: #fff;
+    color: #1f5a3d;
+    border-radius: 3px;
+    padding: 0 6px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    cursor: pointer;
+    line-height: 1.5;
+}
+
+.pcum-gruppo-num:hover {
+    background: #2f6b4f;
+    color: #fff;
+}
+
+.pcum-badge-rif {
+    font-weight: 600;
+    opacity: 0.85;
+}
+
+.modal-pcum-content-sm {
+    width: min(480px, 100%);
+}
+
+.pcum-avviso-non-annullabile {
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    background: #fdecea;
+    border: 1px solid #e2a8a0;
+    border-radius: 4px;
+    color: #8b1e1e;
+    font-weight: 700;
+}
+
+.btn-pcum-pericolo {
+    background: #a33b2d !important;
+    border-color: #812f24 !important;
+}
+
+.btn-pcum-pericolo:hover:not(:disabled) {
+    background: #b84838 !important;
+}
+
+.servizio-block.is-pcum-selezionato {
+    outline: 2px solid #2f6b4f;
+    outline-offset: -2px;
+}
+
+/* Modale */
+.modal-pcum-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 12000;
+    background: rgba(0, 0, 0, 0.45);
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.modal-pcum-content {
+    width: min(640px, 100%);
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+    background: #f4ebe0;
+    border: 1px solid #b9a78a;
+    border-radius: 6px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+}
+
+.modal-pcum-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #cbb79a;
+    background: #e8dcc6;
+}
+
+.modal-pcum-header h2 {
+    margin: 0;
+    font-size: 1.15rem;
+}
+
+.modal-pcum-close {
+    border: none;
+    background: transparent;
+    font-size: 1.6rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #444;
+}
+
+.modal-pcum-body {
+    padding: 14px 16px 8px;
+}
+
+.modal-pcum-intro {
+    margin: 0 0 10px;
+    color: #444;
+}
+
+.pcum-lista-servizi {
+    margin: 0 0 14px;
+    padding: 8px 12px 8px 28px;
+    background: #fffdf8;
+    border: 1px solid #d7c6a8;
+    border-radius: 4px;
+    max-height: 160px;
+    overflow: auto;
+}
+
+.pcum-lista-servizi li {
+    margin: 3px 0;
+}
+
+.pcum-lista-servizi .pcum-totale {
+    margin-top: 8px;
+    list-style: none;
+    margin-left: -16px;
+    padding-top: 6px;
+    border-top: 1px dashed #cbb79a;
+}
+
+.pcum-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 12px;
+}
+
+.pcum-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.pcum-field-full {
+    grid-column: 1 / -1;
+}
+
+.pcum-field label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #444;
+}
+
+.pcum-field input,
+.pcum-field select {
+    padding: 6px 8px;
+    border: 1px solid #b9a78a;
+    border-radius: 3px;
+    background: #fff;
+    font-size: 0.95rem;
+}
+
+.pcum-errore {
+    margin: 10px 0 0;
+    color: #8b1e1e;
+    font-weight: 600;
+}
+
+.modal-pcum-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 12px 16px 14px;
+    border-top: 1px solid #cbb79a;
+}
+
+.btn-pcum-annulla {
+    background: #ece4d6;
+    border: 1px solid #b9a78a;
+    color: #333;
+}
+
+.btn-pcum-conferma {
+    background: #2f6b4f;
+    border: 1px solid #24553e;
+    color: #fff;
+    font-weight: 700;
+}
+
+.btn-pcum-conferma:hover:not(:disabled) {
+    background: #3a825f;
+}
+
+.btn-pcum-conferma:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+@media (max-width: 560px) {
+    .pcum-form-grid {
+        grid-template-columns: 1fr;
+    }
+}

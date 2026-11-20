@@ -12,12 +12,14 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
-/** Note da mostrare all'utente (senza blocchi tecnici tratta / tariffa) */
+/** Note da mostrare all'utente (senza blocchi tecnici tratta / tariffa / pagamento cumulativo) */
 export function testoNoteFineVisibile(noteFine) {
     let note = parseTrattaDaNote(noteFine).notePulite;
     // Rimuove anche il blocco tariffa calcolata [[CT]]...[[/CT]]
+    // e il marker pagamento cumulativo [[PCUM]]...[[/PCUM]]
     note = String(note || '')
         .replace(/\[\[CT\]\]([\s\S]*?)\[\[\/CT\]\]/g, '')
+        .replace(/\[\[PCUM\]\]([\s\S]*?)\[\[\/PCUM\]\]/g, '')
         .replace(/^\s*\n/, '')
         .trim();
     return note;

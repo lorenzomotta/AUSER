@@ -281,7 +281,7 @@
                         <p class="ns-km-operatore-hint" id="ns-operatore-km-hint" hidden></p>
                     </div>
                 </div>
-                <div class="ns-grid ns-grid-operatore">
+                <div class="ns-grid ns-grid-operatore-mezzo">
                     <div class="ns-field ns-field-operatore">
                         <label for="ns-operatore">OPERATORE</label>
                         <select id="ns-operatore" class="ns-input">
@@ -299,8 +299,6 @@
                         <input type="text" id="ns-dotazioni" class="ns-input" readonly tabindex="-1"
                             placeholder="Seleziona un mezzo">
                     </div>
-                </div>
-                <div class="ns-grid ns-grid-mezzo-dettagli mod-mezzo-dettagli-row">
                     <div class="ns-field mod-field-scadenza mod-field-scadenza-ztl">
                         <label for="ns-scadenza-ztl">SCADENZA ZTL</label>
                         <input type="text" id="ns-scadenza-ztl" class="ns-input mod-input-scadenza" readonly tabindex="-1"
@@ -311,7 +309,13 @@
                         <input type="text" id="ns-scadenza-assicurazione" class="ns-input mod-input-scadenza" readonly tabindex="-1"
                             placeholder="—">
                     </div>
-                    <div class="ns-field mod-field-note-mezzo ns-field-note-mezzo-compact">
+                    <div class="ns-field ns-field-accompagnatore">
+                        <label for="ns-accompagnatore">ACCOMPAGNATORE</label>
+                        <select id="ns-accompagnatore" class="ns-input">
+                            <option value="">— Seleziona accompagnatore —</option>
+                        </select>
+                    </div>
+                    <div class="ns-field mod-field-note-mezzo ns-field-note-mezzo-compact ns-field-note-mezzo-span">
                         <div class="ns-label-nota-aggiuntive">
                             <label for="ns-note-mezzo">NOTE MEZZO</label>
                             <button type="button" id="btn-modifica-note-mezzo" class="ns-btn-icona-modifica"

@@ -246,6 +246,12 @@ body {
     pointer-events: none; /* Disabilita completamente le checkbox */
 }
 
+/* In modifica le caselle diventano cliccabili */
+.socio-block.is-editing .socio-form-group input[type="checkbox"]:not(:disabled) {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
 /* Container per checkbox */
 .socio-checkbox-container {
     display: flex;
@@ -381,13 +387,126 @@ body {
     width: 100%;
 }
 
-.socio-form-group-disponibilita {
-    flex: 0 0 150px;
+.socio-form-group-mansioni {
+    flex: 1 1 auto;
+    min-width: 180px;
+}
+
+.op-mansioni-flags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    min-height: 31px;
+    padding: 2px 0;
+}
+
+.op-mansione-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #555;
+    white-space: nowrap;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background-color: #eee;
+    cursor: default;
+    user-select: none;
+}
+
+.op-mansione-flag input {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    pointer-events: none;
+    cursor: default;
+    accent-color: #2e7d32;
+}
+
+.socio-block.is-editing .op-mansione-flag input:not(:disabled) {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.op-mansione-flag.is-on {
+    background-color: #8fd19a;
+    color: #1b5e20;
+}
+
+.op-mansione-flag.is-disabled {
+    opacity: 0.45;
+}
+
+.op-mansioni-vuoto {
+    font-size: 12px;
+    color: #999;
+}
+
+.socio-form-row-prima {
+    align-items: flex-end;
+    width: 100%;
+}
+
+.socio-form-actions-riga1 {
+    margin-left: auto;
+    flex-shrink: 0;
+    align-self: flex-end;
+    padding-top: 0;
+}
+
+.btn-modifica-operatore {
+    background-color: #d32f2f;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s;
+}
+
+.btn-modifica-operatore:hover {
+    background-color: #b71c1c;
+}
+
+.btn-modifica-operatore.is-salva {
+    background-color: #2e7d32;
+}
+
+.btn-modifica-operatore.is-salva:hover {
+    background-color: #1b5e20;
+}
+
+.btn-modifica-operatore:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+.socio-block.is-editing {
+    outline: 2px solid #d32f2f;
+    outline-offset: 1px;
 }
 
 .socio-form-group-nota {
     flex: 1 1 auto;
-    min-width: 300px;
+    min-width: 120px;
+    /* Nessun max-width: la nota si allunga e spinge i pulsanti a destra */
+}
+
+.socio-form-group-nota textarea {
+    min-height: 31px;
+    height: 31px;
+    width: 100%;
+    resize: vertical;
+}
+
+.socio-form-row-seconda {
+    align-items: flex-end;
+    width: 100%;
 }
 
 /* Pulsanti azione */
@@ -396,6 +515,8 @@ body {
     gap: 8px;
     align-items: flex-end;
     align-self: flex-end;
+    margin-left: auto; /* bordo destro CHILOMETRAGGIO allineato al margine destro */
+    flex-shrink: 0;
     padding-top: 0px;
 }
 
@@ -448,6 +569,32 @@ body {
     background-color: #F57C00;
 }
 
+.btn-filtro-attivi {
+    background-color: #00897b;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s;
+    min-width: 78px;
+}
+
+.btn-filtro-attivi:hover {
+    background-color: #00796b;
+}
+
+.btn-filtro-attivi.is-filtrato {
+    background-color: #ef6c00;
+}
+
+.btn-filtro-attivi.is-filtrato:hover {
+    background-color: #e65100;
+}
+
 .btn-chilometri-totali {
     background-color: #1565C0;
     color: white;
@@ -465,6 +612,41 @@ body {
     background-color: #0D47A1;
 }
 
+.page-header-left {
+    grid-column: 1;
+    justify-self: start;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.btn-filtra-mansioni {
+    background-color: #6d4c41;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.btn-filtra-mansioni:hover {
+    background-color: #5d4037;
+}
+
+.btn-filtra-mansioni.is-active {
+    background-color: #2e7d32;
+    box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.35);
+}
+
+.btn-filtra-mansioni.is-active:hover {
+    background-color: #1b5e20;
+}
+
 .page-header-actions {
     grid-column: 3;
     justify-self: end;
@@ -472,6 +654,141 @@ body {
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+}
+
+/* Modale FILTRA MANSIONI */
+.op-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.op-modal-overlay[hidden] {
+    display: none !important;
+}
+
+.op-modal {
+    width: 100%;
+    max-width: 420px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+    padding: 18px 20px 16px;
+}
+
+.op-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.op-modal-header h2 {
+    margin: 0;
+    font-size: 18px;
+    color: #6d4c41;
+}
+
+.op-modal-close {
+    border: none;
+    background: transparent;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    color: #666;
+    padding: 2px 6px;
+}
+
+.op-modal-close:hover {
+    color: #000;
+}
+
+.op-modal-intro {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: #444;
+    line-height: 1.4;
+}
+
+.op-modal-flags {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+    max-height: min(50vh, 320px);
+    overflow-y: auto;
+    padding: 4px 2px;
+}
+
+.op-modal-flag {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #333;
+    cursor: pointer;
+    line-height: 1.35;
+    user-select: none;
+}
+
+.op-modal-flag input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.op-modal-empty {
+    margin: 0;
+    padding: 12px 0;
+    text-align: center;
+    color: #888;
+    font-style: italic;
+    font-size: 13px;
+}
+
+.op-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.btn-filtra-mansioni-azzera {
+    background-color: #757575;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.btn-filtra-mansioni-azzera:hover {
+    background-color: #616161;
+}
+
+.btn-filtra-mansioni-ok {
+    background-color: #2e7d32;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.btn-filtra-mansioni-ok:hover {
+    background-color: #1b5e20;
 }
 
 .page-header-actions .btn-chiudi {
@@ -577,9 +894,13 @@ body {
         margin-left: -8px;
     }
 
-    .socio-form-group-disponibilita {
-        flex: 0 0 110px;
-        min-width: 90px;
+    .socio-form-group-mansioni {
+        min-width: 140px;
+    }
+
+    .op-mansione-flag {
+        font-size: 10px;
+        padding: 1px 5px;
     }
 
     .socio-form-group-telefono {
@@ -598,7 +919,8 @@ body {
     }
 
     .socio-form-group-nota {
-        min-width: 100px;
+        flex: 1 1 auto;
+        min-width: 90px;
     }
 
     .socio-form-actions .btn {
@@ -606,6 +928,8 @@ body {
         font-size: 11px;
     }
 
+    .btn-filtra-mansioni,
+    .btn-filtro-attivi,
     .btn-chilometri-totali,
     .page-header-actions .btn-chiudi {
         padding: 6px 10px;
@@ -629,6 +953,11 @@ body {
     .page-title-row {
         grid-template-columns: 1fr;
         justify-items: center;
+    }
+
+    .page-header-left {
+        grid-column: 1;
+        justify-self: center;
     }
 
     .page-title-center {

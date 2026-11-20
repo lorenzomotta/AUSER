@@ -129,6 +129,7 @@ function renderLista(lista) {
             ${badge('ADMIN', !!u.is_admin)}
             ${badge('PROGRAMMA', !!u.programma)}
             ${badge('CALENDARIO', !!u.calendario)}
+            ${badge('PROTONDRIVE', !!u.protondrive || !!u.is_admin)}
             <button type="button" class="ut-btn ut-btn-modifica" data-edit-id="${escapeHtml(u.user_id)}">MODIFICA</button>
         </div>
     `).join('');
@@ -172,6 +173,7 @@ function apriModifica(user) {
     document.getElementById('edit-is-admin').checked = !!user.is_admin;
     document.getElementById('edit-programma').checked = !!user.programma;
     document.getElementById('edit-calendario').checked = !!user.calendario;
+    document.getElementById('edit-protondrive').checked = !!user.protondrive || !!user.is_admin;
     document.getElementById('edit-password').value = '';
     applicaSidebarAiCheckbox('edit', user.sidebar_menu);
     aggiornaAbilitazioneSidebarChecks('edit', !!user.is_admin, !!user.programma);
@@ -254,6 +256,7 @@ function apriNuovo() {
     document.getElementById('nuovo-is-admin').checked = false;
     document.getElementById('nuovo-programma').checked = true;
     document.getElementById('nuovo-calendario').checked = false;
+    document.getElementById('nuovo-protondrive').checked = false;
     applicaSidebarAiCheckbox('nuovo', defaultSidebarMenu());
     aggiornaAbilitazioneSidebarChecks('nuovo', false, true);
     document.getElementById('modal-nuovo').hidden = false;
@@ -269,6 +272,7 @@ async function salvaModifica() {
     const isAdminFlag = !!document.getElementById('edit-is-admin')?.checked;
     const programma = !!document.getElementById('edit-programma')?.checked;
     const calendario = !!document.getElementById('edit-calendario')?.checked;
+    const protondrive = isAdminFlag || !!document.getElementById('edit-protondrive')?.checked;
     const nuovaPassword = document.getElementById('edit-password')?.value || '';
     const sidebarMenu = isAdminFlag ? fullSidebarMenu() : leggiSidebarDaCheckbox('edit');
 
@@ -286,6 +290,7 @@ async function salvaModifica() {
                 is_admin: isAdminFlag,
                 programma,
                 calendario,
+                protondrive,
                 sidebar_menu: sidebarMenu,
                 nuova_password: nuovaPassword.trim() ? nuovaPassword.trim() : null
             }
@@ -306,6 +311,7 @@ async function salvaNuovo() {
     const isAdminFlag = !!document.getElementById('nuovo-is-admin')?.checked;
     const programma = !!document.getElementById('nuovo-programma')?.checked;
     const calendario = !!document.getElementById('nuovo-calendario')?.checked;
+    const protondrive = isAdminFlag || !!document.getElementById('nuovo-protondrive')?.checked;
     const sidebarMenu = isAdminFlag ? fullSidebarMenu() : leggiSidebarDaCheckbox('nuovo');
 
     if (!email || !password) {
@@ -323,6 +329,7 @@ async function salvaNuovo() {
                 is_admin: isAdminFlag,
                 programma,
                 calendario,
+                protondrive,
                 sidebar_menu: sidebarMenu
             }
         });

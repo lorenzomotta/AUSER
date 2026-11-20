@@ -222,11 +222,33 @@ html, body {
 }
 
 .ss-operatore-box {
-    gap: 2px;
+    gap: 4px;
+    min-height: 56px;
+}
+
+.ss-persone-riga {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+}
+
+.ss-persone-riga span:first-child {
+    font-weight: 700;
+    min-width: 0;
+}
+
+.ss-persone-riga .ss-tel {
+    font-weight: 700;
+    font-size: 13px;
+    white-space: nowrap;
+    margin-left: auto;
+    text-align: right;
 }
 
 #ss-operatore-nome,
-#ss-operatore-tel,
+#ss-accompagnatore-nome,
 #ss-automezzo,
 #ss-targa {
     font-weight: 700;
@@ -243,6 +265,15 @@ html, body {
     gap: 18px;
     margin: 8px 0;
     flex-wrap: wrap;
+}
+
+.ss-tipo-label {
+    font-weight: 700;
+    font-size: 14px;
+    text-transform: uppercase;
+    color: #111;
+    margin-right: 12px;
+    white-space: nowrap;
 }
 
 .ss-tipo-riga .ss-check:first-of-type {

@@ -45,14 +45,22 @@ export function initElencoManutenzioniModal(options = {}) {
     const etichettaMezzo = options.etichettaMezzo || (() => 'Mezzo');
     const getUltimoKm = options.getUltimoKm || (() => '');
     const onApriCompleta = options.onApriCompleta || null;
+    const onApriModifica = options.onApriModifica || null;
+    const onChanged = options.onChanged || null;
 
     let mezzoCorrente = null;
+    /** Tutte le manutenzioni caricate (poi filtrate per scheda). */
+    let tutteManutenzioni = [];
+    /** Scheda attiva: 'da-eseguire' (default) | 'eseguite' */
+    let schedaAttiva = 'da-eseguire';
 
     const overlay = document.getElementById('modal-elenco-manutenzioni');
     const listaEl = document.getElementById('modal-elenco-manut-lista');
     const titoloMezzo = document.getElementById('modal-elenco-manut-mezzo');
     const kmEl = document.getElementById('modal-elenco-manut-km');
     const statusEl = document.getElementById('modal-elenco-manut-status');
+    const countDaEseguireEl = document.getElementById('count-manut-da-eseguire');
+    const countEseguiteEl = document.getElementById('count-manut-eseguite');
 
     if (!overlay || !listaEl) {
         console.warn('Modale elenco manutenzioni non trovato nell\'HTML');
@@ -65,16 +73,62 @@ export function initElencoManutenzioniModal(options = {}) {
         statusEl.classList.toggle('error', !!isError);
     }
 
+    function isDaEseguire(m) {
+        const s = String(m?.stato || 'aperta').trim().toLowerCase();
+        return s === 'aperta' || s === '';
+    }
+
+    function isEseguitaOChiusa(m) {
+        const s = String(m?.stato || '').trim().toLowerCase();
+        return s === 'eseguita' || s === 'annullata';
+    }
+
+    function filtraPerScheda(rows, scheda) {
+        const list = Array.isArray(rows) ? rows : [];
+        if (scheda === 'eseguite') return list.filter(isEseguitaOChiusa);
+        return list.filter(isDaEseguire);
+    }
+
+    function aggiornaConteggi() {
+        const nDa = tutteManutenzioni.filter(isDaEseguire).length;
+        const nEs = tutteManutenzioni.filter(isEseguitaOChiusa).length;
+        if (countDaEseguireEl) countDaEseguireEl.textContent = String(nDa);
+        if (countEseguiteEl) countEseguiteEl.textContent = String(nEs);
+    }
+
+    function aggiornaTabsUi() {
+        overlay.querySelectorAll('.manut-scheda-tab').forEach((btn) => {
+            const attiva = btn.getAttribute('data-scheda') === schedaAttiva;
+            btn.classList.toggle('is-active', attiva);
+            btn.setAttribute('aria-selected', attiva ? 'true' : 'false');
+        });
+        const tabAttivo = overlay.querySelector(`.manut-scheda-tab[data-scheda="${schedaAttiva}"]`);
+        if (tabAttivo && listaEl) {
+            listaEl.setAttribute('aria-labelledby', tabAttivo.id || '');
+        }
+    }
+
+    function setScheda(scheda) {
+        schedaAttiva = scheda === 'eseguite' ? 'eseguite' : 'da-eseguire';
+        aggiornaTabsUi();
+        renderLista(filtraPerScheda(tutteManutenzioni, schedaAttiva));
+    }
+
     function close() {
         overlay.hidden = true;
         overlay.setAttribute('aria-hidden', 'true');
         mezzoCorrente = null;
+        tutteManutenzioni = [];
+        schedaAttiva = 'da-eseguire';
         setStatus('');
     }
 
     function renderLista(rows) {
         if (!Array.isArray(rows) || !rows.length) {
-            listaEl.innerHTML = '<div class="manut-elenco-empty">Nessuna manutenzione per questo mezzo</div>';
+            const msg = schedaAttiva === 'eseguite'
+                ? 'Nessuna manutenzione eseguita (o annullata)'
+                : 'Nessuna manutenzione da eseguire';
+            listaEl.innerHTML = `<div class="manut-elenco-empty">${msg}</div>`;
             return;
         }
 
@@ -94,29 +148,31 @@ export function initElencoManutenzioniModal(options = {}) {
             const pagato = formatValoreManut(m.pagato);
             const note = String(m.note_manutenzione || '').trim();
 
+            const preavviso = formatValoreManut(m.preavviso);
             let sogliaHtml = '';
             if (String(tip).toLowerCase() === 'km') {
                 sogliaHtml = `
                     <div><span>Km rif.</span>${escapeHtmlManut(kmRif)}</div>
                     <div><span>Delta km</span>${escapeHtmlManut(deltaKm)}</div>
                     <div><span>Km previsti</span>${escapeHtmlManut(kmPrev)}</div>
+                    <div><span>Avvisa prima</span>${escapeHtmlManut(preavviso === '—' ? '—' : `${preavviso} km`)}</div>
                 `;
             } else {
                 sogliaHtml = `
                     <div><span>Delta giorni</span>${escapeHtmlManut(deltaGiorni)}</div>
                     <div><span>Data prevista</span>${escapeHtmlManut(dataPrev)}</div>
+                    <div><span>Avvisa prima</span>${escapeHtmlManut(preavviso === '—' ? '—' : `${preavviso} gg`)}</div>
                 `;
             }
 
             const azioni = stato === 'aperta'
                 ? `
+                    <button type="button" class="manut-btn-modifica" data-modifica-id="${escapeHtmlManut(id)}">MODIFICA</button>
                     <button type="button" class="manut-btn-completa" data-completa-id="${escapeHtmlManut(id)}">COMPLETA</button>
-                    <button type="button" class="manut-btn-eseguita" data-azione="eseguita" data-id="${escapeHtmlManut(id)}">SEGNA ESEGUITA</button>
-                    <button type="button" class="manut-btn-annulla-manut" data-azione="annullata" data-id="${escapeHtmlManut(id)}">ANNULLA</button>
+                    <button type="button" class="manut-btn-apri-report" data-report-id="${escapeHtmlManut(id)}">VEDI SCHEDA</button>
                 `
                 : `
-                    <button type="button" class="manut-btn-completa" data-completa-id="${escapeHtmlManut(id)}">APRI SCHEDA</button>
-                    <button type="button" class="manut-btn-riapri" data-azione="aperta" data-id="${escapeHtmlManut(id)}">RIAPRI</button>
+                    <button type="button" class="manut-btn-apri-report" data-report-id="${escapeHtmlManut(id)}">APRI SCHEDA</button>
                 `;
 
             return `
@@ -149,6 +205,8 @@ export function initElencoManutenzioniModal(options = {}) {
 
         const invoke = getInvoke();
         if (!isTauriEnv() || !invoke) {
+            tutteManutenzioni = [];
+            aggiornaConteggi();
             listaEl.innerHTML = '<div class="manut-elenco-empty">Elenco disponibile solo nell\'app desktop</div>';
             return;
         }
@@ -159,9 +217,14 @@ export function initElencoManutenzioniModal(options = {}) {
                 idMezzo: Number(mezzoCorrente.id) || 0,
                 id_mezzo: Number(mezzoCorrente.id) || 0
             });
-            renderLista(Array.isArray(rows) ? rows : []);
+            tutteManutenzioni = Array.isArray(rows) ? rows : [];
+            aggiornaConteggi();
+            aggiornaTabsUi();
+            renderLista(filtraPerScheda(tutteManutenzioni, schedaAttiva));
         } catch (error) {
             console.error('Errore caricamento manutenzioni:', error);
+            tutteManutenzioni = [];
+            aggiornaConteggi();
             listaEl.innerHTML = `<div class="manut-elenco-empty">Errore: ${escapeHtmlManut(error?.message || error)}</div>`;
         }
     }
@@ -169,6 +232,8 @@ export function initElencoManutenzioniModal(options = {}) {
     async function open(mezzo) {
         if (!mezzo || !mezzo.id) return;
         mezzoCorrente = mezzo;
+        schedaAttiva = 'da-eseguire';
+        aggiornaTabsUi();
         if (titoloMezzo) titoloMezzo.textContent = etichettaMezzo(mezzo);
         if (kmEl) {
             const km = getUltimoKm(mezzo);
@@ -190,6 +255,9 @@ export function initElencoManutenzioniModal(options = {}) {
             await invoke('aggiorna_stato_manutenzione', { id: Number(id), stato });
             setStatus('Aggiornato');
             await caricaLista();
+            if (typeof onChanged === 'function') {
+                try { await onChanged(mezzoCorrente); } catch (_) { /* ignore */ }
+            }
             setTimeout(() => setStatus(''), 1500);
         } catch (error) {
             console.error('Errore aggiornamento stato manutenzione:', error);
@@ -197,7 +265,110 @@ export function initElencoManutenzioniModal(options = {}) {
         }
     }
 
+    async function apriSchedaReport(id) {
+        const idNum = Number(id) || 0;
+        if (!idNum) return;
+
+        const mezzoLabel = mezzoCorrente ? etichettaMezzo(mezzoCorrente) : '';
+        const qs = new URLSearchParams({ id: String(idNum) });
+        if (mezzoLabel) qs.set('mezzo', mezzoLabel);
+        const url = `SCHEDAMANUTENZIONE.html?${qs.toString()}`;
+
+        if (isTauriEnv()) {
+            try {
+                const { WebviewWindow } = await import('@tauri-apps/api/window');
+                const label = `scheda-manutenzione-${idNum}`;
+                const existing = WebviewWindow.getByLabel(label);
+                if (existing) {
+                    try {
+                        await existing.show();
+                        await existing.setFocus();
+                        return;
+                    } catch (err) {
+                        console.warn('Finestra scheda manutenzione non riutilizzabile:', err);
+                        try { await existing.close(); } catch (_) { /* ignore */ }
+                    }
+                }
+                const webview = new WebviewWindow(label, {
+                    url,
+                    title: `Scheda manutenzione ${idNum}`,
+                    width: 900,
+                    height: 1100,
+                    resizable: true,
+                    maximized: false,
+                    decorations: true,
+                    center: true
+                });
+                webview.setFocus().catch((err) => console.warn('setFocus scheda manut:', err));
+                return;
+            } catch (error) {
+                console.error('Errore apertura scheda manutenzione:', error);
+            }
+        }
+        window.open(url, `scheda-manutenzione-${idNum}`, 'width=900,height=1100');
+    }
+
+    async function apriStampaElenco() {
+        if (!mezzoCorrente?.id) {
+            setStatus('Nessun mezzo selezionato', true);
+            return;
+        }
+        const idMezzo = Number(mezzoCorrente.id) || 0;
+        if (!idMezzo) {
+            setStatus('Mezzo non valido', true);
+            return;
+        }
+
+        const mezzoLabel = etichettaMezzo(mezzoCorrente);
+        const qs = new URLSearchParams({ idMezzo: String(idMezzo) });
+        if (mezzoLabel) qs.set('mezzo', mezzoLabel);
+        const url = `STAMPAMANUTENZIONI.html?${qs.toString()}`;
+
+        if (isTauriEnv()) {
+            try {
+                const { WebviewWindow } = await import('@tauri-apps/api/window');
+                const label = `stampa-manutenzioni-${idMezzo}`;
+                const existing = WebviewWindow.getByLabel(label);
+                if (existing) {
+                    try {
+                        await existing.close();
+                    } catch (_) { /* ignore */ }
+                    await new Promise((r) => setTimeout(r, 150));
+                }
+                const webview = new WebviewWindow(label, {
+                    url,
+                    title: `Elenco manutenzioni — ${mezzoLabel || idMezzo}`,
+                    width: 1200,
+                    height: 850,
+                    resizable: true,
+                    maximized: false,
+                    decorations: true,
+                    center: true
+                });
+                webview.setFocus().catch((err) => console.warn('setFocus stampa manut:', err));
+                return;
+            } catch (error) {
+                console.error('Errore apertura stampa elenco manutenzioni:', error);
+                setStatus(`Errore apertura stampa: ${error?.message || error}`, true);
+            }
+        }
+        window.open(url, `stampa-manutenzioni-${idMezzo}`, 'width=1200,height=850');
+    }
+
     listaEl.addEventListener('click', (e) => {
+        const btnReport = e.target.closest('button[data-report-id]');
+        if (btnReport) {
+            apriSchedaReport(btnReport.getAttribute('data-report-id'));
+            return;
+        }
+        const btnModifica = e.target.closest('button[data-modifica-id]');
+        if (btnModifica) {
+            const id = Number(btnModifica.dataset.modificaId) || 0;
+            if (id && typeof onApriModifica === 'function') {
+                onApriModifica(id, mezzoCorrente);
+            }
+            return;
+        }
         const btnCompleta = e.target.closest('button[data-completa-id]');
         if (btnCompleta) {
             const id = Number(btnCompleta.dataset.completaId) || 0;
@@ -211,8 +382,17 @@ export function initElencoManutenzioniModal(options = {}) {
         aggiornaStato(btn.dataset.id, btn.dataset.azione);
     });
 
+    overlay.querySelector('.manut-schede-tabs')?.addEventListener('click', (e) => {
+        const tab = e.target.closest('.manut-scheda-tab[data-scheda]');
+        if (!tab) return;
+        setScheda(tab.getAttribute('data-scheda'));
+    });
+
     document.getElementById('btn-modal-elenco-manut-close')?.addEventListener('click', close);
     document.getElementById('btn-modal-elenco-manut-chiudi')?.addEventListener('click', close);
+    document.getElementById('btn-modal-elenco-manut-stampa')?.addEventListener('click', () => {
+        apriStampaElenco();
+    });
     overlay.addEventListener('click', (e) => {
         if (e.target === overlay) close();
     });
@@ -314,6 +494,208 @@ function setupOperatoreCombo(inputEl, listaEl, getNomi, ensureLoaded) {
     inputEl?.addEventListener('blur', () => setTimeout(hide, 150));
 
     return { hide, render };
+}
+
+/** Modifica una manutenzione già programmata (es. posticipo data/km). */
+export function initModificaManutenzioneModal(options = {}) {
+    const getInvoke = options.getInvoke || (() => null);
+    const isTauriEnv = options.isTauriEnv || (() => false);
+    const etichettaMezzo = options.etichettaMezzo || (() => 'Mezzo');
+    const trovaMezzo = options.trovaMezzo || (() => null);
+
+    const overlay = document.getElementById('modal-modifica-manutenzione');
+    const form = document.getElementById('form-modifica-manutenzione');
+    const statusEl = document.getElementById('modal-modifica-manut-status');
+    const titoloMezzo = document.getElementById('modal-modifica-manut-mezzo');
+    const idEl = document.getElementById('modifica-manut-id');
+    const tipHiddenEl = document.getElementById('modifica-manut-tipologia');
+    const tipVisEl = document.getElementById('modifica-manut-tipologia-vis');
+    const wrapData = document.getElementById('modifica-wrap-data-prev');
+    const wrapKmPrev = document.getElementById('modifica-wrap-km-prev');
+    const wrapKmRif = document.getElementById('modifica-wrap-km-rif');
+    const dataPrevEl = document.getElementById('modifica-manut-data-prevista');
+    const kmPrevEl = document.getElementById('modifica-manut-km-previsto');
+    const kmRifEl = document.getElementById('modifica-manut-km-rif');
+    const preavvisoEl = document.getElementById('modifica-manut-preavviso');
+    const preavvisoLabelEl = document.getElementById('modifica-manut-preavviso-label');
+    const motivazioneEl = document.getElementById('modifica-manut-motivazione');
+    const noteEl = document.getElementById('modifica-manut-note');
+    const riepilogoEl = document.getElementById('modifica-manut-riepilogo');
+
+    if (!overlay || !form) {
+        console.warn('Modale modifica manutenzione non trovato');
+        return { openById: async () => {}, close: () => {} };
+    }
+
+    function setStatus(msg, isError = false) {
+        if (!statusEl) return;
+        statusEl.textContent = msg || '';
+        statusEl.classList.toggle('error', !!isError);
+    }
+
+    function setVal(el, v) {
+        if (el) el.value = v == null ? '' : String(v);
+    }
+
+    function syncTipologiaUi(tip) {
+        const isKm = String(tip || '').toLowerCase() === 'km';
+        if (wrapData) wrapData.hidden = isKm;
+        if (wrapKmPrev) wrapKmPrev.hidden = !isKm;
+        if (wrapKmRif) wrapKmRif.hidden = !isKm;
+        if (preavvisoLabelEl) {
+            preavvisoLabelEl.textContent = isKm ? 'AVVISA PRIMA (KM)' : 'AVVISA PRIMA (GG)';
+        }
+        if (preavvisoEl) {
+            preavvisoEl.placeholder = isKm ? 'es. 40' : 'es. 10';
+        }
+        if (riepilogoEl) {
+            riepilogoEl.textContent = isKm
+                ? 'Per posticipare: alza i km previsti. Puoi anche cambiare il preavviso giallo.'
+                : 'Per posticipare: metti una data prevista più avanti. Puoi anche cambiare il preavviso giallo.';
+        }
+    }
+
+    function close() {
+        overlay.hidden = true;
+        overlay.setAttribute('aria-hidden', 'true');
+        setStatus('');
+    }
+
+    function fillForm(m, mezzo) {
+        setVal(idEl, m.id || '');
+        const tip = String(m.tipologia || '').trim();
+        setVal(tipHiddenEl, tip);
+        setVal(tipVisEl, tip);
+        setVal(dataPrevEl, m.data_prevista || '');
+        setVal(kmPrevEl, m.km_previsto || '');
+        setVal(kmRifEl, m.km_riferimento || '');
+        setVal(preavvisoEl, m.preavviso || '');
+        setVal(motivazioneEl, m.motivazione || '');
+        setVal(noteEl, m.note_manutenzione || '');
+        if (titoloMezzo) {
+            titoloMezzo.textContent = mezzo
+                ? etichettaMezzo(mezzo)
+                : `Mezzo ${m.id_mezzo || ''}`;
+        }
+        syncTipologiaUi(tip);
+    }
+
+    async function openById(idManutenzione, mezzoHint = null) {
+        const id = Number(idManutenzione) || 0;
+        if (!id) return;
+        const invoke = getInvoke();
+        if (!isTauriEnv() || !invoke) {
+            setStatus('Disponibile solo nell\'app desktop', true);
+            overlay.hidden = false;
+            return;
+        }
+        setStatus('Caricamento…');
+        overlay.hidden = false;
+        overlay.setAttribute('aria-hidden', 'false');
+        try {
+            await invoke('init_supabase_from_config').catch(() => {});
+            const m = await invoke('get_manutenzione', { id });
+            const stato = String(m?.stato || '').toLowerCase();
+            if (stato && stato !== 'aperta') {
+                setStatus('Puoi modificare solo le manutenzioni ancora aperte', true);
+                return;
+            }
+            const mezzo = mezzoHint
+                || (typeof trovaMezzo === 'function' ? trovaMezzo(m.id_mezzo) : null);
+            fillForm(m, mezzo);
+            setStatus('');
+            const tip = String(m.tipologia || '').trim().toLowerCase();
+            if (tip === 'km') kmPrevEl?.focus();
+            else dataPrevEl?.focus();
+        } catch (error) {
+            console.error('Errore apertura modifica manutenzione:', error);
+            setStatus(`Errore: ${error?.message || error}`, true);
+        }
+    }
+
+    async function salva() {
+        const invoke = getInvoke();
+        if (!isTauriEnv() || !invoke) {
+            setStatus('Salvataggio solo nell\'app desktop', true);
+            return;
+        }
+        const id = Number(idEl?.value) || 0;
+        if (!id) {
+            setStatus('Scheda non valida', true);
+            return;
+        }
+        const tip = String(tipHiddenEl?.value || '').trim().toLowerCase();
+        const isKm = tip === 'km';
+        const dataPrev = dataPrevEl?.value?.trim() || '';
+        const kmPrev = kmPrevEl?.value?.trim() || '';
+        const preavviso = preavvisoEl?.value?.trim() || '';
+
+        if (!isKm && !dataPrev) {
+            setStatus('Inserisci la data prevista', true);
+            dataPrevEl?.focus();
+            return;
+        }
+        if (isKm && !kmPrev) {
+            setStatus('Inserisci i km previsti', true);
+            kmPrevEl?.focus();
+            return;
+        }
+        if (preavviso) {
+            const pre = Number(String(preavviso).replace(',', '.'));
+            if (!Number.isFinite(pre) || pre < 0) {
+                setStatus('Preavviso non valido', true);
+                preavvisoEl?.focus();
+                return;
+            }
+        }
+
+        const payload = {
+            id,
+            motivazione: motivazioneEl?.value?.trim() || '',
+            note_manutenzione: noteEl?.value?.trim() || '',
+            preavviso,
+            data_prevista: isKm ? undefined : dataPrev,
+            km_previsto: isKm ? kmPrev : undefined
+        };
+
+        const btn = document.getElementById('btn-modal-modifica-manut-salva');
+        if (btn) btn.disabled = true;
+        setStatus('Salvataggio…');
+        try {
+            await invoke('init_supabase_from_config').catch(() => {});
+            const saved = await invoke('salva_manutenzione', { input: payload });
+            fillForm(saved, typeof trovaMezzo === 'function' ? trovaMezzo(saved.id_mezzo) : null);
+            setStatus('Manutenzione aggiornata');
+            if (typeof options.onSaved === 'function') {
+                options.onSaved(saved);
+            }
+            setTimeout(close, 600);
+        } catch (error) {
+            console.error('Errore modifica manutenzione:', error);
+            setStatus(`Errore: ${error?.message || error}`, true);
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    document.getElementById('btn-modal-modifica-manut-close')?.addEventListener('click', close);
+    document.getElementById('btn-modal-modifica-manut-annulla')?.addEventListener('click', close);
+    document.getElementById('btn-modal-modifica-manut-salva')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        salva();
+    });
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        salva();
+    });
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !overlay.hidden) close();
+    });
+
+    return { openById, close };
 }
 
 /** Scheda per completare i campi e segnare eseguita. */
@@ -555,13 +937,16 @@ export function initScaduteManutenzioniModal(options = {}) {
                 const mezzo = s.etichetta_mezzo || s.etichettaMezzo || `Mezzo ${s.id_mezzo || ''}`;
                 const motiv = s.motivazione || 'Manutenzione';
                 const tip = s.tipologia || '';
+                const liv = String(s.livello || 'scaduta').toLowerCase();
+                const isPreavviso = liv === 'preavviso';
+                const badge = isPreavviso ? 'IN ARRIVO' : 'SCADUTA';
                 const dettaglio = tip.toLowerCase() === 'km'
                     ? `Km previsti: ${s.km_previsto || '—'} (attuale ${s.ultimo_km || s.ultimoKm || '—'})`
                     : `Data prevista: ${s.data_prevista || s.dataPrevista || '—'}`;
                 return `
-                    <div class="manut-scaduta-item">
+                    <div class="manut-scaduta-item ${isPreavviso ? 'is-preavviso' : 'is-scaduta'}">
                         <div class="manut-scaduta-item-testo">
-                            <strong>${escapeHtmlManut(mezzo)}</strong>
+                            <strong>${escapeHtmlManut(mezzo)} <em class="manut-livello-badge">${escapeHtmlManut(badge)}</em></strong>
                             <span>${escapeHtmlManut(motiv)} — ${escapeHtmlManut(dettaglio)}</span>
                         </div>
                         <button type="button" data-scegli-id="${escapeHtmlManut(id)}">APRI SCHEDA</button>
@@ -627,6 +1012,8 @@ export function initManutenzioneMezzoModal(options = {}) {
     const deltaKmEl = document.getElementById('manut-delta-km');
     const deltaGiorniEl = document.getElementById('manut-delta-giorni');
     const kmRifEl = document.getElementById('manut-km-riferimento');
+    const preavvisoEl = document.getElementById('manut-preavviso');
+    const preavvisoHintEl = document.getElementById('manut-preavviso-hint');
     const hintEl = document.getElementById('manut-hint');
     const operatoreEl = document.getElementById('manut-operatore');
     const operatoreListaEl = document.getElementById('manut-operatore-lista');
@@ -654,10 +1041,21 @@ export function initManutenzioneMezzoModal(options = {}) {
             deltaGiorniEl.disabled = isKm;
             if (isKm) deltaGiorniEl.value = '';
         }
+        if (preavvisoEl) {
+            preavvisoEl.placeholder = isKm ? 'es. 40' : 'es. 10';
+            preavvisoEl.title = isKm
+                ? 'Km prima della soglia: avviso giallo sulla Home'
+                : 'Giorni prima della data: avviso giallo sulla Home';
+        }
+        if (preavvisoHintEl) {
+            preavvisoHintEl.textContent = isKm
+                ? 'km prima della soglia (opzionale) → avviso giallo; a scadenza diventa rosso'
+                : 'giorni prima della data (opzionale) → avviso giallo; alla data diventa rosso';
+        }
         if (hintEl) {
             hintEl.textContent = isKm
-                ? 'Con Tipologia Km: l\'alert scatta a (km attuale + delta). La data di esecuzione si inserisce quando completi la manutenzione.'
-                : 'Con Tipologia Giorni: l\'alert scatta tra N giorni da oggi. La data di esecuzione si inserisce quando completi la manutenzione.';
+                ? 'Con Tipologia Km: la manutenzione scade a (km attuale + delta). Se indichi «Inizia ad avvisarmi», sulla Home vedi giallo prima e rosso a scadenza.'
+                : 'Con Tipologia Giorni: la manutenzione scade tra N giorni da oggi. Se indichi «Inizia ad avvisarmi», sulla Home vedi giallo prima e rosso alla data.';
         }
     }
 
@@ -766,6 +1164,7 @@ export function initManutenzioneMezzoModal(options = {}) {
     async function save() {
         if (!mezzoCorrente) return;
         const tip = (tipologiaEl?.value || 'Km').trim();
+        const preavvisoRaw = preavvisoEl?.value?.trim() || '';
         const payload = {
             id_mezzo: Number(mezzoCorrente.id) || 0,
             tipologia: tip,
@@ -776,7 +1175,8 @@ export function initManutenzioneMezzoModal(options = {}) {
             operatore: operatoreEl?.value?.trim() || '',
             delta_giorni: tip === 'Giorni' ? (deltaGiorniEl?.value?.trim() || '') : '',
             delta_chilometri: tip === 'Km' ? (deltaKmEl?.value?.trim() || '') : '',
-            km_riferimento: document.getElementById('manut-km-riferimento')?.value?.trim() || ''
+            km_riferimento: document.getElementById('manut-km-riferimento')?.value?.trim() || '',
+            preavviso: preavvisoRaw
         };
 
         if (!payload.id_mezzo) {
@@ -792,6 +1192,29 @@ export function initManutenzioneMezzoModal(options = {}) {
             setStatus('Inserisci i giorni (DeltaGiorni)', true);
             deltaGiorniEl?.focus();
             return;
+        }
+        if (preavvisoRaw) {
+            const pre = Number(String(preavvisoRaw).replace(',', '.'));
+            if (!Number.isFinite(pre) || pre < 0) {
+                setStatus('Preavviso non valido', true);
+                preavvisoEl?.focus();
+                return;
+            }
+            if (tip === 'Km') {
+                const delta = Number(String(payload.delta_chilometri).replace(',', '.'));
+                if (Number.isFinite(delta) && pre >= delta) {
+                    setStatus('Il preavviso (km) deve essere minore del Delta km', true);
+                    preavvisoEl?.focus();
+                    return;
+                }
+            } else {
+                const delta = Number(String(payload.delta_giorni).replace(',', '.'));
+                if (Number.isFinite(delta) && pre >= delta) {
+                    setStatus('Il preavviso (giorni) deve essere minore del Delta giorni', true);
+                    preavvisoEl?.focus();
+                    return;
+                }
+            }
         }
 
         const invoke = getInvoke();

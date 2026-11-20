@@ -5,6 +5,7 @@ import {
     normalizzaPayloadTratta,
     htmlContenutoRiepilogoTratta
 } from './tratta-riepilogo.js';
+import { testoMezzoServizio } from './mezzo-etichetta.js';
 
 let invoke, appWindow;
 
@@ -133,16 +134,7 @@ function normalizzaNumero(val) {
 }
 
 function costruisciStringaMezzo(servizio) {
-    const nrAutomezzo = normalizzaNumero(servizio.mezzo);
-    if (!nrAutomezzo) return servizio.mezzo_usato || '';
-    if (!allAutomezzi.length) return servizio.mezzo_usato || '';
-    const automezzo = allAutomezzi.find(a => normalizzaNumero(a.nr_automezzo) === nrAutomezzo);
-    if (!automezzo) return servizio.mezzo_usato || '';
-    const parti = [];
-    if (automezzo.marca) parti.push(automezzo.marca.trim());
-    if (automezzo.modello) parti.push(automezzo.modello.trim());
-    if (nrAutomezzo) parti.push(`(${nrAutomezzo})`);
-    return parti.join(' - ') || servizio.mezzo_usato || '';
+    return testoMezzoServizio(servizio, allAutomezzi);
 }
 
 async function caricaAutomezzi() {
@@ -302,10 +294,10 @@ function htmlIconaCarrozzina(carrozzina) {
     let file = '';
     let label = '';
     if (v === 'SOCIO') {
-        file = 'assets/carrozzina-bleu.png?v=4';
+        file = 'assets/carrozzina-bleu.png?v=5';
         label = 'Carrozzina socio';
     } else if (v === 'AUSER') {
-        file = 'assets/carrozzina-verde.png?v=2';
+        file = 'assets/carrozzina-verde.png?v=5';
         label = 'Carrozzina AUSER';
     } else {
         return '';
@@ -419,7 +411,48 @@ function creaNotaDettaglio(label, value) {
     </div>`;
 }
 
-function apriModalServizio(servizio) {
+function formatTelefonoConRiferimento(t) {
+    const num = String(t?.telefono || '').trim();
+    if (!num) return '';
+    const rif = String(t?.riferimento || '').trim();
+    return rif ? `${num} (${rif})` : num;
+}
+
+/** Telefono principale + altri (non principali) da Telefoni_supa via IdSocio */
+async function caricaTelefoniSocio(idsocio) {
+    if (!idsocio || !invoke) {
+        return { principale: '', altri: '' };
+    }
+    try {
+        await invoke('init_supabase_from_config').catch(() => {});
+        const completa = await invoke('get_socio_anagrafica', { idsocio: String(idsocio) });
+        const telefoni = Array.isArray(completa?.telefoni) ? completa.telefoni : [];
+
+        const principaleItem = telefoni.find((t) => t.principale && String(t.telefono || '').trim())
+            || telefoni.find((t) => String(t.telefono || '').trim());
+
+        const principale = principaleItem
+            ? formatTelefonoConRiferimento(principaleItem)
+            : String(completa?.anagrafica?.telefono || '').trim();
+
+        const altri = telefoni
+            .filter((t) => {
+                if (!String(t.telefono || '').trim()) return false;
+                if (principaleItem && t === principaleItem) return false;
+                return true;
+            })
+            .map(formatTelefonoConRiferimento)
+            .filter(Boolean)
+            .join(' · ');
+
+        return { principale, altri };
+    } catch (error) {
+        console.warn('Telefoni socio non disponibili:', error);
+        return { principale: '', altri: '' };
+    }
+}
+
+async function apriModalServizio(servizio) {
     const modal = document.getElementById('modal-servizio');
     const body = document.getElementById('modal-servizio-body');
     const title = document.getElementById('modal-servizio-title');
@@ -429,6 +462,8 @@ function apriModalServizio(servizio) {
     if (title) {
         title.textContent = `SERVIZIO ${servizio.id || ''} — ${servizio.socio_trasportato || ''}`;
     }
+
+    const telefoni = await caricaTelefoniSocio(servizio.idsocio);
 
     body.innerHTML = `
         <div class="dettaglio-section">
@@ -457,11 +492,16 @@ function apriModalServizio(servizio) {
                 ${creaCampoDettaglio('STATO INCASSO', servizio.stato_incasso)}
                 ${creaCampoDettaglio('TIPO PAGAMENTO', servizio.tipo_pagamento)}
             </div>
+            <div class="dettaglio-row dettaglio-row-telefoni">
+                ${creaCampoDettaglio('TELEFONO PRINCIPALE', telefoni.principale, 'field-tel-principale')}
+                ${creaCampoDettaglio('ALTRI TELEFONI', telefoni.altri, 'field-altri-telefoni')}
+            </div>
             <div class="dettaglio-row">
                 ${creaNotaDettaglio('NOTE ARRIVO', servizio.note_arrivo)}
             </div>
             <div class="dettaglio-row">
-                ${creaCampoDettaglio('OPERATORE', servizio.operatore, 'field-large')}
+                ${creaCampoDettaglio('OPERATORE', servizio.operatore, 'field-half')}
+                ${creaCampoDettaglio('ACCOMPAGNATORE', servizio.operatore_2 || '', 'field-half')}
                 ${creaCampoDettaglio('MEZZO USATO', mezzo, 'field-large')}
                 ${creaCampoDettaglio('TEMPO', servizio.tempo, 'field-small')}
                 ${creaCampoDettaglio('KM', servizio.km, 'field-small')}
@@ -499,10 +539,10 @@ function initCalendario() {
 
     calendar = new FullCalendar.Calendar(mount, {
         locale: 'it',
+        timeZone: 'local',
         initialView: vistaCorrente,
         firstDay: 1,
         height: 'auto',
-        dayMinHeight: 118,
         moreLinkClick: 'popover',
         views: {
             dayGridMonth: { dayMaxEvents: 8 },

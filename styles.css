@@ -121,6 +121,39 @@ body {
     transform: translateX(-5px);
 }
 
+.btn-sidebar-nav-con-badge {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.btn-sidebar-nav-con-badge .sidebar-nav-label {
+    flex: 1 1 auto;
+    text-align: left;
+}
+
+.sidebar-nav-badge {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5em;
+    height: 1.5em;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #c62828;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.sidebar-nav-badge[hidden] {
+    display: none !important;
+}
+
 .sidebar-divider {
     height: 2px;
     background-color: rgba(255, 255, 255, 0.2);
@@ -148,7 +181,27 @@ body {
     padding: 10px 8px;
     cursor: pointer;
     line-height: 1.2;
-    animation: sidebar-manut-pulse 1.5s ease-in-out infinite;
+    animation: sidebar-manut-pulse-rosso 1.5s ease-in-out infinite;
+}
+
+/* Preavviso: giallo (prima della scadenza) */
+.sidebar-manutenzione-alert.is-preavviso {
+    border-color: #f9a825;
+    background: #fff8e1;
+    color: #f57f17;
+    animation-name: sidebar-manut-pulse-giallo;
+}
+
+.sidebar-manutenzione-alert.is-preavviso:hover {
+    background: #ffecb3;
+}
+
+/* Scaduta: rosso (resta finché non completi) */
+.sidebar-manutenzione-alert.is-scaduta {
+    border-color: #b71c1c;
+    background: #ffebee;
+    color: #b71c1c;
+    animation-name: sidebar-manut-pulse-rosso;
 }
 
 .sidebar-manutenzione-alert[hidden] {
@@ -159,9 +212,18 @@ body {
     background: #ffcdd2;
 }
 
-@keyframes sidebar-manut-pulse {
+.sidebar-manutenzione-alert.is-scaduta:hover {
+    background: #ffcdd2;
+}
+
+@keyframes sidebar-manut-pulse-rosso {
     0%, 100% { box-shadow: 0 0 0 0 rgba(183, 28, 28, 0.35); }
     50% { box-shadow: 0 0 0 4px rgba(183, 28, 28, 0.15); }
+}
+
+@keyframes sidebar-manut-pulse-giallo {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(249, 168, 37, 0.35); }
+    50% { box-shadow: 0 0 0 4px rgba(249, 168, 37, 0.18); }
 }
 
 .sidebar-user {

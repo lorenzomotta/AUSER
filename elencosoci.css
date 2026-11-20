@@ -649,10 +649,13 @@ body {
 
 .socio-form-group input,
 .socio-form-group textarea {
+    width: 100%;
+    box-sizing: border-box;
     padding: 4px 6px;
     border: 1px solid #999;
     border-radius: 3px;
     font-size: 13px;
+    font-weight: 700;
     background-color: #fff;
     font-family: inherit;
     color: #333;
@@ -764,13 +767,13 @@ body {
 }
 
 .socio-form-group-nominativo {
-    flex: 1 1 220px;
-    min-width: 180px;
+    flex: 1.6 1 260px;
+    min-width: 200px;
 }
 
 .socio-form-group-codicefiscale {
-    flex: 0 0 140px;
-    min-width: 140px;
+    flex: 1 1 170px;
+    min-width: 155px;
 }
 
 .socio-form-group-numerotessera {
@@ -804,8 +807,8 @@ body {
 }
 
 .socio-form-group-tipologiasocio {
-    flex: 0 0 120px;
-    min-width: 120px;
+    flex: 1 1 150px;
+    min-width: 135px;
 }
 
 .socio-form-group-operatore {
@@ -994,18 +997,18 @@ body {
     }
 
     .socio-form-group-nominativo {
-        flex: 1 1 140px;
-        min-width: 120px;
+        flex: 1.6 1 180px;
+        min-width: 150px;
     }
 
     .socio-form-group-codicefiscale {
-        flex: 0 0 118px;
-        min-width: 110px;
+        flex: 1 1 145px;
+        min-width: 130px;
     }
 
     .socio-form-group-tipologiasocio {
-        flex: 0 0 95px;
-        min-width: 90px;
+        flex: 1 1 120px;
+        min-width: 110px;
     }
 
     .socio-form-group-operatore {

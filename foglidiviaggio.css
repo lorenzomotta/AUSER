@@ -1,0 +1,363 @@
+/* Fogli di viaggio — elenco tabellare della vista FogliDiViaggio */
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+.fdv-footer[hidden],
+.fdv-tabella-wrap[hidden],
+.fdv-messaggio[hidden],
+.fdv-menu[hidden],
+.fdv-footer-nota[hidden],
+#fdv-menu-valori[hidden],
+#fdv-menu-date[hidden] {
+    display: none !important;
+}
+
+body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #d8d6d3;
+    color: #1a1a1a;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+.fdv-header {
+    flex: 0 0 auto;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    background: #37474f;
+    color: #fff;
+    border-bottom: 3px solid #9ea09e;
+}
+
+.fdv-header-titolo h1 {
+    margin: 0;
+    font-size: 20px;
+    letter-spacing: 0.04em;
+}
+
+.fdv-sottotitolo {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #eceff1;
+}
+
+.fdv-header-azioni {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.fdv-stato {
+    font-size: 13px;
+    color: #eceff1;
+}
+
+.fdv-btn {
+    border: none;
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.fdv-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.fdv-btn-tutti {
+    background: #1565c0;
+    color: #fff;
+}
+
+.fdv-btn-tutti:hover:not(:disabled) {
+    background: #0d47a1;
+}
+
+.fdv-btn-torna {
+    background: #d32f2f;
+    color: #fff;
+}
+
+.fdv-btn-torna:hover {
+    background: #b71c1c;
+}
+
+.fdv-main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.fdv-messaggio {
+    margin: 18px;
+    padding: 16px;
+    background: #fff;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.fdv-messaggio.fdv-errore {
+    color: #b71c1c;
+    font-weight: 600;
+}
+
+.fdv-tabella-wrap {
+    flex: 1;
+    min-height: 0;
+    margin: 12px 16px;
+    background: #fff;
+    border-radius: 4px;
+    overflow: auto;
+}
+
+.fdv-tabella {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 1100px;
+}
+
+.fdv-tabella th,
+.fdv-tabella td {
+    border-bottom: 1px solid #e0e0e0;
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.fdv-tabella th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #eceff1;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    padding: 4px 6px;
+}
+
+.fdv-th {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.fdv-filtro-btn {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    border: 1px solid #90a4ae;
+    border-radius: 3px;
+    background: #fff;
+    color: #37474f;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+
+.fdv-filtro-btn:hover,
+.fdv-filtro-btn.is-aperto {
+    background: #cfd8dc;
+}
+
+.fdv-filtro-btn.is-filtrato,
+.fdv-filtro-btn.is-ordinato {
+    background: #1565c0;
+    border-color: #1565c0;
+    color: #fff;
+}
+
+.fdv-vuoto {
+    text-align: center;
+    color: #546e7a;
+    padding: 18px;
+}
+
+.fdv-footer {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    flex-wrap: wrap;
+    padding: 12px 18px;
+    background: #37474f;
+    color: #fff;
+}
+
+.fdv-footer p {
+    margin: 0;
+    font-size: 15px;
+}
+
+.fdv-footer strong {
+    margin-left: 8px;
+    font-size: 18px;
+}
+
+.fdv-footer-nota {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 400;
+    color: #eceff1;
+}
+
+.fdv-menu {
+    position: fixed;
+    z-index: 30;
+    width: 260px;
+    max-height: min(420px, calc(100vh - 24px));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #90a4ae;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.fdv-menu-ordina {
+    display: flex;
+    gap: 6px;
+}
+
+.fdv-menu-ordina button,
+.fdv-menu-azzera {
+    flex: 1;
+    border: 1px solid #90a4ae;
+    border-radius: 4px;
+    background: #eceff1;
+    color: #263238;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 8px;
+    cursor: pointer;
+}
+
+.fdv-menu-ordina button:hover,
+.fdv-menu-azzera:hover {
+    background: #cfd8dc;
+}
+
+.fdv-menu-ordina button.is-scelto {
+    background: #1565c0;
+    border-color: #1565c0;
+    color: #fff;
+}
+
+.fdv-menu-date {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.fdv-menu-date label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #455a64;
+}
+
+.fdv-menu-date input[type="date"] {
+    width: 100%;
+    border: 1px solid #90a4ae;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 13px;
+}
+
+.fdv-menu-cerca-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #455a64;
+}
+
+.fdv-menu input[type="search"] {
+    width: 100%;
+    border: 1px solid #90a4ae;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 13px;
+}
+
+.fdv-menu-tutti {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.fdv-menu-lista {
+    overflow: auto;
+    max-height: 220px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 4px 0;
+}
+
+.fdv-menu-valore {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 4px 8px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.fdv-menu-valore:hover {
+    background: #e3f2fd;
+}
+
+.fdv-menu-valore span {
+    overflow-wrap: anywhere;
+}
+
+.fdv-menu-vuoto {
+    padding: 8px;
+    color: #78909c;
+    font-size: 12px;
+}
+
+.fdv-tabella tbody tr:nth-child(even) {
+    background: #f7f7f7;
+}
+
+.fdv-tabella tbody tr:hover {
+    background: #e3f2fd;
+}
+
+.fdv-tabella td.fdv-num {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.fdv-tabella td.fdv-data {
+    white-space: nowrap;
+}
+
+.fdv-tabella td.fdv-note {
+    min-width: 160px;
+    max-width: 280px;
+}

@@ -4,11 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calendario Servizi — Accesso Operatori</title>
+    <script>
+        if (new URLSearchParams(location.search).get('anteprima') === 'mobile') {
+            document.documentElement.classList.add('anteprima-mobile');
+        }
+    </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/@fullcalendar/list@6.1.15/index.global.min.css" rel="stylesheet">
     <link rel="stylesheet" href="calendario.css?v=18">
-    <link rel="stylesheet" href="calendario-web.css?v=32">
+    <link rel="stylesheet" href="calendario-web.css?v=35">
+    <link rel="stylesheet" href="rifornimento-mobile.css?v=2">
 </head>
 <body>
     <!-- Schermata login operatori -->
@@ -46,8 +52,7 @@
         <div class="calendario-container">
             <header class="calendario-header">
                 <div class="header-center">
-                    <h1 class="page-title">CALENDARIO SERVIZI</h1>
-                    <span class="servizi-count" id="calendario-count">(0 servizi)</span>
+                    <h1 class="page-title">CALENDARIO SERVIZI <span class="servizi-count" id="calendario-count">(0)</span></h1>
                     <span class="web-user-label" id="web-user-label"></span>
                 </div>
                 <div class="header-toolbar">
@@ -70,6 +75,11 @@
             <div id="calendario-loading" class="calendario-loading">Caricamento servizi...</div>
             <div id="calendario-mount"></div>
         </div>
+
+        <footer class="rif-mobile-footer">
+            <button type="button" class="rif-mobile-btn" id="btn-apri-rifornimento">RIFORNIMENTO</button>
+            <span class="rif-mobile-ok" id="rif-mobile-ok" hidden>Salvato</span>
+        </footer>
     </div>
 
     <div id="modal-servizio" class="modal-servizio-overlay" style="display: none;" aria-hidden="true">
@@ -136,6 +146,61 @@
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.15/locales/it.global.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script type="module" src="calendario-web.js?v=56"></script>
+    <div id="rif-mobile-overlay" class="rif-mobile-overlay" hidden>
+        <div class="rif-mobile-scheda" role="dialog" aria-labelledby="rif-mobile-titolo">
+            <div class="rif-mobile-testa">
+                <h2 id="rif-mobile-titolo">NUOVO RIFORNIMENTO</h2>
+                <button type="button" class="rif-mobile-chiudi" id="rif-mobile-chiudi" aria-label="Chiudi">&times;</button>
+            </div>
+            <div class="rif-mobile-corpo">
+                <div class="rif-campo">
+                    <label for="rif-data">DATA</label>
+                    <input type="date" id="rif-data" required>
+                </div>
+                <div class="rif-campo">
+                    <label for="rif-mezzo">MEZZO</label>
+                    <select id="rif-mezzo"></select>
+                </div>
+                <div class="rif-campo">
+                    <label for="rif-operatore">OPERATORE</label>
+                    <select id="rif-operatore"></select>
+                </div>
+                <div class="rif-campo">
+                    <label for="rif-distributore-scelta">DISTRIBUTORE</label>
+                    <select id="rif-distributore-scelta"></select>
+                </div>
+                <div class="rif-campo rif-nuovo-wrap" id="rif-nuovo-wrap" hidden>
+                    <label for="rif-distributore-nuovo">NUOVO DISTRIBUTORE</label>
+                    <input type="text" id="rif-distributore-nuovo" maxlength="120" autocomplete="off" placeholder="Scrivi il nome">
+                </div>
+                <p class="rif-aiuto">Scegli un distributore già usato, oppure «Aggiungi nuovo…» e scrivi il nome.</p>
+                <div class="rif-riga">
+                    <div class="rif-campo">
+                        <label for="rif-km">KM</label>
+                        <input type="text" id="rif-km" inputmode="decimal" autocomplete="off" placeholder="Es. 45210">
+                    </div>
+                    <div class="rif-campo">
+                        <label for="rif-litri">LITRI</label>
+                        <input type="text" id="rif-litri" inputmode="decimal" autocomplete="off" placeholder="Es. 35,5">
+                    </div>
+                </div>
+                <div class="rif-campo">
+                    <label for="rif-costo">COSTO (€)</label>
+                    <input type="text" id="rif-costo" inputmode="decimal" autocomplete="off" placeholder="Es. 58,20">
+                </div>
+                <div class="rif-campo">
+                    <label for="rif-note">NOTE</label>
+                    <textarea id="rif-note" rows="3" maxlength="500" placeholder="Note sul rifornimento"></textarea>
+                </div>
+                <p class="rif-mobile-errore" id="rif-errore" role="alert" hidden></p>
+            </div>
+            <div class="rif-mobile-piedi">
+                <button type="button" class="rif-btn-annulla" id="rif-btn-annulla">ANNULLA</button>
+                <button type="button" class="rif-btn-salva" id="rif-btn-salva">SALVA</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="calendario-web.js?v=61"></script>
 </body>
 </html>

@@ -127,6 +127,14 @@
     display: none !important;
 }
 
+html.anteprima-mobile #web-login-screen {
+    display: none !important;
+}
+
+html.anteprima-mobile #web-calendario-app {
+    display: block !important;
+}
+
 .web-calendario-app {
     display: block;
 }
@@ -151,6 +159,78 @@
     display: contents;
 }
 
+/* Vista settimana: riga1 ora/socio + mezzo a destra; riga2 operatore + accompagnatore */
+.web-calendario-app .cal-event-week {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 13px;
+    line-height: 1.35;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.web-calendario-app .cal-event-week .cal-event-riga-settimana {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.web-calendario-app .cal-event-week .cal-event-week-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.web-calendario-app .cal-event-week .cal-event-ora {
+    font-weight: 700;
+}
+
+.web-calendario-app .cal-event-week .cal-event-mezzo {
+    margin-left: auto;
+    text-align: right;
+    flex: 0 1 48%;
+    min-width: 0;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.web-calendario-app .cal-event-week .cal-event-riga-op {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.web-calendario-app .cal-event-week .cal-event-op {
+    flex: 0 1 auto;
+    min-width: 0;
+    text-align: left;
+}
+
+.web-calendario-app .cal-event-week .cal-event-acc {
+    margin-left: auto;
+    text-align: right;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
 /* ─── Layout mobile calendario web ─────────────────────────────────────── */
 @media (max-width: 768px) {
     body {
@@ -160,9 +240,9 @@
     .web-calendario-app .calendario-header {
         flex-direction: column;
         align-items: stretch;
-        gap: 10px;
-        margin-bottom: 10px;
-        padding-bottom: 10px;
+        gap: 6px;
+        margin-bottom: 6px;
+        padding-bottom: 6px;
     }
 
     .web-calendario-app .header-center {
@@ -172,19 +252,21 @@
     }
 
     .web-calendario-app .page-title {
-        font-size: 1.15rem;
-        line-height: 1.25;
+        font-size: 1.05rem;
+        line-height: 1.15;
     }
 
     .web-calendario-app .servizi-count {
-        display: block;
-        font-size: 0.82rem;
-        margin-top: 2px;
+        display: inline;
+        font-size: 0.85em;
+        font-weight: 600;
+        margin: 0;
     }
 
     .web-calendario-app .web-user-label {
-        font-size: 0.78rem;
-        margin-top: 2px;
+        font-size: 0.72rem;
+        line-height: 1.15;
+        margin-top: 0;
     }
 
     .web-calendario-app .header-toolbar {
@@ -439,14 +521,6 @@
         border-radius: 4px;
     }
 
-    .web-calendario-app .cal-event-week-row {
-        font-size: 13px;
-        line-height: 1.35;
-        white-space: normal;
-        overflow: visible;
-        text-overflow: unset;
-    }
-
     .web-calendario-app #calendario-mount .fc-listWeek-view .fc-scroller-harness,
     .web-calendario-app #calendario-mount .fc-listWeek-view .fc-scroller,
     .web-calendario-app #calendario-mount .fc-listWeek-view .fc-view-harness {
@@ -540,6 +614,16 @@
         font-size: 13px;
     }
 
+    .web-calendario-app .cal-event-mobile .cal-event-riga-op {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+
     .web-calendario-app .cal-event-mobile .cal-event-op {
         color: #1565c0;
         font-size: 13px;
@@ -547,6 +631,22 @@
         font-style: italic;
         white-space: normal;
         line-height: 1.35;
+        flex: 0 1 auto;
+        min-width: 0;
+    }
+
+    .web-calendario-app .cal-event-mobile .cal-event-acc {
+        margin-left: auto;
+        text-align: right;
+        flex: 0 1 auto;
+        min-width: 0;
+        color: #1565c0;
+        font-size: 13px;
+        font-weight: 700;
+        font-style: italic;
+        line-height: 1.35;
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
 
     .web-calendario-app .cal-event-mobile .cal-event-mezzo {

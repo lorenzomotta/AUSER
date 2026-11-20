@@ -127,6 +127,14 @@
     display: none !important;
 }
 
+html.anteprima-mobile #web-login-screen {
+    display: none !important;
+}
+
+html.anteprima-mobile #web-calendario-app {
+    display: block !important;
+}
+
 .web-calendario-app {
     display: block;
 }
@@ -232,9 +240,9 @@
     .web-calendario-app .calendario-header {
         flex-direction: column;
         align-items: stretch;
-        gap: 10px;
-        margin-bottom: 10px;
-        padding-bottom: 10px;
+        gap: 6px;
+        margin-bottom: 6px;
+        padding-bottom: 6px;
     }
 
     .web-calendario-app .header-center {
@@ -244,19 +252,21 @@
     }
 
     .web-calendario-app .page-title {
-        font-size: 1.15rem;
-        line-height: 1.25;
+        font-size: 1.05rem;
+        line-height: 1.15;
     }
 
     .web-calendario-app .servizi-count {
-        display: block;
-        font-size: 0.82rem;
-        margin-top: 2px;
+        display: inline;
+        font-size: 0.85em;
+        font-weight: 600;
+        margin: 0;
     }
 
     .web-calendario-app .web-user-label {
-        font-size: 0.78rem;
-        margin-top: 2px;
+        font-size: 0.72rem;
+        line-height: 1.15;
+        margin-top: 0;
     }
 
     .web-calendario-app .header-toolbar {

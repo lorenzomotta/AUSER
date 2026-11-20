@@ -12,17 +12,23 @@ import {
 import {
     richiediSessione,
     isAdmin,
-    logout
+    logout,
+    leggiSessione
 } from './auth-session.js';
 import {
     applicaVisibilitaSidebar,
-    puoVedereSidebar
+    puoVedereSidebar,
+    puoFareBackupProton
 } from './sidebar-permessi.js';
 import { applicaTitoloFinestra, mostraVersioneInElemento } from './app-version.js';
 import { opzioniFinestraAnagrafica } from './anagrafica-finestra.js';
+import { initBackupProton } from './backup-proton.js';
 
 // Import Tauri API
 let invoke, appWindow;
+let backupProton = null;
+/** Evita di ripresentare i dialoghi durante la chiusura confermata */
+let chiusuraInCorso = false;
 
 // Funzione per inizializzare le API Tauri
 async function initTauri() {
@@ -715,7 +721,42 @@ function oggiIsoLocale() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** Alert rosso in sidebar se ci sono manutenzioni mezzi scadute (Km o Giorni). */
+/** Numerino su GESTIONE AUTOPARCO = totale manutenzioni ancora aperte. */
+async function aggiornaBadgeManutenzioniAperte() {
+    const badge = document.getElementById('badge-manut-aperte');
+    const btn = document.getElementById('btn-elenco-mezzi');
+    if (!badge) return;
+    if (!invoke) {
+        badge.hidden = true;
+        badge.textContent = '0';
+        return;
+    }
+
+    try {
+        await invoke('init_supabase_from_config').catch(() => {});
+        const n = Number(await invoke('get_conteggio_manutenzioni_aperte')) || 0;
+        if (n > 0) {
+            badge.hidden = false;
+            badge.textContent = String(n);
+            badge.title = n === 1
+                ? '1 manutenzione aperta da completare'
+                : `${n} manutenzioni aperte da completare`;
+            if (btn) {
+                btn.title = badge.title;
+            }
+        } else {
+            badge.hidden = true;
+            badge.textContent = '0';
+            if (btn) btn.removeAttribute('title');
+        }
+    } catch (err) {
+        console.warn('Badge manutenzioni aperte non disponibile:', err);
+        badge.hidden = true;
+        badge.textContent = '0';
+    }
+}
+
+/** Alert in sidebar: giallo in preavviso, rosso se scaduta (resta finché non completi). */
 async function aggiornaAvvisoManutenzioni() {
     const alertEl = document.getElementById('sidebar-manutenzione-alert');
     if (!alertEl) return;
@@ -727,16 +768,32 @@ async function aggiornaAvvisoManutenzioni() {
     try {
         await invoke('init_supabase_from_config').catch(() => {});
         const list = await invoke('get_manutenzioni_scadute');
-        const n = Array.isArray(list) ? list.length : 0;
+        const items = Array.isArray(list) ? list : [];
+        const n = items.length;
         if (n > 0) {
+            const nRosse = items.filter((m) => {
+                const liv = String(m?.livello || '').toLowerCase();
+                return liv === 'scaduta';
+            }).length;
+            // Se c'è almeno una scaduta → rosso; altrimenti solo preavviso → giallo
+            const isRosso = nRosse > 0;
             alertEl.hidden = false;
-            const primo = list[0]?.etichetta_mezzo || list[0]?.etichettaMezzo || '';
+            alertEl.classList.toggle('is-preavviso', !isRosso);
+            alertEl.classList.toggle('is-scaduta', isRosso);
+            const primo = items[0]?.etichetta_mezzo || items[0]?.etichettaMezzo || '';
             alertEl.textContent = n === 1 ? 'MANUTENZIONE!!' : `MANUTENZIONE!! (${n})`;
-            alertEl.title = primo
-                ? `Manutenzione in scadenza: ${primo}${n > 1 ? ` e altre ${n - 1}` : ''} — apri scheda`
-                : 'Manutenzioni in scadenza — apri scheda';
+            if (isRosso) {
+                alertEl.title = primo
+                    ? `Manutenzione scaduta: ${primo}${n > 1 ? ` e altre ${n - 1}` : ''} — completa la scheda`
+                    : 'Manutenzioni scadute — completa la scheda';
+            } else {
+                alertEl.title = primo
+                    ? `Manutenzione in arrivo: ${primo}${n > 1 ? ` e altre ${n - 1}` : ''} — apri scheda`
+                    : 'Manutenzioni in preavviso — apri scheda';
+            }
         } else {
             alertEl.hidden = true;
+            alertEl.classList.remove('is-preavviso', 'is-scaduta');
             alertEl.textContent = 'MANUTENZIONE!!';
         }
     } catch (err) {
@@ -870,19 +927,49 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     
+    backupProton = initBackupProton({
+        getInvoke: () => invoke,
+        isTauriEnv: isTauri
+    });
+
+    async function eseguiChiusuraConBackup() {
+        if (chiusuraInCorso) return true;
+        const conferma = await chiediConfermaUscitaApp();
+        if (!conferma) return false;
+
+        // Solo se l'utente ha il permesso PROTONDRIVE (o è admin)
+        const sessione = leggiSessione();
+        if (puoFareBackupProton(sessione) && backupProton?.chiediBackupAllaChiusura) {
+            const esito = await backupProton.chiediBackupAllaChiusura();
+            // Annulla → resta nell'app, non chiudere
+            if (esito?.annulla) return false;
+        }
+
+        chiusuraInCorso = true;
+        if (isTauri() && appWindow) {
+            await appWindow.close();
+        } else {
+            window.close();
+        }
+        return true;
+    }
+
     // Imposta il listener per il pulsante di chiusura (header o footer)
     const closeBtn = document.querySelector('.btn-close-app-header') || document.querySelector('.btn-close-app');
     if (closeBtn) {
         closeBtn.addEventListener('click', async () => {
-            const conferma = await chiediConfermaUscitaApp();
-            if (!conferma) return;
+            await eseguiChiusuraConBackup();
+        });
+    }
 
-            if (isTauri() && appWindow) {
-                await appWindow.close();
-            } else {
-                // In modalità browser, chiudi la finestra
-                window.close();
-            }
+    // Anche la X della finestra: stessa conferma + eventuale backup
+    if (isTauri() && appWindow?.onCloseRequested) {
+        appWindow.onCloseRequested(async (event) => {
+            // Se abbiamo già confermato, lascia chiudere
+            if (chiusuraInCorso) return;
+            // Blocca la chiusura e mostra i dialoghi
+            event.preventDefault();
+            await eseguiChiusuraConBackup();
         });
     }
 
@@ -1195,11 +1282,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Alert manutenzioni mezzi (Km / Giorni)
+    // Alert scadute + badge aperte su GESTIONE AUTOPARCO
     if (tauriReady) {
-        await aggiornaAvvisoManutenzioni();
+        await Promise.all([
+            aggiornaAvvisoManutenzioni(),
+            aggiornaBadgeManutenzioniAperte()
+        ]);
         window.addEventListener('focus', () => {
             aggiornaAvvisoManutenzioni();
+            aggiornaBadgeManutenzioniAperte();
         });
         document.getElementById('sidebar-manutenzione-alert')?.addEventListener('click', async () => {
             try {

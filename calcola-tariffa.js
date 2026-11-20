@@ -14,7 +14,7 @@ const MARKUP = `
         <div class="ct-dialog-campi">
             <div class="ct-field">
                 <label for="ct-costo-km">COSTO AL KM</label>
-                <input type="text" id="ct-costo-km" class="ns-input" inputmode="decimal" autocomplete="off" placeholder="es. 0,70">
+                <input type="text" id="ct-costo-km" class="ns-input ct-costo-km-bloccato" inputmode="decimal" autocomplete="off" readonly tabindex="-1" title="Valore preso dalle Impostazioni: non si può modificare qui">
             </div>
             <div class="ct-field">
                 <label for="ct-pedaggio">PEDAGGIO AUTOSTRADALE</label>
@@ -327,12 +327,7 @@ export async function apriCalcolaTariffa(options = {}) {
 
     const daImpostazioni = await caricaValoriDaImpostazioni(options.getInvoke, options.isTauri);
 
-    let costoKm = options.costoKmIniziale;
-    if (costoKm === undefined || costoKm === null || String(costoKm).trim() === '') {
-        costoKm = daImpostazioni.costoKm;
-    } else {
-        costoKm = parseNumeroIt(costoKm);
-    }
+    const costoKm = daImpostazioni.costoKm;
 
     let extra = options.extraIniziale;
     if (extra === undefined || extra === null || String(extra).trim() === '') {
@@ -346,7 +341,11 @@ export async function apriCalcolaTariffa(options = {}) {
         if (el) el.value = v;
     };
 
-    setVal('ct-costo-km', formatNumeroIt(costoKm, 2));
+    const campoCostoKm = document.getElementById('ct-costo-km');
+    if (campoCostoKm) {
+        campoCostoKm.readOnly = true;
+        campoCostoKm.value = formatNumeroIt(costoKm, 2);
+    }
     setVal('ct-pedaggio', '');
     setVal('ct-extra', formatNumeroIt(extra, 2));
     const kmInit = options.chilometriIniziali;

@@ -1,0 +1,93 @@
+/* Dialogo backup Proton Drive alla chiusura app */
+
+.backup-dialog {
+    width: min(100%, 520px);
+}
+
+.backup-dialog-messaggio {
+    margin: 0 0 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #222;
+    text-align: center;
+    line-height: 1.35;
+}
+
+.backup-dialog-hint {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: #555;
+    text-align: center;
+    line-height: 1.35;
+}
+
+.backup-path-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+    margin-bottom: 10px;
+}
+
+.backup-path-row input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid #bbb;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.backup-btn-sfoglia {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    border: 1px solid #455a64;
+    border-radius: 4px;
+    background: #546e7a;
+    color: #fff;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.backup-btn-sfoglia:hover {
+    background: #37474f;
+}
+
+.backup-dialog-status {
+    min-height: 1.2em;
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: #1565c0;
+    text-align: center;
+}
+
+.backup-dialog-status.error {
+    color: #b71c1c;
+}
+
+.backup-dialog-status.ok {
+    color: #2e7d32;
+}
+
+.backup-dialog-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+.backup-dialog .ns-dialog-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.backup-btn-annulla {
+    background-color: #fff;
+    border-color: #90a4ae;
+    color: #455a64;
+}
+
+.backup-btn-annulla:hover {
+    background-color: #eceff1;
+}

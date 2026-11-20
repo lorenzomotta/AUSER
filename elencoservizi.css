@@ -54,6 +54,22 @@ body {
 
 .header-right {
     flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    max-width: none;
+}
+
+.header-right > .btn {
+    flex: 0 0 auto;
+    padding: 6px 10px;
+    font-size: 12px;
+    line-height: 1.2;
+    width: auto;
+    min-width: 0;
+    white-space: nowrap;
 }
 
 .header-title-block {
@@ -131,8 +147,8 @@ body {
 }
 
 .btn-ricerca-header {
-    padding: 8px 20px;
-    font-size: 14px;
+    padding: 6px 10px;
+    font-size: 12px;
     font-weight: bold;
     background-color: #28a745;
     color: white;
@@ -141,8 +157,8 @@ body {
     cursor: pointer;
     transition: background-color 0.3s;
     white-space: nowrap;
-    width: 140px;
-    min-width: 140px;
+    width: auto;
+    min-width: 0;
     text-align: center;
 }
 
@@ -367,6 +383,79 @@ body {
     max-width: 320px !important;
 }
 
+/* Con icone FILTRA: Operatore e Accompagnatore più larghi */
+.form-row-operatore-mezzo .form-group-operatore-filtra,
+.form-row-operatore-mezzo .form-group-accompagnatore {
+    flex: 1 1 300px !important;
+    min-width: 240px !important;
+    max-width: 380px !important;
+}
+
+.form-row-operatore-mezzo .form-group-mezzo {
+    flex: 0 0 240px;
+    min-width: 180px;
+    max-width: 280px;
+}
+
+.btn-filtra:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* Pulsanti solo icona */
+.btn.btn-icona {
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.btn.btn-icona .es-icona {
+    display: block;
+    pointer-events: none;
+}
+
+.form-actions-icone {
+    gap: 6px;
+}
+
+.form-actions-icone .btn.btn-icona {
+    min-width: 34px;
+    width: 34px;
+    height: 34px;
+}
+
+.btn-filtra.btn-icona {
+    min-width: 32px;
+    padding: 0;
+}
+
+.btn-filtra.btn-icona.is-attivo {
+    background-color: #ef6c00;
+}
+
+.btn-filtra.btn-icona.is-attivo:hover {
+    background-color: #e65100;
+}
+
+.btn-modifica.btn-icona {
+    background-color: #fff;
+    color: #c62828;
+    border: 1px solid #c62828;
+}
+
+.btn-modifica.btn-icona:hover {
+    background-color: #ffebee;
+    color: #b71c1c;
+    border-color: #b71c1c;
+}
+
 
 .form-group label {
     font-weight: bold;
@@ -459,6 +548,12 @@ body {
     flex: 0 0 auto;
     padding-left: 7px;
     padding-right: 7px;
+}
+
+.form-actions-inline .btn.btn-icona {
+    min-width: 34px;
+    width: 34px;
+    padding: 0;
 }
 
 .btn {
@@ -800,8 +895,8 @@ body {
 .modal-ricerca-content {
     background-color: white;
     border-radius: 8px;
-    width: 90%;
-    max-width: 900px;
+    width: 92%;
+    max-width: 980px;
     max-height: 90vh;
     display: flex;
     flex-direction: column;
@@ -847,33 +942,52 @@ body {
 }
 
 .ricerca-form-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
-.ricerca-form-group-full {
-    grid-column: span 2;
+.ricerca-riga {
+    display: grid;
+    align-items: end;
+    gap: 10px;
+}
+
+/* Larghezze più equilibrate sulle 3 righe */
+.ricerca-riga-1 {
+    grid-template-columns: 0.85fr 0.85fr 1.15fr 1.15fr 1.35fr;
+}
+
+.ricerca-riga-2 {
+    grid-template-columns: 1.5fr 1fr 1fr 1fr;
+}
+
+.ricerca-riga-3 {
+    grid-template-columns: 0.9fr 0.9fr 1.35fr 1.35fr;
 }
 
 .ricerca-form-group {
     display: flex;
     flex-direction: column;
+    min-width: 0;
 }
 
 .ricerca-form-group label {
     font-weight: bold;
-    margin-bottom: 5px;
+    margin-bottom: 4px;
     color: #333;
-    font-size: 14px;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .ricerca-input,
 .ricerca-select {
-    padding: 8px 12px;
+    padding: 6px 8px;
     border: 1px solid #ccc;
     border-radius: 4px;
-    font-size: 14px;
+    font-size: 13px;
     width: 100%;
     box-sizing: border-box;
 }
@@ -976,12 +1090,10 @@ body {
         align-self: stretch;
     }
     
-    .ricerca-form-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .ricerca-form-group-full {
-        grid-column: span 1;
+    .ricerca-riga-1,
+    .ricerca-riga-2,
+    .ricerca-riga-3 {
+        grid-template-columns: 1fr 1fr;
     }
 }
 

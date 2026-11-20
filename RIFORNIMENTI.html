@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rifornimenti - AUSER Asti</title>
+    <link rel="stylesheet" href="responsive-app.css">
+    <link rel="stylesheet" href="rifornimenti.css">
+</head>
+<body>
+    <header class="rif-header">
+        <div class="rif-header-titolo">
+            <h1>RIFORNIMENTI</h1>
+            <p class="rif-sottotitolo" id="rif-sottotitolo">Tutti i mezzi</p>
+        </div>
+        <div class="rif-header-azioni">
+            <span class="rif-stato" id="rif-stato" aria-live="polite"></span>
+            <button type="button" class="rif-btn rif-btn-tutti" id="btn-mostra-tutti">MOSTRA TUTTI</button>
+            <button type="button" class="rif-btn rif-btn-torna" id="btn-torna">TORNA</button>
+        </div>
+    </header>
+
+    <main class="rif-main">
+        <p class="rif-messaggio" id="rif-messaggio">Caricamento rifornimenti…</p>
+        <div class="rif-tabella-wrap" id="rif-tabella-wrap" hidden>
+            <table class="rif-tabella">
+                <thead>
+                    <tr>
+                        <th>DATA</th>
+                        <th>MEZZO</th>
+                        <th>OPERATORE</th>
+                        <th>DISTRIBUTORE</th>
+                        <th>KM</th>
+                        <th>LITRI</th>
+                        <th>COSTO</th>
+                        <th>NOTE</th>
+                    </tr>
+                </thead>
+                <tbody id="rif-corpo"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <footer class="rif-footer" id="rif-footer" hidden>
+        <p>Totale rifornimenti <strong id="rif-totale-n">0</strong></p>
+        <p>Totale litri <strong id="rif-totale-litri">0</strong></p>
+        <p>Totale costo <strong id="rif-totale-costo">0,00 €</strong></p>
+    </footer>
+
+    <script type="module" src="rifornimenti.js"></script>
+</body>
+</html>

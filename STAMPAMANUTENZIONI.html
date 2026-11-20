@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elenco manutenzioni - AUSER Asti</title>
+    <link rel="stylesheet" href="responsive-app.css">
+    <link rel="stylesheet" href="stampamanutenzioni.css">
+</head>
+<body>
+    <div class="em-toolbar no-print">
+        <button type="button" class="em-btn em-btn-chiudi" id="btn-chiudi">CHIUDI</button>
+        <button type="button" class="em-btn em-btn-stampa" id="btn-stampa">STAMPA</button>
+        <label class="em-filtro-anno" for="filtro-anno">
+            Anno
+            <select id="filtro-anno" title="Filtra per anno">
+                <option value="tutti">Tutti</option>
+            </select>
+        </label>
+        <span class="em-toolbar-status" id="em-status" aria-live="polite"></span>
+    </div>
+
+    <div class="em-loading" id="em-loading">Caricamento elenco…</div>
+    <div class="em-errore" id="em-errore" hidden></div>
+
+    <article class="em-page" id="em-page" hidden>
+        <header class="em-title-bar">
+            <h1>ELENCO MANUTENZIONI COMPLETATE</h1>
+            <p class="em-subtitle" id="em-mezzo"></p>
+            <p class="em-meta" id="em-meta"></p>
+        </header>
+        <div id="em-contenuto"></div>
+        <footer class="em-footer">
+            AUSER Asti — elenco manutenzioni mezzo
+        </footer>
+    </article>
+
+    <script type="module" src="stampamanutenzioni.js"></script>
+</body>
+</html>

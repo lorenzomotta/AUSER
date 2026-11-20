@@ -478,6 +478,36 @@ body {
     grid-template-columns: minmax(150px, 0.85fr) minmax(180px, 1.1fr) minmax(140px, 1fr);
 }
 
+/* Riga 1: Operatore | Mezzo | Dotazioni | ZTL | Assicurazione
+   Riga 2: Accompagnatore | Note mezzo (span fino a destra) */
+.ns-grid-operatore-mezzo {
+    grid-template-columns:
+        minmax(160px, 1.15fr)
+        minmax(150px, 1.1fr)
+        minmax(120px, 0.95fr)
+        98px
+        118px;
+    gap: 8px 12px;
+    align-items: end;
+}
+
+.ns-field-accompagnatore {
+    grid-column: 1;
+}
+
+.ns-field-note-mezzo-span {
+    grid-column: 2 / -1;
+}
+
+.ns-grid-operatore-mezzo .mod-field-scadenza label {
+    font-size: 10px;
+}
+
+.ns-grid-operatore-mezzo .mod-input-scadenza {
+    font-size: 11px;
+    padding: 5px 8px;
+}
+
 .ns-grid-pagamento {
     grid-template-columns:
         minmax(118px, 0.95fr)
@@ -914,6 +944,23 @@ body {
         grid-template-columns: 1fr 1fr;
     }
 
+    .ns-grid-operatore-mezzo {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .ns-field-accompagnatore {
+        grid-column: 1;
+    }
+
+    .ns-field-note-mezzo-span {
+        grid-column: 1 / -1;
+    }
+
+    .ns-grid-operatore-mezzo .mod-field-scadenza-ztl,
+    .ns-grid-operatore-mezzo .mod-field-scadenza-assic {
+        grid-column: auto;
+    }
+
     .ns-grid-pagamento {
         grid-template-columns: 1fr 1fr;
     }
@@ -953,6 +1000,10 @@ body {
 
     .ns-field-dotazioni {
         grid-column: 1 / -1;
+    }
+
+    .ns-grid-operatore-mezzo .ns-field-dotazioni {
+        grid-column: auto;
     }
 
     .ns-grid-mezzo-dettagli {
@@ -1025,6 +1076,15 @@ body {
 
     .ns-grid-operatore {
         grid-template-columns: 1fr;
+    }
+
+    .ns-grid-operatore-mezzo {
+        grid-template-columns: 1fr;
+    }
+
+    .ns-field-accompagnatore,
+    .ns-field-note-mezzo-span {
+        grid-column: 1;
     }
 
     .ns-grid-pagamento {

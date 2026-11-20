@@ -22,7 +22,10 @@ import { ensureTariffeDonazione, getTariffeDonazione, testoPulsanteTariffa } fro
 let invoke;
 
 let allTesserati = [];
+/** Soci con caselle Operatore, Attivo e Autista tutte spuntate. */
 let allOperatori = [];
+/** Soci con mansione ACCOMPAGNATORE spuntata (campo Disponibilita). */
+let allAccompagnatori = [];
 let allAutomezzi = [];
 let allMotivazioni = [];
 let allComuniPrelievo = [];
@@ -929,6 +932,37 @@ function popolaSelectStatiServizio(valoreSelezionato = '') {
     if (selezionato) select.value = selezionato;
 }
 
+function parseDisponibilitaCodici(value) {
+    if (!value) return [];
+    return String(value)
+        .split(/[,;]/)
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+}
+
+function haMansioneAccompagnatore(tesserato) {
+    return parseDisponibilitaCodici(tesserato?.disponibilita).includes('ACCOMPAGNATORE');
+}
+
+function haMansioneAutista(tesserato) {
+    return parseDisponibilitaCodici(tesserato?.disponibilita).includes('AUTISTA');
+}
+
+/** La casella è spuntata se il valore arriva come true, SI, 1, e simili. */
+function isFlagSpuntato(value) {
+    if (value === true || value === 1) return true;
+    const s = String(value ?? '').trim().toUpperCase();
+    return s === 'SI' || s === 'SÌ' || s === 'TRUE' || s === '1'
+        || s === 'YES' || s === 'Y' || s === 'S' || s === 'ATTIVO';
+}
+
+/** Operatore del servizio: caselle Operatore, Attivo e Autista tutte spuntate. */
+function isAutistaAttivo(tesserato) {
+    return isFlagSpuntato(tesserato?.operatore)
+        && isFlagSpuntato(tesserato?.attivo)
+        && haMansioneAutista(tesserato);
+}
+
 function popolaSelectOperatori() {
     const select = document.getElementById('ns-operatore');
     if (!select) return;
@@ -941,6 +975,35 @@ function popolaSelectOperatori() {
             opt.textContent = op.nominativo || '';
             select.appendChild(opt);
         });
+}
+
+function popolaSelectAccompagnatori() {
+    const select = document.getElementById('ns-accompagnatore');
+    if (!select) return;
+
+    const valoreAttuale = select.value;
+    select.innerHTML = '';
+
+    const vuoto = document.createElement('option');
+    vuoto.value = '';
+    vuoto.textContent = '— Seleziona accompagnatore —';
+    select.appendChild(vuoto);
+
+    allAccompagnatori
+        .slice()
+        .sort((a, b) => (a.nominativo || '').localeCompare(b.nominativo || '', 'it'))
+        .forEach((acc) => {
+            const nome = String(acc.nominativo || '').trim();
+            if (!nome) return;
+            const opt = document.createElement('option');
+            opt.value = nome;
+            opt.textContent = nome;
+            select.appendChild(opt);
+        });
+
+    if (valoreAttuale && [...select.options].some((o) => o.value === valoreAttuale)) {
+        select.value = valoreAttuale;
+    }
 }
 
 function popolaSelectMezzi() {
@@ -1836,7 +1899,7 @@ function raccogliDatiForm() {
         luogo_destinazione: getValore('ns-luogo-destinazione'),
         note_arrivo: document.getElementById('ns-note-arrivo')?.value || '',
         operatore: getValore('ns-operatore'),
-        operatore_2: '',
+        operatore_2: getValore('ns-accompagnatore'),
         mezzo: getValore('ns-mezzo'),
         dotazioni: getValore('ns-dotazioni'),
         note_mezzo: document.getElementById('ns-note-mezzo')?.value || '',
@@ -2176,8 +2239,8 @@ async function caricaDatiIniziali() {
         }
     } else {
         allTesserati = [
-            { idsocio: '101', nominativo: 'ASTUTI GUIDO', attivo: 'SI', archivia: 'false', operatore: 'NO' },
-            { idsocio: '102', nominativo: 'ROSSI MARIA', attivo: 'SI', archivia: 'false', operatore: 'SI' }
+            { idsocio: '101', nominativo: 'ASTUTI GUIDO', attivo: 'SI', archivia: 'false', operatore: 'NO', disponibilita: '' },
+            { idsocio: '102', nominativo: 'ROSSI MARIA', attivo: 'SI', archivia: 'false', operatore: 'SI', disponibilita: 'AUTISTA' }
         ];
         allAutomezzi = [
             {
@@ -2205,15 +2268,15 @@ async function caricaDatiIniziali() {
         allStatiServizio = [];
     }
 
-    allOperatori = allTesserati.filter(t => {
-        const op = String(t.operatore || '').trim().toUpperCase();
-        return op === 'SI' || op === 'TRUE' || op === '1';
-    });
+    allOperatori = allTesserati.filter((t) => isAutistaAttivo(t) && String(t.nominativo || '').trim());
+
+    allAccompagnatori = allTesserati.filter((t) => haMansioneAccompagnatore(t));
 
     popolaSelectRichiedenti();
     popolaSelectTipiPagamento();
     popolaSelectStatiServizio();
     popolaSelectOperatori();
+    popolaSelectAccompagnatori();
     popolaSelectMezzi();
     await ensureTariffeDonazione(invoke);
     aggiornaEtichetteTariffe();

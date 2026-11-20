@@ -137,8 +137,8 @@ async function caricaTelefoniTrasportato(idsocio) {
     }
 }
 
-async function caricaTelefonoOperatore(nomeOperatore, tesserati) {
-    const nome = String(nomeOperatore || '').trim().toUpperCase();
+function caricaTelefonoDaNominativo(nomePersona, tesserati) {
+    const nome = String(nomePersona || '').trim().toUpperCase();
     if (!nome) return '';
     const lista = Array.isArray(tesserati) ? tesserati : [];
     const found = lista.find(t => String(t.nominativo || '').trim().toUpperCase() === nome);
@@ -158,6 +158,8 @@ function popolaScheda(servizio, extra) {
 
     setText('ss-operatore-nome', servizio.operatore || '');
     setText('ss-operatore-tel', extra.telefonoOperatore || '');
+    setText('ss-accompagnatore-nome', servizio.operatore_2 || extra.accompagnatore || '');
+    setText('ss-accompagnatore-tel', extra.telefonoAccompagnatore || '');
     setText('ss-automezzo', extra.automezzoTesto || '');
     setText('ss-targa', extra.targa || '');
 
@@ -237,12 +239,16 @@ async function caricaScheda() {
         } catch (_) { /* ignore */ }
 
         const telefoniTrasportato = await caricaTelefoniTrasportato(servizio.idsocio);
-        const telefonoOperatore = await caricaTelefonoOperatore(servizio.operatore, tesserati);
+        const accompagnatoreNome = String(servizio.operatore_2 || '').trim();
+        const telefonoOperatore = caricaTelefonoDaNominativo(servizio.operatore, tesserati);
+        const telefonoAccompagnatore = caricaTelefonoDaNominativo(accompagnatoreNome, tesserati);
 
         popolaScheda(servizio, {
             telefonoTrasportato: telefoniTrasportato.principale,
             altriTelefoniTrasportato: telefoniTrasportato.altri,
             telefonoOperatore,
+            accompagnatore: accompagnatoreNome,
+            telefonoAccompagnatore,
             automezzoTesto: formatAutomezzo(servizio, automezzi),
             targa: targaDaMezzo(servizio, automezzi),
             oraArrivo: ''

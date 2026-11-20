@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scheda manutenzione - AUSER Asti</title>
+    <link rel="stylesheet" href="responsive-app.css">
+    <link rel="stylesheet" href="schedamanutenzione.css">
+</head>
+<body>
+    <div class="sm-toolbar no-print">
+        <button type="button" class="sm-btn sm-btn-chiudi" id="btn-chiudi">CHIUDI</button>
+        <button type="button" class="sm-btn sm-btn-stampa" id="btn-stampa">STAMPA</button>
+        <span class="sm-toolbar-status" id="sm-status" aria-live="polite"></span>
+    </div>
+
+    <div class="sm-loading" id="sm-loading">Caricamento scheda...</div>
+    <div class="sm-errore" id="sm-errore" hidden></div>
+
+    <article class="sm-page" id="sm-page" hidden>
+        <header class="sm-title-bar">
+            <h1>SCHEDA MANUTENZIONE</h1>
+            <p class="sm-subtitle" id="sm-stato-badge"></p>
+        </header>
+
+        <section class="sm-blocco sm-blocco-mezzo">
+            <div class="sm-band">MEZZO</div>
+            <div class="sm-box sm-box-wide" id="sm-mezzo"></div>
+        </section>
+
+        <section class="sm-grid sm-grid-meta">
+            <div class="sm-pair">
+                <span class="sm-label">ID MANUTENZIONE</span>
+                <div class="sm-box" id="sm-id"></div>
+            </div>
+            <div class="sm-pair">
+                <span class="sm-label">STATO</span>
+                <div class="sm-box" id="sm-stato"></div>
+            </div>
+            <div class="sm-pair">
+                <span class="sm-label">DATA ESECUZIONE</span>
+                <div class="sm-box" id="sm-data"></div>
+            </div>
+            <div class="sm-pair">
+                <span class="sm-label">TIPOLOGIA</span>
+                <div class="sm-box" id="sm-tipologia"></div>
+            </div>
+        </section>
+
+        <section class="sm-blocco">
+            <div class="sm-band">MOTIVAZIONE</div>
+            <div class="sm-box sm-box-wide" id="sm-motivazione"></div>
+        </section>
+
+        <section class="sm-blocco" id="sm-sezione-km">
+            <div class="sm-band">PROGRAMMAZIONE KM</div>
+            <div class="sm-grid sm-grid-4">
+                <div class="sm-pair">
+                    <span class="sm-label">KM RIFERIMENTO</span>
+                    <div class="sm-box" id="sm-km-rif"></div>
+                </div>
+                <div class="sm-pair">
+                    <span class="sm-label">DELTA CHILOMETRI</span>
+                    <div class="sm-box" id="sm-delta-km"></div>
+                </div>
+                <div class="sm-pair">
+                    <span class="sm-label">KM PREVISTI</span>
+                    <div class="sm-box" id="sm-km-prev"></div>
+                </div>
+                <div class="sm-pair">
+                    <span class="sm-label">AVVISA PRIMA (KM)</span>
+                    <div class="sm-box" id="sm-preavviso-km"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="sm-blocco" id="sm-sezione-giorni" hidden>
+            <div class="sm-band">PROGRAMMAZIONE GIORNI</div>
+            <div class="sm-grid sm-grid-3">
+                <div class="sm-pair">
+                    <span class="sm-label">DELTA GIORNI</span>
+                    <div class="sm-box" id="sm-delta-giorni"></div>
+                </div>
+                <div class="sm-pair">
+                    <span class="sm-label">DATA PREVISTA</span>
+                    <div class="sm-box" id="sm-data-prev"></div>
+                </div>
+                <div class="sm-pair">
+                    <span class="sm-label">AVVISA PRIMA (GG)</span>
+                    <div class="sm-box" id="sm-preavviso-gg"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="sm-grid sm-grid-meta">
+            <div class="sm-pair sm-pair-wide">
+                <span class="sm-label">ESEGUITA PRESSO</span>
+                <div class="sm-box" id="sm-presso"></div>
+            </div>
+            <div class="sm-pair">
+                <span class="sm-label">OPERATORE</span>
+                <div class="sm-box" id="sm-operatore"></div>
+            </div>
+            <div class="sm-pair">
+                <span class="sm-label">PAGATO (€)</span>
+                <div class="sm-box" id="sm-pagato"></div>
+            </div>
+        </section>
+
+        <section class="sm-blocco">
+            <div class="sm-band">NOTE MANUTENZIONE</div>
+            <div class="sm-box sm-box-note" id="sm-note"></div>
+        </section>
+
+        <footer class="sm-footer">
+            AUSER Asti — report manutenzione mezzo
+        </footer>
+    </article>
+
+    <script type="module" src="schedamanutenzione.js"></script>
+</body>
+</html>

@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="responsive-app.css">
     <link rel="stylesheet" href="elencoservizi.css">
     <link rel="stylesheet" href="elencoservizi-pdf.css">
+    <link rel="stylesheet" href="pagamento-cumulativo.css">
     <link rel="stylesheet" href="nuovoservizio.css">
     <link rel="stylesheet" href="modifica-servizio.css">
     <link rel="stylesheet" href="completa-servizio.css">
@@ -35,6 +36,10 @@
                 </div>
             </div>
             <div class="header-right">
+                <button type="button" class="btn btn-paga-tutti-header" id="btn-paga-tutti" disabled title="Seleziona almeno 2 servizi">
+                    PAGA TUTTI
+                    <span class="pcum-selezione-hint">(<span id="pcum-selezione-count">0</span>)</span>
+                </button>
                 <button type="button" class="btn btn-stampa-pdf-header" id="btn-stampa-pdf-elenco">STAMPA PDF</button>
                 <button class="btn btn-ricerca-header" id="btn-ricerca">RICERCA</button>
             </div>
@@ -49,75 +54,95 @@
                 </div>
                 <div class="modal-ricerca-body">
                     <div class="ricerca-form-grid">
-                        <div class="ricerca-form-group">
-                            <label for="ricerca-idservizio">IDSERVIZIO</label>
-                            <input type="text" id="ricerca-idservizio" class="ricerca-input">
-                        </div>
-                        <div class="ricerca-form-group">
-                            <label for="ricerca-idsocio">IDSOCIO</label>
-                            <input type="text" id="ricerca-idsocio" class="ricerca-input">
-                        </div>
-                        <div class="ricerca-form-group">
-                            <label for="ricerca-data-da">DATA DA</label>
-                            <input type="date" id="ricerca-data-da" class="ricerca-input">
-                        </div>
-                        <div class="ricerca-form-group">
-                            <label for="ricerca-data-a">DATA A</label>
-                            <input type="date" id="ricerca-data-a" class="ricerca-input">
-                        </div>
-                        <div class="ricerca-form-group ricerca-form-group-full">
-                            <label for="ricerca-nominativo">NOMINATIVO</label>
-                            <div class="autocomplete-wrapper">
-                                <input type="text" id="ricerca-nominativo" class="ricerca-input autocomplete-input" autocomplete="off">
-                                <div id="ricerca-nominativo-suggestions" class="autocomplete-suggestions"></div>
+                        <div class="ricerca-riga ricerca-riga-1">
+                            <div class="ricerca-form-group">
+                                <label for="ricerca-idservizio">IDSERVIZIO</label>
+                                <input type="text" id="ricerca-idservizio" class="ricerca-input" inputmode="numeric">
+                            </div>
+                            <div class="ricerca-form-group">
+                                <label for="ricerca-idsocio">IDSOCIO</label>
+                                <input type="text" id="ricerca-idsocio" class="ricerca-input" inputmode="numeric">
+                            </div>
+                            <div class="ricerca-form-group">
+                                <label for="ricerca-data-da">DATA DA</label>
+                                <input type="date" id="ricerca-data-da" class="ricerca-input">
+                            </div>
+                            <div class="ricerca-form-group">
+                                <label for="ricerca-data-a">DATA A</label>
+                                <input type="date" id="ricerca-data-a" class="ricerca-input">
+                            </div>
+                            <div class="ricerca-form-group">
+                                <label for="ricerca-pagamento-cumulativo">PAG. CUMULATIVO</label>
+                                <select id="ricerca-pagamento-cumulativo" class="ricerca-select">
+                                    <option value="">Tutti</option>
+                                    <option value="SI">Solo cumulativi</option>
+                                    <option value="NO">Non cumulativi</option>
+                                </select>
                             </div>
                         </div>
-                        <div class="ricerca-form-group">
-                            <label for="ricerca-stato-incasso">STATO INCASSO</label>
-                            <select id="ricerca-stato-incasso" class="ricerca-select">
-                                <option value="">Tutti</option>
-                                <option value="INCASSATO">INCASSATO</option>
-                                <option value="DA INCASSARE">DA INCASSARE</option>
-                                <option value="GRATIS">GRATIS</option>
-                                <option value="ANNULLATO">ANNULLATO</option>
-                            </select>
+                        <div class="ricerca-riga ricerca-riga-2">
+                            <div class="ricerca-form-group">
+                                <label for="ricerca-nominativo">NOMINATIVO</label>
+                                <div class="autocomplete-wrapper">
+                                    <input type="text" id="ricerca-nominativo" class="ricerca-input autocomplete-input" autocomplete="off">
+                                    <div id="ricerca-nominativo-suggestions" class="autocomplete-suggestions"></div>
+                                </div>
+                            </div>
+                            <div class="ricerca-form-group">
+                                <label for="ricerca-stato-incasso">STATO INCASSO</label>
+                                <select id="ricerca-stato-incasso" class="ricerca-select">
+                                    <option value="">Tutti</option>
+                                    <option value="INCASSATO">INCASSATO</option>
+                                    <option value="DA INCASSARE">DA INCASSARE</option>
+                                    <option value="GRATIS">GRATIS</option>
+                                    <option value="ANNULLATO">ANNULLATO</option>
+                                </select>
+                            </div>
+                            <div class="ricerca-form-group">
+                                <label for="ricerca-tipo-pagamento">TIPO PAGAMENTO</label>
+                                <select id="ricerca-tipo-pagamento" class="ricerca-select">
+                                    <option value="">Tutti</option>
+                                </select>
+                            </div>
+                            <div class="ricerca-form-group">
+                                <label for="ricerca-tipo-servizio">TIPO SERVIZIO</label>
+                                <select id="ricerca-tipo-servizio" class="ricerca-select">
+                                    <option value="">Tutti</option>
+                                    <option value="STANDARD">Standard</option>
+                                    <option value="SOLLEVATORE">Sollevatore</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="ricerca-form-group">
-                            <label for="ricerca-tipo-pagamento">TIPO DI PAGAMENTO</label>
-                            <select id="ricerca-tipo-pagamento" class="ricerca-select">
-                                <option value="">Tutti</option>
-                            </select>
-                        </div>
-                        <div class="ricerca-form-group">
-                            <label for="ricerca-tipo-servizio">TIPO DI SERVIZIO</label>
-                            <select id="ricerca-tipo-servizio" class="ricerca-select">
-                                <option value="">Tutti</option>
-                                <option value="STANDARD">Standard</option>
-                                <option value="SOLLEVATORE">Sollevatore</option>
-                            </select>
-                        </div>
-                        <div class="ricerca-form-group">
-                            <label for="ricerca-carrozzina">CARROZZINA</label>
-                            <select id="ricerca-carrozzina" class="ricerca-select">
-                                <option value="">Tutti</option>
-                                <option value="AUSER">AUSER</option>
-                                <option value="SOCIO">SOCIO</option>
-                            </select>
-                        </div>
-                        <div class="ricerca-form-group">
-                            <label for="ricerca-richiedente">RICHIEDENTE</label>
-                            <select id="ricerca-richiedente" class="ricerca-select">
-                                <option value="">Tutti</option>
-                                <option value="SOCIO">SOCIO</option>
-                                <option value="COMUNE">COMUNE</option>
-                                <option value="ALTRI">ALTRI</option>
-                            </select>
-                        </div>
-                        <div class="ricerca-form-group">
-                            <label for="ricerca-operatore">OPERATORE</label>
-                            <select id="ricerca-operatore" class="ricerca-select">
-                                <option value="">Tutti</option>
-                            </select>
+                        <div class="ricerca-riga ricerca-riga-3">
+                            <div class="ricerca-form-group">
+                                <label for="ricerca-carrozzina">CARROZZINA</label>
+                                <select id="ricerca-carrozzina" class="ricerca-select">
+                                    <option value="">Tutti</option>
+                                    <option value="AUSER">AUSER</option>
+                                    <option value="SOCIO">SOCIO</option>
+                                </select>
+                            </div>
+                            <div class="ricerca-form-group">
+                                <label for="ricerca-richiedente">RICHIEDENTE</label>
+                                <select id="ricerca-richiedente" class="ricerca-select">
+                                    <option value="">Tutti</option>
+                                    <option value="SOCIO">SOCIO</option>
+                                    <option value="COMUNE">COMUNE</option>
+                                    <option value="ALTRI">ALTRI</option>
+                                </select>
+                            </div>
+                            <div class="ricerca-form-group">
+                                <label for="ricerca-operatore">OPERATORE</label>
+                                <select id="ricerca-operatore" class="ricerca-select">
+                                    <option value="">Tutti</option>
+                                </select>
+                            </div>
+                            <div class="ricerca-form-group">
+                                <label for="ricerca-accompagnatore">ACCOMPAGNATORE</label>
+                                <select id="ricerca-accompagnatore" class="ricerca-select">
+                                    <option value="">Tutti</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -133,7 +158,81 @@
             <div class="servizi-lista-loading">Caricamento servizi...</div>
         </div>
     </div>
-    
+
+    <!-- Modale Pagamento cumulativo -->
+    <div id="modal-pagamento-cumulativo" class="modal-pcum-overlay" style="display: none;" aria-hidden="true">
+        <div class="modal-pcum-content" role="dialog" aria-labelledby="modal-pcum-title" aria-modal="true">
+            <div class="modal-pcum-header">
+                <h2 id="modal-pcum-title">Pagamento cumulativo</h2>
+                <button type="button" class="modal-pcum-close" id="btn-pcum-chiudi" title="Chiudi" aria-label="Chiudi">&times;</button>
+            </div>
+            <div class="modal-pcum-body">
+                <p class="modal-pcum-intro">
+                    Compila i dati del bonifico una sola volta: verranno copiati su tutti i servizi selezionati.
+                    L’importo di donazione di ogni servizio resta quello già presente.
+                </p>
+                <ul class="pcum-lista-servizi" id="pcum-lista-servizi"></ul>
+                <div class="pcum-form-grid">
+                    <div class="pcum-field">
+                        <label for="pcum-stato-incasso">STATO INCASSO</label>
+                        <select id="pcum-stato-incasso">
+                            <option value="INCASSATO" selected>INCASSATO</option>
+                            <option value="DA INCASSARE">DA INCASSARE</option>
+                            <option value="GRATIS">GRATIS</option>
+                            <option value="ANNULLATO">ANNULLATO</option>
+                        </select>
+                    </div>
+                    <div class="pcum-field">
+                        <label for="pcum-tipo-pagamento">TIPO DI PAGAMENTO</label>
+                        <select id="pcum-tipo-pagamento"></select>
+                    </div>
+                    <div class="pcum-field">
+                        <label for="pcum-data-bonifico">DATA INCASSO</label>
+                        <input type="date" id="pcum-data-bonifico">
+                    </div>
+                    <div class="pcum-field">
+                        <label for="pcum-data-ricevuta">DATA RICEVUTA</label>
+                        <input type="date" id="pcum-data-ricevuta">
+                    </div>
+                    <div class="pcum-field">
+                        <label for="pcum-numero-ricevuta">NUMERO RICEVUTA</label>
+                        <input type="text" id="pcum-numero-ricevuta" inputmode="numeric" autocomplete="off">
+                    </div>
+                    <div class="pcum-field pcum-field-full">
+                        <label for="pcum-riferimento">RIFERIMENTO BONIFICO (CRO / causale)</label>
+                        <input type="text" id="pcum-riferimento" autocomplete="off" placeholder="Es. CRO o causale del bonifico">
+                    </div>
+                </div>
+                <p id="pcum-errore" class="pcum-errore" role="alert" hidden></p>
+            </div>
+            <div class="modal-pcum-footer">
+                <button type="button" class="btn btn-pcum-annulla" id="btn-pcum-annulla">ANNULLA</button>
+                <button type="button" class="btn btn-pcum-conferma" id="btn-pcum-conferma">CONFERMA</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conferma rimozione da pagamento cumulativo -->
+    <div id="modal-pcum-conferma-rimuovi" class="modal-pcum-overlay" style="display: none;" aria-hidden="true">
+        <div class="modal-pcum-content modal-pcum-content-sm" role="dialog" aria-labelledby="modal-pcum-rimuovi-title" aria-modal="true">
+            <div class="modal-pcum-header">
+                <h2 id="modal-pcum-rimuovi-title">Conferma rimozione</h2>
+                <button type="button" class="modal-pcum-close" id="btn-pcum-rimuovi-chiudi" title="Chiudi" aria-label="Chiudi">&times;</button>
+            </div>
+            <div class="modal-pcum-body">
+                <p class="pcum-avviso-non-annullabile">Attenzione: questa operazione <strong>non è annullabile</strong>.</p>
+                <p id="pcum-rimuovi-testo">
+                    Il servizio uscirà dal pagamento cumulativo, lo stato tornerà a
+                    <strong>DA INCASSARE</strong> e i dati di pagamento (tipo, date, ricevuta) verranno azzerati.
+                </p>
+            </div>
+            <div class="modal-pcum-footer">
+                <button type="button" class="btn btn-pcum-annulla" id="btn-pcum-rimuovi-annulla">ANNULLA</button>
+                <button type="button" class="btn btn-pcum-conferma btn-pcum-pericolo" id="btn-pcum-rimuovi-conferma">CONFERMA RIMOZIONE</button>
+            </div>
+        </div>
+    </div>
+
     <div class="es-pdf-overlay" id="modal-stampa-pdf-servizi" hidden>
         <div class="es-pdf-dialog" role="dialog" aria-labelledby="modal-stampa-pdf-servizi-title" aria-modal="true">
             <div class="es-pdf-header">

@@ -7,7 +7,8 @@
  * 3. Tabella user_permissions: user_id + Calendario = true (o is_admin = true)
  * 4. Esegui supabase-calendario-web.sql per le policy RLS
  * 5. Pubblica su GitHub Pages i file: CALENDARIO_WEB.html, calendario-web.css,
- *    calendario-web.js, calendario-web-excel.js, calendario.css, tratta-riepilogo.js, config.public.json
+ *    calendario-web.js, calendario-web-excel.js, calendario.css, tratta-riepilogo.js,
+ *    rifornimento-mobile.js, rifornimento-mobile.css, config.public.json
  */
 
 import {
@@ -27,6 +28,7 @@ import {
     OPZIONI_DEFAULT
 } from './calendario-web-edit.js?v=29';
 import { generaExcelCalendarioWeb } from './calendario-web-excel.js?v=1';
+import { avviaMascheraRifornimento } from './rifornimento-mobile.js?v=3';
 
 let supabaseClient = null;
 let publicConfig = null;
@@ -817,6 +819,22 @@ function rowToServizioCompleto(row) {
             'NoteFineServizio', 'NOTAFINESERVIZIO', 'NOTE_FINE_SERVIZIO', 'NotaFineServizio'
         ]),
         archivia: getFieldAny(row, ['Archiviazione', 'ARCHIVIAZIONE']),
+        pagamento_cumulativo: isTruthyFlag(getFieldAny(row, [
+            'PagamentoCumulativo', 'PAGAMENTOCUMULATIVO', 'pagamento_cumulativo'
+        ])),
+        pagamento_cumulativo_rif: getFieldAny(row, [
+            'PagamentoCumulativo_Rif', 'PagamentoCumulativo_RIF', 'pagamento_cumulativo_rif'
+        ]),
+        pagamento_cumulativo_gruppo: getFieldAny(row, [
+            'PagamentoCumulativo_Gruppo', 'PagamentoCumulativo_GRUPPO', 'pagamento_cumulativo_gruppo'
+        ]),
+        pagamento_cumulativo_numero: (() => {
+            const raw = getFieldAny(row, [
+                'PagamentoCumulativo_Numero', 'PagamentoCumulativo_NUMERO', 'pagamento_cumulativo_numero'
+            ]);
+            const n = parseInt(String(raw || '').trim(), 10);
+            return Number.isFinite(n) && n > 0 ? n : 0;
+        })(),
         _raw: row
     };
     const fine = leggiCampiFineServizioDaRow(row);
@@ -1193,7 +1211,7 @@ function renderEventContent(arg) {
 
 function aggiornaContatore(num) {
     const el = document.getElementById('calendario-count');
-    if (el) el.textContent = `(${num} servizi nel periodo)`;
+    if (el) el.textContent = `(${num})`;
 }
 
 function setLoading(visible, messaggio) {
@@ -1207,7 +1225,13 @@ function setLoading(visible, messaggio) {
     }
 }
 
+let modalitaAnteprima = false;
+
 async function aggiornaEventiCalendario() {
+    if (modalitaAnteprima) {
+        setLoading(false);
+        return;
+    }
     if (!calendar) return;
     const reqId = ++loadRequestId;
     setLoading(true);
@@ -2089,6 +2113,25 @@ async function avviaCalendario(user, perm) {
     setLoading(true, 'Caricamento anagrafiche...');
     await caricaNominativi();
     await caricaAutomezzi();
+    avviaMascheraRifornimento({
+        getClient: () => supabaseClient,
+        nomeTabella: tabella('rifornimenti') || 'Rifornimenti',
+        getMezzi: () => (allAutomezzi || [])
+            .map((mezzo) => {
+                const value = chiaveMezzo(mezzo.id) || chiaveMezzo(mezzo.nr_automezzo);
+                if (!value) return null;
+                return { value, label: etichettaAutomezzo(mezzo) || `Mezzo ${value}` };
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.label.localeCompare(b.label, 'it')),
+        getOperatori: () => (allOperatori || [])
+            .map((op) => {
+                const label = String(op?.label || '').trim();
+                if (!label) return null;
+                return { value: label, label };
+            })
+            .filter(Boolean)
+    });
     initCalendario();
     setupEventListenersCalendario();
     if (isVistaMobileCalendario() && calendar) {
@@ -2099,9 +2142,99 @@ async function avviaCalendario(user, perm) {
     if (calendar) await aggiornaEventiCalendario();
 }
 
+function dataOggiItaliana() {
+    const oggi = new Date();
+    const giorno = String(oggi.getDate()).padStart(2, '0');
+    const mese = String(oggi.getMonth() + 1).padStart(2, '0');
+    return `${giorno}/${mese}/${oggi.getFullYear()}`;
+}
+
+function clientSoloAnteprima() {
+    return {
+        from() {
+            return {
+                select() {
+                    return {
+                        limit() {
+                            return Promise.resolve({
+                                data: [
+                                    { Distributore: 'Q8 Asti' },
+                                    { Distributore: 'Eni centro' }
+                                ],
+                                error: null
+                            });
+                        }
+                    };
+                },
+                insert() {
+                    return Promise.resolve({
+                        error: {
+                            message: 'Anteprima: dal telefono, dopo l’accesso, il rifornimento viene salvato davvero.'
+                        }
+                    });
+                }
+            };
+        }
+    };
+}
+
+function mostraAnteprimaMobile() {
+    modalitaAnteprima = true;
+    const oggi = dataOggiItaliana();
+    allAutomezzi = [{
+        id: '15',
+        nr_automezzo: '8',
+        marca: 'FIAT',
+        modello: 'DOBLO',
+        targa: 'GB372ZG',
+        colore_mezzo: 'Bianco'
+    }];
+    allOperatori = [
+        { value: 'Luca Verdi', label: 'Luca Verdi' },
+        { value: 'Anna Neri', label: 'Anna Neri' }
+    ];
+    mostraCalendario('Anteprima · dati di esempio');
+    configuraVistaInizialeMobile();
+    avviaMascheraRifornimento({
+        getClient: clientSoloAnteprima,
+        nomeTabella: 'Rifornimenti',
+        getMezzi: () => [{ value: '15', label: etichettaAutomezzo(allAutomezzi[0]) }],
+        getOperatori: () => allOperatori.map((op) => ({ value: op.label, label: op.label }))
+    });
+    initCalendario();
+    setupEventListenersCalendario();
+    if (calendar) {
+        impostaVista('dayGridDay');
+        calendar.today();
+        const esempi = [
+            { id: 'a1', data_prelievo: oggi, ora_inizio: '08:30', socio_trasportato: 'Rossi Mario', operatore: 'Luca Verdi', mezzo: '15', stato_servizio: 'DA ESEGUIRE' },
+            { id: 'a2', data_prelievo: oggi, ora_inizio: '10:15', socio_trasportato: 'Bianchi Anna', operatore: 'Anna Neri', mezzo: '15', stato_servizio: 'ESEGUITO' },
+            { id: 'a3', data_prelievo: oggi, ora_inizio: '14:00', socio_trasportato: 'Neri Paolo', operatore: 'Luca Verdi', mezzo: '15', stato_servizio: 'COMPLETATO' }
+        ];
+        esempi.forEach((servizio) => serviziById.set(servizio.id, servizio));
+        calendar.removeAllEvents();
+        calendar.addEventSource(esempi.map(servizioToEvent).filter(Boolean));
+        aggiornaContatore(esempi.length);
+    }
+    setLoading(false);
+}
+
+function anteprimaRichiesta() {
+    return new URLSearchParams(window.location.search).get('anteprima') === 'mobile';
+}
+
 // ─── Avvio ───────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
+    if (anteprimaRichiesta()) {
+        try {
+            mostraAnteprimaMobile();
+        } catch (err) {
+            console.error(err);
+            setLoading(true, `Anteprima: ${err?.message || err}`);
+        }
+        return;
+    }
     try {
         await caricaConfigPubblica();
         document.getElementById('web-login-form')?.addEventListener('submit', gestisciLogin);

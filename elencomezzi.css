@@ -51,6 +51,40 @@ body {
     flex-wrap: wrap;
 }
 
+.btn-header-viaggi {
+    position: static;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: bold;
+    background-color: #00695c;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.btn-header-viaggi:hover {
+    background-color: #004d40;
+}
+
+.btn-header-rifornimenti {
+    position: static;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: bold;
+    background-color: #6a1b9a;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.btn-header-rifornimenti:hover {
+    background-color: #4a148c;
+}
+
 .btn-header-nuovo-mezzo {
     position: static;
     padding: 8px 16px;
@@ -263,7 +297,8 @@ body {
     padding: 5px 8px;
     border: 1px solid #ccc;
     border-radius: 3px;
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 700;
     background-color: #fff;
     min-width: 0;
 }
@@ -319,7 +354,8 @@ body {
     height: 30px;
     box-sizing: border-box;
     padding: 4px 6px;
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 700;
     border: 1px solid #ccc;
     border-radius: 3px;
     background-color: #fffef8;
@@ -348,22 +384,34 @@ body {
 }
 
 .mezzo-form-group-ultimo-km input[readonly] {
-    text-align: right;
+    text-align: center;
     font-variant-numeric: tabular-nums;
     background-color: #ebeae8;
     cursor: default;
 }
 
+/* Triangolo rosso: stesso formato degli altri pulsanti icona */
+.mezzo-block-actions .mezzo-manut-alert {
+    background-color: #c62828;
+    color: #fff;
+}
+
+.mezzo-block-actions .mezzo-manut-alert:hover {
+    background-color: #b71c1c;
+}
+
 .mezzo-form-group-actions {
     flex: 0 0 auto;
     min-width: 0;
+    margin-left: auto;
 }
 
 .mezzo-block-actions {
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
+    flex-wrap: nowrap;
+    gap: 6px;
     align-items: center;
+    justify-content: flex-end;
 }
 
 .mezzo-block-actions button {
@@ -374,6 +422,23 @@ body {
     border-radius: 3px;
     cursor: pointer;
     white-space: nowrap;
+}
+
+/* Pulsanti icona: stessi colori “tema”, ma compatti sulla riga superiore */
+.mezzo-block-actions .btn-mezzo-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 4px;
+    flex: 0 0 auto;
+}
+
+.mezzo-block-actions .btn-mezzo-icon .mezzo-btn-icon {
+    display: block;
+    pointer-events: none;
 }
 
 .btn-mezzo-modifica {
@@ -397,6 +462,24 @@ body {
 
 .btn-mezzo-vedi-manutenzioni:hover {
     background-color: #263238;
+}
+
+.btn-mezzo-fogli {
+    background-color: #00695c;
+    color: #fff;
+}
+
+.btn-mezzo-fogli:hover {
+    background-color: #004d40;
+}
+
+.btn-mezzo-rifornimenti {
+    background-color: #6a1b9a;
+    color: #fff;
+}
+
+.btn-mezzo-rifornimenti:hover {
+    background-color: #4a148c;
 }
 
 .btn-mezzo-modifica:hover {

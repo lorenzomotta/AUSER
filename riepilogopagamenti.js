@@ -17,6 +17,8 @@ let invoke;
 let tuttiServizi = [];
 let serviziFiltrati = [];
 let filtriAttivi = false;
+/** Numero pagamento cumulativo attivo come filtro (null = nessun filtro) */
+let filtroPcumNumero = null;
 /** { campo: string|null, direzione: 'asc'|'desc' } — null = ordine predefinito (data più recente) */
 let ordinamento = { campo: null, direzione: 'asc' };
 
@@ -95,6 +97,23 @@ function isGratis(servizio) {
 
 function isIncassato(servizio) {
     return statoNorm(servizio) === 'INCASSATO';
+}
+
+/** Numero gruppo pagamento cumulativo (0 se assente). */
+function numeroPcum(servizio) {
+    const n = Number(
+        servizio?.pagamento_cumulativo_numero
+        ?? servizio?.PagamentoCumulativo_Numero
+        ?? 0
+    );
+    if (Number.isFinite(n) && n > 0) return Math.trunc(n);
+    const gruppo = String(
+        servizio?.pagamento_cumulativo_gruppo
+        ?? servizio?.PagamentoCumulativo_Gruppo
+        ?? ''
+    ).trim();
+    if (/^\d+$/.test(gruppo)) return parseInt(gruppo, 10);
+    return 0;
 }
 
 function isDaIncassare(servizio) {
@@ -199,7 +218,8 @@ function leggiFiltri() {
 }
 
 function haFiltriAttivi(f) {
-    return Object.values(f).some((v) => String(v || '').trim() !== '');
+    return Object.values(f).some((v) => String(v || '').trim() !== '')
+        || (filtroPcumNumero != null && Number(filtroPcumNumero) > 0);
 }
 
 function filtraServizi() {
@@ -215,6 +235,8 @@ function filtraServizi() {
     if (da) da.setHours(0, 0, 0, 0);
     if (a) a.setHours(23, 59, 59, 999);
 
+    const nPcumFiltro = Number(filtroPcumNumero || 0);
+
     serviziFiltrati = tuttiServizi.filter((s) => {
         if (annoSel !== 'tutti') {
             const anno = annoDaDataItaliana(s.data_prelievo);
@@ -224,6 +246,7 @@ function filtraServizi() {
         if (f.stato && statoNorm(s) !== normalizza(f.stato)) return false;
         if (f.richiedente && normalizza(s.richiedente) !== normalizza(f.richiedente)) return false;
         if (f.tipoPagam && normalizza(s.tipo_pagamento) !== normalizza(f.tipoPagam)) return false;
+        if (nPcumFiltro > 0 && numeroPcum(s) !== nPcumFiltro) return false;
 
         if (da || a) {
             const dataSrv = parseDataServizio(s.data_prelievo);
@@ -235,6 +258,14 @@ function filtraServizi() {
     });
 
     applicaOrdinamento();
+}
+
+/** Toggle filtro per n. pagamento cumulativo (stesso click spegne). */
+function toggleFiltroPcumNumero(numero) {
+    const n = Number(numero || 0);
+    if (!Number.isFinite(n) || n <= 0) return;
+    filtroPcumNumero = Number(filtroPcumNumero) === n ? null : n;
+    applicaFiltriERender();
 }
 
 function valoreOrdinamento(servizio, campo) {
@@ -261,6 +292,10 @@ function valoreOrdinamento(servizio, campo) {
             return parseEuro(servizio.pagamento);
         case 'tipo_pagam':
             return normalizza(servizio.tipo_pagamento);
+        case 'pcum': {
+            const n = numeroPcum(servizio);
+            return n > 0 ? n : null;
+        }
         case 'data_incasso': {
             const d = parseDataServizio(dataIncasso(servizio));
             return d ? d.getTime() : null;
@@ -382,7 +417,13 @@ function renderTabella() {
     // Limite rendering DOM per fluidità (prime 2500 righe)
     const MAX = 2500;
     const slice = serviziFiltrati.slice(0, MAX);
-    tbody.innerHTML = slice.map((s) => `
+    tbody.innerHTML = slice.map((s) => {
+        const nPcum = numeroPcum(s);
+        const pcumAttivo = filtroPcumNumero != null && Number(filtroPcumNumero) === nPcum;
+        const pcumCell = nPcum > 0
+            ? `<button type="button" class="rp-pcum-num${pcumAttivo ? ' is-attivo' : ''}" data-pcum-numero="${nPcum}" title="Filtra elenco: solo pagamento cumulativo n. ${nPcum}">${nPcum}</button>`
+            : '';
+        return `
         <tr class="${classeRiga(s)}" data-id="${escapeHtml(s.id)}">
             <td>${htmlStato(s)}</td>
             <td>${escapeHtml(s.richiedente)}</td>
@@ -394,12 +435,14 @@ function renderTabella() {
             <td class="rp-td-left">${escapeHtml(s.luogo_destinazione)}</td>
             <td class="rp-td-strong">${escapeHtml(s.pagamento)}</td>
             <td>${escapeHtml(s.tipo_pagamento)}</td>
+            <td class="col-pcum">${pcumCell}</td>
             <td>${escapeHtml(dataIncasso(s))}</td>
             <td>
                 <button type="button" class="rp-btn-apri" data-apri-id="${escapeHtml(s.id)}" title="Apri servizio in lettura">›››</button>
             </td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
 
     if (serviziFiltrati.length > MAX && conteggio) {
         conteggio.textContent = `${formatNumero(serviziFiltrati.length)} servizi (mostrati ${formatNumero(MAX)})`;
@@ -465,6 +508,7 @@ function resetFiltri() {
         if (!el) return;
         el.value = '';
     });
+    filtroPcumNumero = null;
     applicaFiltriERender();
 }
 
@@ -534,6 +578,9 @@ function descrizioneFiltriAttivi() {
     if (f.stato) parts.push(`Stato: ${f.stato}`);
     if (f.richiedente) parts.push(`Richiedente: ${f.richiedente}`);
     if (f.tipoPagam) parts.push(`Tipo pagam.: ${f.tipoPagam}`);
+    if (filtroPcumNumero != null && Number(filtroPcumNumero) > 0) {
+        parts.push(`Pag. cumulativo n. ${filtroPcumNumero}`);
+    }
     if (f.dataDa || f.dataA) {
         parts.push(`Periodo: ${f.dataDa || '…'} → ${f.dataA || '…'}`);
     }
@@ -638,6 +685,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     document.getElementById('rp-tbody')?.addEventListener('click', (e) => {
+        const pcumBtn = e.target.closest('[data-pcum-numero]');
+        if (pcumBtn) {
+            e.preventDefault();
+            const n = parseInt(pcumBtn.getAttribute('data-pcum-numero') || '0', 10);
+            if (n > 0) toggleFiltroPcumNumero(n);
+            return;
+        }
         const btn = e.target.closest('[data-apri-id]');
         if (!btn) return;
         apriServizioInLettura(btn.getAttribute('data-apri-id'));

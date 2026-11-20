@@ -34,6 +34,20 @@ pub struct SupabaseTablesConfig {
     pub appunti_risposte: String,
     /// Manutenzioni programmate mezzi
     pub manutenzioni: String,
+    /// Vista fogli di viaggio (letta da Servizi_supa)
+    #[serde(default = "default_fogli_di_viaggio")]
+    pub fogli_di_viaggio: String,
+    /// Rifornimenti mezzi
+    #[serde(default = "default_rifornimenti")]
+    pub rifornimenti: String,
+}
+
+fn default_fogli_di_viaggio() -> String {
+    "FogliDiViaggio".to_string()
+}
+
+fn default_rifornimenti() -> String {
+    "Rifornimenti".to_string()
 }
 
 impl SupabaseTablesConfig {
@@ -61,6 +75,8 @@ impl SupabaseTablesConfig {
             "appunti_destinatari" => Some(&self.appunti_destinatari),
             "appunti_risposte" => Some(&self.appunti_risposte),
             "manutenzioni" => Some(&self.manutenzioni),
+            "fogli_di_viaggio" => Some(&self.fogli_di_viaggio),
+            "rifornimenti" => Some(&self.rifornimenti),
             _ => None,
         }
     }
@@ -1416,6 +1432,72 @@ impl SupabaseClient {
             }
         }
         Err("Colonna IdSocio non trovata nella tabella servizi".to_string())
+    }
+
+    /// Righe della vista FogliDiViaggio. `mezzo_id` filtra la colonna Mezzo (IdAutomezzo).
+    pub async fn fetch_fogli_di_viaggio(&self, mezzo_id: Option<&str>) -> Result<Vec<Value>, String> {
+        let filter = mezzo_id
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|id| format!("Mezzo=eq.{}", id));
+        let filter_ref = filter.as_deref();
+        let columns = Some(
+            "id,Data,Mezzo,Km_Partenza,Km_Arrivo,Operatore,Trasportato,Partenza,Destinazione,Motivazione,Note_Finali,Km",
+        );
+        match self
+            .fetch_table(
+                "fogli_di_viaggio",
+                filter_ref,
+                columns,
+                Some("Data.desc,id.desc"),
+            )
+            .await
+        {
+            Ok(rows) => Ok(rows),
+            Err(e) => {
+                let el = e.to_lowercase();
+                if el.contains("data") || el.contains("order") || el.contains("42703") {
+                    println!("⚠️ Ordinamento Data sui fogli di viaggio fallito, riprovo senza: {}", e);
+                    self.fetch_table("fogli_di_viaggio", filter_ref, columns, None)
+                        .await
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    /// Righe della tabella Rifornimenti. `mezzo_id` filtra la colonna Mezzo (IdAutomezzo).
+    pub async fn fetch_rifornimenti(&self, mezzo_id: Option<&str>) -> Result<Vec<Value>, String> {
+        let filter = mezzo_id
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|id| format!("Mezzo=eq.{}", id));
+        let filter_ref = filter.as_deref();
+        let columns = Some(
+            "id,Data_Rifornimento,Mezzo,Operatore,Distributore,KM_Rifornimento,Litri,Costo_Rifornimento,Note_Rifornimento",
+        );
+        match self
+            .fetch_table(
+                "rifornimenti",
+                filter_ref,
+                columns,
+                Some("Data_Rifornimento.desc,id.desc"),
+            )
+            .await
+        {
+            Ok(rows) => Ok(rows),
+            Err(e) => {
+                let el = e.to_lowercase();
+                if el.contains("data_rifornimento") || el.contains("order") || el.contains("42703") {
+                    println!("⚠️ Ordinamento rifornimenti fallito, riprovo senza: {}", e);
+                    self.fetch_table("rifornimenti", filter_ref, columns, None)
+                        .await
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 
     /// Solo Mezzo + km di arrivo/rientro (leggero, per ultimo chilometraggio mezzi).

@@ -350,6 +350,7 @@ export async function loginConEmailPassword(invoke, email, password) {
         is_admin: isAdminFlag,
         programma: programmaFlag,
         calendario: perm.calendario === true,
+        protondrive: perm.protondrive === true,
         sidebar_menu: perm.sidebar_menu ?? {}
     };
 

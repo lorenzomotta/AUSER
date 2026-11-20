@@ -74,6 +74,12 @@ struct SupabaseTablesConfigSection {
     /// Manutenzioni programmate mezzi
     #[serde(default)]
     manutenzioni: Option<String>,
+    /// Vista fogli di viaggio
+    #[serde(default)]
+    fogli_di_viaggio: Option<String>,
+    /// Rifornimenti mezzi
+    #[serde(default)]
+    rifornimenti: Option<String>,
     /// Legacy: non esiste tabella operatori — filtrare tesserati.Operatore
     #[serde(alias = "operatori")]
     operatori: Option<String>,
@@ -644,6 +650,12 @@ async fn setup_supabase_from_config(config: &AppConfig) {
             manutenzioni: cfg
                 .and_then(|t| t.manutenzioni.clone())
                 .unwrap_or_else(|| "Manutenzioni_supa".to_string()),
+            fogli_di_viaggio: cfg
+                .and_then(|t| t.fogli_di_viaggio.clone())
+                .unwrap_or_else(|| "FogliDiViaggio".to_string()),
+            rifornimenti: cfg
+                .and_then(|t| t.rifornimenti.clone())
+                .unwrap_or_else(|| "Rifornimenti".to_string()),
         };
 
         let sb_config = SupabaseConfig {
@@ -655,7 +667,7 @@ async fn setup_supabase_from_config(config: &AppConfig) {
         *guard = Some(SupabaseClient::new(sb_config));
         println!(
             "✓ Client Supabase inizializzato ({} tabelle configurate)",
-            21
+            23
         );
         println!(
             "  tesserati={}, tesseramenti={}, servizi={}, automezzi={}, tipo_socio={}",
@@ -774,7 +786,8 @@ async fn fetch_servizi_supabase(filter: Option<&str>) -> Result<Vec<serde_json::
 }
 
 async fn fetch_servizi_anteprima(filter: &str, limit: usize) -> Result<Vec<serde_json::Value>, String> {
-    const COLONNE: &str = "idservizio,Prelievo_Data,Prelievo_Ora,Prelievo_Comune,Prelievo_Indirizzo,Prelievo_Note,IdSocio,Trasportato,Sollevatore,Standard,Carrozzina,Richiedente,Motivazione,Destinazione_Data,Destinazione_Comune,Destinazione_Indirizzo,Destinazione_Note,Donazioni,Incassato,TipoPagamento,Oper,IdOperatore,Oper2,IdOperatore2,Mezzo,Km,Km_uscita,Km_rientro,Tempo,Bonifico_Data,Ricevuta_Data,Ricevuta_numero,StatoServizio,NoteFineServizio,Archiviazione,CreatoDa,ModificatoDa,created_at,update_at";
+    // Colonne principali Servizi_supa (+ Accompagnatore se presente).
+    const COLONNE: &str = "idservizio,Prelievo_Data,Prelievo_Ora,Prelievo_Comune,Prelievo_Indirizzo,Prelievo_Note,IdSocio,Trasportato,Sollevatore,Standard,Carrozzina,Richiedente,Motivazione,Destinazione_Data,Destinazione_Comune,Destinazione_Indirizzo,Destinazione_Note,Donazioni,Incassato,TipoPagamento,Oper,IdOperatore,Accompagnatore,Mezzo,Km,Km_uscita,Km_rientro,Tempo,Bonifico_Data,Ricevuta_Data,Ricevuta_numero,StatoServizio,NoteFineServizio,Archiviazione,PagamentoCumulativo,PagamentoCumulativo_Rif,PagamentoCumulativo_Gruppo,PagamentoCumulativo_Numero,CreatoDa,ModificatoDa,created_at,update_at";
     ensure_supabase_client().await?;
     let tentativi = [
         (COLONNE, "Prelievo_Data.desc"),
@@ -996,6 +1009,18 @@ struct ServizioCompleto {
     note_arrivo: String,
     note_fine_servizio: String,
     archivia: String,
+    /// true se il servizio è nel pagamento cumulativo
+    #[serde(default)]
+    pagamento_cumulativo: bool,
+    /// CRO / causale del bonifico cumulativo
+    #[serde(default)]
+    pagamento_cumulativo_rif: String,
+    /// Codice gruppo dei servizi pagati insieme
+    #[serde(default)]
+    pagamento_cumulativo_gruppo: String,
+    /// Numero progressivo del gruppo (0 = nessuno)
+    #[serde(default)]
+    pagamento_cumulativo_numero: u64,
     #[serde(default)]
     creato_da: String,
     #[serde(default)]
@@ -2532,6 +2557,33 @@ fn get_bool_from_row(row: &serde_json::Value, names: &[&str]) -> bool {
     false
 }
 
+fn get_u64_field(row: &serde_json::Value, names: &[&str]) -> u64 {
+    for name in names {
+        if let Some(v) = row.get(*name) {
+            if let Some(n) = v.as_u64() {
+                return n;
+            }
+            if let Some(n) = v.as_i64() {
+                if n > 0 {
+                    return n as u64;
+                }
+            }
+            if let Some(n) = v.as_f64() {
+                if n > 0.0 {
+                    return n as u64;
+                }
+            }
+            if let Some(s) = v.as_str() {
+                let t = s.trim();
+                if let Ok(n) = t.parse::<u64>() {
+                    return n;
+                }
+            }
+        }
+    }
+    0
+}
+
 fn build_tipo_servizio_row(row: &serde_json::Value) -> String {
     if get_bool_from_row(row, &["Sollevatore", "SOLLEVATORE"]) {
         return "SOLLEVATORE".to_string();
@@ -2631,7 +2683,18 @@ fn supabase_row_to_servizio_completo(
         },
         operatore: resolve_operatore_nome(row, nominativi),
         operatore_2: {
-            let raw = get_field_any(row, &["Oper2", "OPER2", "operatore_2", "IdOperatore2"]);
+            let raw = get_field_any(
+                row,
+                &[
+                    "Accompagnatore",
+                    "ACCOMPAGNATORE",
+                    "accompagnatore",
+                    "Oper2",
+                    "OPER2",
+                    "operatore_2",
+                    "IdOperatore2",
+                ],
+            );
             if raw.is_empty() {
                 String::new()
             } else if let Some(nom) = lookup_nominativo_by_idsocio(nominativi, &raw) {
@@ -2646,7 +2709,10 @@ fn supabase_row_to_servizio_completo(
             if !id2.is_empty() {
                 id2
             } else {
-                let raw = get_field_any(row, &["Oper2", "OPER2"]);
+                let raw = get_field_any(
+                    row,
+                    &["Accompagnatore", "ACCOMPAGNATORE", "Oper2", "OPER2"],
+                );
                 if raw.trim().parse::<u64>().is_ok() {
                     raw
                 } else {
@@ -2718,6 +2784,38 @@ fn supabase_row_to_servizio_completo(
             &["NoteFineServizio", "NOTAFINESERVIZIO", "NOTE_FINE_SERVIZIO"],
         ),
         archivia: get_bool_field(row, &["Archiviazione", "ARCHIVIAZIONE", "archiviazione"]),
+        pagamento_cumulativo: get_bool_from_row(
+            row,
+            &[
+                "PagamentoCumulativo",
+                "PAGAMENTOCUMULATIVO",
+                "pagamento_cumulativo",
+            ],
+        ),
+        pagamento_cumulativo_rif: get_field_any(
+            row,
+            &[
+                "PagamentoCumulativo_Rif",
+                "PagamentoCumulativo_RIF",
+                "pagamento_cumulativo_rif",
+            ],
+        ),
+        pagamento_cumulativo_gruppo: get_field_any(
+            row,
+            &[
+                "PagamentoCumulativo_Gruppo",
+                "PagamentoCumulativo_GRUPPO",
+                "pagamento_cumulativo_gruppo",
+            ],
+        ),
+        pagamento_cumulativo_numero: get_u64_field(
+            row,
+            &[
+                "PagamentoCumulativo_Numero",
+                "PagamentoCumulativo_NUMERO",
+                "pagamento_cumulativo_numero",
+            ],
+        ),
         creato_da: get_field_any(
             row,
             &["CreatoDa", "creato_da", "Creato_Da", "CREATODA"],
@@ -4769,6 +4867,8 @@ struct Manutenzione {
     km_riferimento: String,
     km_previsto: String,
     data_prevista: String,
+    /// Giorni o km prima della soglia per avviso giallo (stringa vuota = solo rosso a scadenza)
+    preavviso: String,
     stato: String,
 }
 
@@ -4786,6 +4886,8 @@ struct ManutenzioneInput {
     delta_chilometri: Option<String>,
     /// Se assente, il backend usa l'ultimo km del mezzo
     km_riferimento: Option<String>,
+    /// Giorni (tip. Giorni) o km (tip. Km) prima della soglia → avviso giallo
+    preavviso: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -4798,6 +4900,8 @@ struct ManutenzioneScaduta {
     data_prevista: String,
     ultimo_km: String,
     etichetta_mezzo: String,
+    /// "preavviso" (giallo) oppure "scaduta" (rosso)
+    livello: String,
 }
 
 fn supabase_row_to_manutenzione(row: &serde_json::Value) -> Option<Manutenzione> {
@@ -4843,6 +4947,7 @@ fn supabase_row_to_manutenzione(row: &serde_json::Value) -> Option<Manutenzione>
             row,
             &["DataPrevista", "DATAPREVISTA", "data_prevista"],
         )),
+        preavviso: get_field_any(row, &["Preavviso", "PREAVVISO", "preavviso"]),
         stato: {
             let s = get_field_any(row, &["Stato", "STATO", "stato"]);
             if s.is_empty() {
@@ -4892,33 +4997,61 @@ async fn map_ultimi_km_mezzi() -> Result<std::collections::HashMap<String, f64>,
     Ok(map)
 }
 
-fn manutenzione_e_scaduta(m: &Manutenzione, ultimi_km: &std::collections::HashMap<String, f64>) -> bool {
+/// Restituisce "scaduta" (rosso), "preavviso" (giallo) o None (niente alert).
+fn manutenzione_livello_avviso(
+    m: &Manutenzione,
+    ultimi_km: &std::collections::HashMap<String, f64>,
+) -> Option<&'static str> {
     let stato = m.stato.trim().to_ascii_lowercase();
     if stato != "aperta" {
-        return false;
+        return None;
     }
     let tip = m.tipologia.trim().to_ascii_lowercase();
+    let preavviso = parse_optional_number(&m.preavviso).unwrap_or(0.0);
+
     if tip == "km" {
         let previsto = parse_optional_number(&m.km_previsto).or_else(|| {
             let rif = parse_optional_number(&m.km_riferimento)?;
             let delta = parse_optional_number(&m.delta_chilometri)?;
             Some(rif + delta)
-        });
-        let Some(soglia) = previsto else {
-            return false;
-        };
+        })?;
+        if previsto <= 0.0 {
+            return None;
+        }
         let key = normalize_mezzo_key(&m.id_mezzo.to_string());
         let attuale = ultimi_km.get(&key).copied().unwrap_or(0.0);
-        return attuale + f64::EPSILON >= soglia && soglia > 0.0;
+        if attuale + f64::EPSILON >= previsto {
+            return Some("scaduta");
+        }
+        if preavviso > 0.0 {
+            let soglia_giallo = (previsto - preavviso).max(0.0);
+            if attuale + f64::EPSILON >= soglia_giallo {
+                return Some("preavviso");
+            }
+        }
+        return None;
     }
+
     if tip == "giorni" {
-        // Alert solo su DataPrevista (Data = data di esecuzione, non di programmazione)
-        let Some(data_prev) = italian_date_to_iso(&m.data_prevista) else {
-            return false;
-        };
-        return today_iso_local() >= data_prev;
+        // Alert su DataPrevista (Data = data di esecuzione, non di programmazione)
+        let data_prev = italian_date_to_iso(&m.data_prevista)?;
+        let oggi = today_iso_local();
+        if oggi >= data_prev {
+            return Some("scaduta");
+        }
+        if preavviso > 0.0 {
+            let giorni = preavviso.floor() as i64;
+            if giorni > 0 {
+                if let Some(inizio_giallo) = add_days_iso(&data_prev, -giorni) {
+                    if oggi >= inizio_giallo {
+                        return Some("preavviso");
+                    }
+                }
+            }
+        }
+        return None;
     }
-    false
+    None
 }
 
 #[tauri::command]
@@ -4963,6 +5096,7 @@ async fn create_manutenzione(input: ManutenzioneInput) -> Result<Manutenzione, S
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .and_then(|s| s.parse::<i64>().ok());
+    let preavviso = input.preavviso.as_deref().and_then(parse_optional_number);
 
     if tip_norm == "Km" {
         if delta_km.map(|n| n <= 0.0).unwrap_or(true) {
@@ -4977,6 +5111,29 @@ async fn create_manutenzione(input: ManutenzioneInput) -> Result<Manutenzione, S
     }
     if tip_norm == "Giorni" && delta_giorni.map(|n| n <= 0).unwrap_or(true) {
         return Err("Per tipologia Giorni inserisci DeltaGiorni > 0".to_string());
+    }
+    if let Some(p) = preavviso {
+        if p < 0.0 {
+            return Err("Il preavviso non può essere negativo".to_string());
+        }
+        if tip_norm == "Km" {
+            if let Some(d) = delta_km {
+                if p >= d {
+                    return Err(
+                        "Il preavviso (km) deve essere minore del Delta km".to_string(),
+                    );
+                }
+            }
+        }
+        if tip_norm == "Giorni" {
+            if let Some(d) = delta_giorni {
+                if p.floor() as i64 >= d {
+                    return Err(
+                        "Il preavviso (giorni) deve essere minore del Delta giorni".to_string(),
+                    );
+                }
+            }
+        }
     }
 
     let km_previsto = match (km_riferimento, delta_km) {
@@ -5035,6 +5192,10 @@ async fn create_manutenzione(input: ManutenzioneInput) -> Result<Manutenzione, S
         Some(d) => body.insert("DataPrevista".to_string(), serde_json::json!(d)),
         None => body.insert("DataPrevista".to_string(), serde_json::Value::Null),
     };
+    match preavviso {
+        Some(p) if p > 0.0 => body.insert("Preavviso".to_string(), serde_json::json!(p)),
+        _ => body.insert("Preavviso".to_string(), serde_json::Value::Null),
+    };
     body.insert("Stato".to_string(), serde_json::json!("aperta"));
 
     ensure_supabase_client().await?;
@@ -5069,6 +5230,50 @@ async fn get_manutenzioni_mezzo(id_mezzo: u32) -> Result<Vec<Manutenzione>, Stri
             .map_err(|e| format_supabase_error(&e))?
     };
     Ok(rows.iter().filter_map(supabase_row_to_manutenzione).collect())
+}
+
+/// Id dei mezzi che hanno almeno una manutenzione ancora aperta (non completata).
+#[tauri::command]
+async fn get_id_mezzi_manutenzioni_aperte() -> Result<Vec<u32>, String> {
+    println!("=== get_id_mezzi_manutenzioni_aperte chiamato ===");
+    ensure_supabase_client().await?;
+    let rows = {
+        let guard = get_supabase_client().lock().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+        client
+            .fetch_manutenzioni(Some("Stato=eq.aperta"))
+            .await
+            .map_err(|e| format_supabase_error(&e))?
+    };
+    let mut ids: Vec<u32> = rows
+        .iter()
+        .filter_map(supabase_row_to_manutenzione)
+        .map(|m| m.id_mezzo)
+        .collect();
+    ids.sort_unstable();
+    ids.dedup();
+    Ok(ids)
+}
+
+/// Quante manutenzioni sono ancora aperte (non completate), in totale.
+#[tauri::command]
+async fn get_conteggio_manutenzioni_aperte() -> Result<u32, String> {
+    println!("=== get_conteggio_manutenzioni_aperte chiamato ===");
+    ensure_supabase_client().await?;
+    let rows = {
+        let guard = get_supabase_client().lock().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+        client
+            .fetch_manutenzioni(Some("Stato=eq.aperta"))
+            .await
+            .map_err(|e| format_supabase_error(&e))?
+    };
+    let n = rows.iter().filter_map(supabase_row_to_manutenzione).count();
+    Ok(n as u32)
 }
 
 #[tauri::command]
@@ -5111,9 +5316,9 @@ async fn get_manutenzioni_scadute() -> Result<Vec<ManutenzioneScaduta>, String> 
         let Some(m) = supabase_row_to_manutenzione(row) else {
             continue;
         };
-        if !manutenzione_e_scaduta(&m, &ultimi_km) {
+        let Some(livello) = manutenzione_livello_avviso(&m, &ultimi_km) else {
             continue;
-        }
+        };
         let key = normalize_mezzo_key(&m.id_mezzo.to_string());
         let ultimo = ultimi_km.get(&key).copied().unwrap_or(0.0);
         scadute.push(ManutenzioneScaduta {
@@ -5132,10 +5337,19 @@ async fn get_manutenzioni_scadute() -> Result<Vec<ManutenzioneScaduta>, String> 
                 .get(&m.id_mezzo)
                 .cloned()
                 .unwrap_or_else(|| format!("Mezzo {}", m.id_mezzo)),
+            livello: livello.to_string(),
         });
     }
 
-    println!("✓ Manutenzioni scadute: {}", scadute.len());
+    // Rosse (scadute) prima delle gialle (preavviso)
+    scadute.sort_by(|a, b| {
+        let rank = |l: &str| if l == "scaduta" { 0 } else { 1 };
+        rank(&a.livello)
+            .cmp(&rank(&b.livello))
+            .then_with(|| a.etichetta_mezzo.cmp(&b.etichetta_mezzo))
+    });
+
+    println!("✓ Manutenzioni in avviso: {}", scadute.len());
     Ok(scadute)
 }
 
@@ -5181,6 +5395,12 @@ struct ManutenzioneUpdate {
     operatore: Option<String>,
     /// Se presente: aperta | eseguita | annullata
     stato: Option<String>,
+    /// Riprogrammazione: delta / soglie / preavviso
+    delta_giorni: Option<String>,
+    delta_chilometri: Option<String>,
+    km_previsto: Option<String>,
+    data_prevista: Option<String>,
+    preavviso: Option<String>,
 }
 
 #[tauri::command]
@@ -5264,6 +5484,152 @@ async fn salva_manutenzione(input: ManutenzioneUpdate) -> Result<Manutenzione, S
         }
     }
 
+    // Riprogrammazione (posticipo / cambio soglia / preavviso)
+    let wants_programmazione = input.delta_giorni.is_some()
+        || input.delta_chilometri.is_some()
+        || input.km_previsto.is_some()
+        || input.data_prevista.is_some()
+        || input.preavviso.is_some();
+
+    let corrente = if wants_programmazione {
+        Some(get_manutenzione(input.id).await?)
+    } else {
+        None
+    };
+    let tip = corrente
+        .as_ref()
+        .map(|m| m.tipologia.trim().to_ascii_lowercase())
+        .unwrap_or_default();
+
+    if let Some(raw) = input.data_prevista.as_deref() {
+        let t = raw.trim();
+        if t.is_empty() {
+            body.insert("DataPrevista".to_string(), serde_json::Value::Null);
+        } else {
+            let Some(iso) = italian_date_to_iso(t) else {
+                return Err("Data prevista non valida (usa gg/mm/aaaa)".to_string());
+            };
+            body.insert("DataPrevista".to_string(), serde_json::json!(iso));
+        }
+    }
+
+    if let Some(raw) = input.km_previsto.as_deref() {
+        let t = raw.trim();
+        if t.is_empty() {
+            body.insert("KmPrevisto".to_string(), serde_json::Value::Null);
+        } else if let Some(n) = parse_optional_number(t) {
+            if n <= 0.0 {
+                return Err("Km previsti devono essere > 0".to_string());
+            }
+            body.insert("KmPrevisto".to_string(), serde_json::json!(n));
+            // Allinea DeltaChilometri a (KmPrevisto - KmRiferimento) se possibile
+            if let Some(m) = corrente.as_ref() {
+                if let Some(rif) = parse_optional_number(&m.km_riferimento) {
+                    let delta = n - rif;
+                    if delta > 0.0 {
+                        body.insert("DeltaChilometri".to_string(), serde_json::json!(delta));
+                    }
+                }
+            }
+        } else {
+            return Err("Km previsti non validi".to_string());
+        }
+    }
+
+    if let Some(raw) = input.delta_giorni.as_deref() {
+        let t = raw.trim();
+        if t.is_empty() {
+            body.insert("DeltaGiorni".to_string(), serde_json::Value::Null);
+        } else if let Ok(d) = t.parse::<i64>() {
+            if d <= 0 {
+                return Err("Delta giorni deve essere > 0".to_string());
+            }
+            body.insert("DeltaGiorni".to_string(), serde_json::json!(d));
+        } else {
+            return Err("Delta giorni non valido".to_string());
+        }
+    }
+
+    if let Some(raw) = input.delta_chilometri.as_deref() {
+        let t = raw.trim();
+        if t.is_empty() {
+            body.insert("DeltaChilometri".to_string(), serde_json::Value::Null);
+        } else if let Some(n) = parse_optional_number(t) {
+            if n <= 0.0 {
+                return Err("Delta km deve essere > 0".to_string());
+            }
+            body.insert("DeltaChilometri".to_string(), serde_json::json!(n));
+            // Se non è già stato impostato KmPrevisto, ricalcola da KmRiferimento + delta
+            if input.km_previsto.is_none() {
+                if let Some(m) = corrente.as_ref() {
+                    if let Some(rif) = parse_optional_number(&m.km_riferimento) {
+                        body.insert("KmPrevisto".to_string(), serde_json::json!(rif + n));
+                    }
+                }
+            }
+        } else {
+            return Err("Delta km non valido".to_string());
+        }
+    }
+
+    if let Some(raw) = input.preavviso.as_deref() {
+        let t = raw.trim();
+        if t.is_empty() {
+            body.insert("Preavviso".to_string(), serde_json::Value::Null);
+        } else if let Some(n) = parse_optional_number(t) {
+            if n < 0.0 {
+                return Err("Il preavviso non può essere negativo".to_string());
+            }
+            if n == 0.0 {
+                body.insert("Preavviso".to_string(), serde_json::Value::Null);
+            } else {
+                // Controlli soft rispetto alla soglia attuale/nuova
+                if tip == "km" {
+                    let previsto = body
+                        .get("KmPrevisto")
+                        .and_then(|v| v.as_f64())
+                        .or_else(|| {
+                            corrente
+                                .as_ref()
+                                .and_then(|m| parse_optional_number(&m.km_previsto))
+                        });
+                    let rif = corrente
+                        .as_ref()
+                        .and_then(|m| parse_optional_number(&m.km_riferimento));
+                    if let (Some(p), Some(r)) = (previsto, rif) {
+                        let delta = p - r;
+                        if delta > 0.0 && n >= delta {
+                            return Err(
+                                "Il preavviso (km) deve essere minore del Delta km".to_string(),
+                            );
+                        }
+                    }
+                }
+                if tip == "giorni" {
+                    let delta = body
+                        .get("DeltaGiorni")
+                        .and_then(|v| v.as_i64())
+                        .or_else(|| {
+                            corrente
+                                .as_ref()
+                                .and_then(|m| m.delta_giorni.trim().parse::<i64>().ok())
+                        });
+                    if let Some(d) = delta {
+                        if n.floor() as i64 >= d {
+                            return Err(
+                                "Il preavviso (giorni) deve essere minore del Delta giorni"
+                                    .to_string(),
+                            );
+                        }
+                    }
+                }
+                body.insert("Preavviso".to_string(), serde_json::json!(n));
+            }
+        } else {
+            return Err("Preavviso non valido".to_string());
+        }
+    }
+
     if body.is_empty() {
         return Err("Nessun campo da aggiornare".to_string());
     }
@@ -5336,6 +5702,58 @@ async fn get_all_automezzi() -> Result<Vec<Automezzo>, String> {
     } else {
         Err("Client Supabase non disponibile".to_string())
     }
+}
+
+/// Fogli di viaggio (vista Supabase). `mezzo` vuoto = tutti i mezzi.
+#[tauri::command]
+async fn get_fogli_di_viaggio(mezzo: Option<String>) -> Result<Vec<serde_json::Value>, String> {
+    let mezzo_id = mezzo
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+    println!(
+        "=== get_fogli_di_viaggio mezzo={:?} ===",
+        mezzo_id.as_deref().unwrap_or("tutti")
+    );
+
+    ensure_supabase_client().await?;
+    let guard = get_supabase_client().lock().await;
+    let client = guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+    let rows = client
+        .fetch_fogli_di_viaggio(mezzo_id.as_deref())
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+    println!("✓ Fogli di viaggio: {} righe", rows.len());
+    Ok(rows)
+}
+
+/// Rifornimenti. `mezzo` vuoto = tutti i mezzi.
+#[tauri::command]
+async fn get_rifornimenti(mezzo: Option<String>) -> Result<Vec<serde_json::Value>, String> {
+    let mezzo_id = mezzo
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+    println!(
+        "=== get_rifornimenti mezzo={:?} ===",
+        mezzo_id.as_deref().unwrap_or("tutti")
+    );
+
+    ensure_supabase_client().await?;
+    let guard = get_supabase_client().lock().await;
+    let client = guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+    let rows = client
+        .fetch_rifornimenti(mezzo_id.as_deref())
+        .await
+        .map_err(|e| format_supabase_error(&e))?;
+    println!("✓ Rifornimenti: {} righe", rows.len());
+    Ok(rows)
 }
 
 fn build_automezzo_body(
@@ -6007,6 +6425,9 @@ struct UserPermissionsRecord {
     is_admin: bool,
     programma: bool,
     calendario: bool,
+    /// Backup Proton Drive alla chiusura app
+    #[serde(default)]
+    protondrive: bool,
     /// JSON object delle voci sidebar consentite (stringa serializzata o oggetto)
     #[serde(default)]
     sidebar_menu: serde_json::Value,
@@ -6051,6 +6472,10 @@ fn supabase_row_to_user_permissions(row: &serde_json::Value) -> UserPermissionsR
         is_admin: get_bool_from_row(row, &["is_admin", "isadmin", "IsAdmin", "IS_ADMIN"]),
         programma: get_bool_from_row(row, &["Programma", "programma", "PROGRAMMA"]),
         calendario: get_bool_from_row(row, &["Calendario", "calendario", "CALENDARIO"]),
+        protondrive: get_bool_from_row(
+            row,
+            &["ProtonDrive", "protondrive", "PROTONDRIVE", "proton_drive"],
+        ),
         sidebar_menu: parse_sidebar_menu_from_row(row),
     }
 }
@@ -7075,6 +7500,8 @@ struct UpdateUserPermissionsPayload {
     is_admin: bool,
     programma: bool,
     calendario: bool,
+    #[serde(default)]
+    protondrive: bool,
     /// JSON object voci sidebar (opzionale)
     #[serde(default)]
     sidebar_menu: Option<serde_json::Value>,
@@ -7104,6 +7531,7 @@ async fn update_user_permissions(payload: UpdateUserPermissionsPayload) -> Resul
     body.insert("is_admin".to_string(), serde_json::json!(payload.is_admin));
     body.insert("Programma".to_string(), serde_json::json!(payload.programma));
     body.insert("Calendario".to_string(), serde_json::json!(payload.calendario));
+    body.insert("ProtonDrive".to_string(), serde_json::json!(payload.protondrive));
     if let Some(ref menu) = payload.sidebar_menu {
         // Salva come testo JSON (colonna text) — compatibile anche con jsonb
         let as_text = if menu.is_string() {
@@ -7195,6 +7623,8 @@ struct CreateAppUserPayload {
     programma: bool,
     calendario: bool,
     #[serde(default)]
+    protondrive: bool,
+    #[serde(default)]
     sidebar_menu: Option<serde_json::Value>,
 }
 
@@ -7243,6 +7673,7 @@ async fn create_app_user(payload: CreateAppUserPayload) -> Result<UserPermission
         "is_admin": payload.is_admin,
         "Programma": payload.programma,
         "Calendario": payload.calendario,
+        "ProtonDrive": payload.protondrive,
         "SidebarMenu": sidebar_text,
         "can_insert": payload.is_admin || payload.programma,
         "can_update": payload.is_admin || payload.programma,
@@ -7276,6 +7707,7 @@ async fn create_app_user(payload: CreateAppUserPayload) -> Result<UserPermission
         is_admin: payload.is_admin,
         programma: payload.programma,
         calendario: payload.calendario,
+        protondrive: payload.protondrive,
         sidebar_menu: sidebar_val,
     })
 }
@@ -8182,6 +8614,7 @@ fn data_iso_valida(valore: &str) -> Option<String> {
 }
 
 fn filtro_operatore_or(ids: &[String], nome: &str) -> Option<String> {
+    // Solo Oper / IdOperatore: Oper2 e IdOperatore2 non esistono su Servizi_supa.
     let mut parti = Vec::new();
     for id in ids {
         let id = id.trim();
@@ -8189,11 +8622,9 @@ fn filtro_operatore_or(ids: &[String], nome: &str) -> Option<String> {
             continue;
         }
         parti.push(format!("IdOperatore.eq.{id}"));
-        parti.push(format!("IdOperatore2.eq.{id}"));
     }
     if let Some(pattern) = postgrest_ilike_esatto(nome) {
         parti.push(format!("Oper.{pattern}"));
-        parti.push(format!("Oper2.{pattern}"));
     }
     if parti.is_empty() {
         None
@@ -8208,7 +8639,8 @@ struct ServiziElencoPagina {
     totale: u64,
 }
 
-const COLONNE_ELENCO_SERVIZI: &str = "idservizio,Prelievo_Data,Prelievo_Ora,Prelievo_Comune,Prelievo_Indirizzo,Prelievo_Note,IdSocio,Trasportato,Sollevatore,Standard,Carrozzina,Richiedente,Motivazione,Destinazione_Data,Destinazione_Comune,Destinazione_Indirizzo,Destinazione_Note,Donazioni,Incassato,TipoPagamento,Oper,IdOperatore,Oper2,IdOperatore2,Mezzo,Km,Km_uscita,Km_rientro,Tempo,Bonifico_Data,Ricevuta_Data,Ricevuta_numero,StatoServizio,NoteFineServizio,Archiviazione,CreatoDa,ModificatoDa,created_at,update_at";
+// Colonne principali Servizi_supa (+ Accompagnatore se presente).
+const COLONNE_ELENCO_SERVIZI: &str = "idservizio,Prelievo_Data,Prelievo_Ora,Prelievo_Comune,Prelievo_Indirizzo,Prelievo_Note,IdSocio,Trasportato,Sollevatore,Standard,Carrozzina,Richiedente,Motivazione,Destinazione_Data,Destinazione_Comune,Destinazione_Indirizzo,Destinazione_Note,Donazioni,Incassato,TipoPagamento,Oper,IdOperatore,Accompagnatore,Mezzo,Km,Km_uscita,Km_rientro,Tempo,Bonifico_Data,Ricevuta_Data,Ricevuta_numero,StatoServizio,NoteFineServizio,Archiviazione,PagamentoCumulativo,PagamentoCumulativo_Rif,PagamentoCumulativo_Gruppo,PagamentoCumulativo_Numero,CreatoDa,ModificatoDa,created_at,update_at";
 
 /// Una pagina dell'elenco. Il totale arriva da Supabase senza scaricare le altre righe.
 #[tauri::command]
@@ -8232,6 +8664,9 @@ async fn get_servizi_elenco_pagina(
     carrozzina: Option<String>,
     operatore_ids: Option<Vec<String>>,
     operatore_nome: Option<String>,
+    accompagnatore_nome: Option<String>,
+    pagamento_cumulativo: Option<bool>,
+    pagamento_cumulativo_numero: Option<u64>,
 ) -> Result<ServiziElencoPagina, String> {
     ensure_supabase_client().await?;
     let tutti = tutti_anni.unwrap_or(false);
@@ -8282,6 +8717,9 @@ async fn get_servizi_elenco_pagina(
     if let Some(v) = nominativo.as_deref().and_then(postgrest_ilike_contiene) {
         filtri.push(("Trasportato".into(), v));
     }
+    if let Some(v) = accompagnatore_nome.as_deref().and_then(postgrest_ilike_esatto) {
+        filtri.push(("Accompagnatore".into(), v));
+    }
     if let Some(v) = stato_servizio.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         filtri.push(("StatoServizio".into(), format!("eq.{}", postgrest_valore(v))));
     }
@@ -8322,6 +8760,18 @@ async fn get_servizi_elenco_pagina(
     let mut gruppi_or: Vec<String> = Vec::new();
     if senza_archivio {
         gruppi_or.push("or(Archiviazione.is.null,Archiviazione.eq.false)".into());
+    }
+    match pagamento_cumulativo {
+        Some(true) => {
+            filtri.push(("PagamentoCumulativo".into(), "eq.true".into()));
+        }
+        Some(false) => {
+            gruppi_or.push("or(PagamentoCumulativo.is.null,PagamentoCumulativo.eq.false)".into());
+        }
+        None => {}
+    }
+    if let Some(n) = pagamento_cumulativo_numero.filter(|n| *n > 0) {
+        filtri.push(("PagamentoCumulativo_Numero".into(), format!("eq.{n}")));
     }
     if incasso_norm == "DA INCASSARE" {
         gruppi_or.push("or(Incassato.is.null,Incassato.eq.)".into());
@@ -9340,11 +9790,18 @@ async fn build_servizio_supabase_body(
         "Incassato",
         payload.stato_incasso.clone(),
     );
-    put_opt_string_field(
+    // Accompagnatore (colonna su Servizi_supa); stringa vuota → NULL per poter toglierlo in modifica.
+    put_opt_nullable_string_field(
         &mut body,
         template_row,
-        &["Oper2", "OPER2"],
-        "Oper2",
+        &[
+            "Accompagnatore",
+            "ACCOMPAGNATORE",
+            "accompagnatore",
+            "Oper2",
+            "OPER2",
+        ],
+        "Accompagnatore",
         payload.operatore_2.clone(),
     );
     put_opt_numeric_field(
@@ -9721,6 +10178,511 @@ async fn aggiorna_incasso_serie_servizi(
         aggiornati
     );
     Ok(aggiornati)
+}
+
+const PCUM_START: &str = "[[PCUM]]";
+const PCUM_END: &str = "[[/PCUM]]";
+
+fn note_fine_da_riga(row: &serde_json::Value) -> String {
+    get_field_any(
+        row,
+        &[
+            "NoteFineServizio",
+            "NOTAFINESERVIZIO",
+            "NOTE_FINE_SERVIZIO",
+            "NotaFineServizio",
+        ],
+    )
+}
+
+fn strip_pcum_marker(notes: &str) -> String {
+    if let Some(i) = notes.find(PCUM_START) {
+        if let Some(rel_end) = notes[i..].find(PCUM_END) {
+            let end = i + rel_end + PCUM_END.len();
+            let mut out = String::new();
+            out.push_str(&notes[..i]);
+            out.push_str(&notes[end..]);
+            return out.trim().to_string();
+        }
+    }
+    notes.trim().to_string()
+}
+
+async fn prossimo_numero_pagamento_cumulativo() -> Result<u64, String> {
+    let guard = get_supabase_client().lock().await;
+    let client = guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+    let rows = client
+        .fetch_servizi_limit(
+            "PagamentoCumulativo_Numero=not.is.null",
+            "PagamentoCumulativo_Numero.desc",
+            1,
+            "PagamentoCumulativo_Numero",
+        )
+        .await
+        .unwrap_or_default();
+    drop(guard);
+    let max = rows
+        .first()
+        .map(|row| {
+            get_u64_field(
+                row,
+                &[
+                    "PagamentoCumulativo_Numero",
+                    "PagamentoCumulativo_NUMERO",
+                    "pagamento_cumulativo_numero",
+                ],
+            )
+        })
+        .unwrap_or(0);
+    Ok(max.saturating_add(1).max(1))
+}
+
+fn put_pagamento_cumulativo_flag(
+    body: &mut serde_json::Map<String, serde_json::Value>,
+    row: &serde_json::Value,
+    value: bool,
+) {
+    let candidates = &[
+        "PagamentoCumulativo",
+        "PAGAMENTOCUMULATIVO",
+        "pagamento_cumulativo",
+    ];
+    if let Some(key) = resolve_column_key(row, candidates) {
+        let json_val = json_for_bool_patch(row, &key, value);
+        body.insert(key, json_val);
+    } else {
+        // Colonna nuova: dopo lo script SQL sarà presente; scriviamo il nome standard.
+        body.insert("PagamentoCumulativo".to_string(), serde_json::json!(value));
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PagamentoCumulativoInput {
+    ids: Vec<u32>,
+    stato_incasso: String,
+    tipo_pagamento: String,
+    data_bonifico: Option<String>,
+    data_ricevuta: Option<String>,
+    numero_ricevuta: Option<String>,
+    riferimento: Option<String>,
+    modificato_da: Option<String>,
+}
+
+/// Applica gli stessi dati di pagamento a più servizi e li marca come pagamento cumulativo.
+#[tauri::command]
+async fn applica_pagamento_cumulativo(input: PagamentoCumulativoInput) -> Result<u32, String> {
+    let mut ids: Vec<u32> = input.ids.into_iter().filter(|id| *id > 0).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    if ids.len() < 2 {
+        return Err("Seleziona almeno 2 servizi per un pagamento cumulativo".to_string());
+    }
+
+    println!(
+        "=== applica_pagamento_cumulativo su {} servizi ===",
+        ids.len()
+    );
+    ensure_supabase_client().await?;
+
+    let numero = prossimo_numero_pagamento_cumulativo().await?;
+    let gruppo = numero.to_string();
+    let riferimento = input
+        .riferimento
+        .clone()
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let stato = input.stato_incasso.trim().to_string();
+    let tipo = input.tipo_pagamento.trim().to_string();
+    if stato.is_empty() || tipo.is_empty() {
+        return Err("Stato incasso e tipo pagamento sono obbligatori".to_string());
+    }
+
+    let mut aggiornati = 0u32;
+    for id in ids {
+        let row = fetch_servizio_row_template(id).await?;
+        // Se c'era il vecchio marker nelle note, lo togliamo (ora usiamo le colonne).
+        let note_pulite = strip_pcum_marker(&note_fine_da_riga(&row));
+        let note_originali = note_fine_da_riga(&row);
+
+        let mut body = serde_json::Map::new();
+        put_opt_string_field(
+            &mut body,
+            Some(&row),
+            &["Incassato", "INCASSATO"],
+            "Incassato",
+            Some(stato.clone()),
+        );
+        put_opt_nullable_string_field(
+            &mut body,
+            Some(&row),
+            &["TipoPagamento", "TIPOPAGAMENTO"],
+            "TipoPagamento",
+            Some(tipo.clone()),
+        );
+        put_opt_date_field(
+            &mut body,
+            Some(&row),
+            &["Bonifico_Data", "DATABONIFICO", "DataBonifico"],
+            "Bonifico_Data",
+            input.data_bonifico.clone(),
+        );
+        put_opt_date_field(
+            &mut body,
+            Some(&row),
+            &["Ricevuta_Data", "DATARICEVUTA", "DataRicevuta"],
+            "Ricevuta_Data",
+            input.data_ricevuta.clone(),
+        );
+        put_opt_numeric_field(
+            &mut body,
+            Some(&row),
+            &[
+                "Ricevuta_numero",
+                "Ricevuta_Numero",
+                "RICEVUTA_NUMERO",
+                "NumeroRicevuta",
+                "Numero_Ricevuta",
+                "ricevuta_numero",
+            ],
+            "Ricevuta_numero",
+            input.numero_ricevuta.clone(),
+        );
+        put_pagamento_cumulativo_flag(&mut body, &row, true);
+        put_opt_nullable_string_field(
+            &mut body,
+            Some(&row),
+            &[
+                "PagamentoCumulativo_Rif",
+                "PagamentoCumulativo_RIF",
+                "pagamento_cumulativo_rif",
+            ],
+            "PagamentoCumulativo_Rif",
+            Some(riferimento.clone()),
+        );
+        put_opt_nullable_string_field(
+            &mut body,
+            Some(&row),
+            &[
+                "PagamentoCumulativo_Gruppo",
+                "PagamentoCumulativo_GRUPPO",
+                "pagamento_cumulativo_gruppo",
+            ],
+            "PagamentoCumulativo_Gruppo",
+            Some(gruppo.clone()),
+        );
+        put_opt_numeric_field(
+            &mut body,
+            Some(&row),
+            &[
+                "PagamentoCumulativo_Numero",
+                "PagamentoCumulativo_NUMERO",
+                "pagamento_cumulativo_numero",
+            ],
+            "PagamentoCumulativo_Numero",
+            Some(numero.to_string()),
+        );
+        // Se le colonne nuove non esistono ancora sulla riga template, forziamo i nomi standard.
+        if !body.contains_key("PagamentoCumulativo_Rif")
+            && resolve_column_key(
+                &row,
+                &[
+                    "PagamentoCumulativo_Rif",
+                    "PagamentoCumulativo_RIF",
+                    "pagamento_cumulativo_rif",
+                ],
+            )
+            .is_none()
+        {
+            body.insert(
+                "PagamentoCumulativo_Rif".to_string(),
+                serde_json::json!(riferimento),
+            );
+        }
+        if !body.contains_key("PagamentoCumulativo_Gruppo")
+            && resolve_column_key(
+                &row,
+                &[
+                    "PagamentoCumulativo_Gruppo",
+                    "PagamentoCumulativo_GRUPPO",
+                    "pagamento_cumulativo_gruppo",
+                ],
+            )
+            .is_none()
+        {
+            body.insert(
+                "PagamentoCumulativo_Gruppo".to_string(),
+                serde_json::json!(gruppo),
+            );
+        }
+        if !body.contains_key("PagamentoCumulativo_Numero")
+            && resolve_column_key(
+                &row,
+                &[
+                    "PagamentoCumulativo_Numero",
+                    "PagamentoCumulativo_NUMERO",
+                    "pagamento_cumulativo_numero",
+                ],
+            )
+            .is_none()
+        {
+            body.insert(
+                "PagamentoCumulativo_Numero".to_string(),
+                serde_json::json!(numero),
+            );
+        }
+        if note_pulite != note_originali.trim() {
+            put_opt_nullable_string_field(
+                &mut body,
+                Some(&row),
+                &[
+                    "NoteFineServizio",
+                    "NOTAFINESERVIZIO",
+                    "NOTE_FINE_SERVIZIO",
+                    "NotaFineServizio",
+                ],
+                "NoteFineServizio",
+                Some(note_pulite),
+            );
+        }
+        strip_servizio_audit_fields(&mut body);
+        apply_servizio_audit_fields(
+            &mut body,
+            Some(&row),
+            None,
+            input.modificato_da.as_deref(),
+            false,
+            true,
+        );
+
+        let guard = get_supabase_client().lock().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+        client
+            .patch_servizio(id, &body)
+            .await
+            .map_err(|e| {
+                let msg = format_supabase_error(&e);
+                if msg.to_lowercase().contains("pagamento")
+                    || msg.to_lowercase().contains("column")
+                    || msg.to_lowercase().contains("schema cache")
+                {
+                    format!(
+                        "{msg}\n\nEsegui prima lo script SQL supabase-pagamento-cumulativo.sql su Supabase."
+                    )
+                } else {
+                    msg
+                }
+            })?;
+        drop(guard);
+        aggiornati += 1;
+        println!("✓ Pagamento cumulativo applicato al servizio {}", id);
+    }
+
+    println!(
+        "✓ applica_pagamento_cumulativo: {} servizi aggiornati (numero {})",
+        aggiornati, numero
+    );
+    Ok(aggiornati)
+}
+
+/// Elenco servizi collegati allo stesso pagamento cumulativo (per numero gruppo).
+#[tauri::command]
+async fn get_servizi_pagamento_cumulativo(numero: u64) -> Result<Vec<ServizioCompleto>, String> {
+    if numero == 0 {
+        return Ok(Vec::new());
+    }
+    ensure_supabase_client().await?;
+    let filtro = format!("PagamentoCumulativo_Numero=eq.{}", numero);
+    let rows = {
+        let guard = get_supabase_client().lock().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+        match client
+            .fetch_servizi_limit(
+                &filtro,
+                "Prelievo_Data.desc,idservizio.desc",
+                300,
+                COLONNE_ELENCO_SERVIZI,
+            )
+            .await
+        {
+            Ok(r) => r,
+            Err(_) => client
+                .fetch_servizi_limit(&filtro, "Prelievo_Data.desc", 300, "*")
+                .await
+                .map_err(|e| format_supabase_error(e.as_str()))?,
+        }
+    };
+    let vuoti = HashMap::new();
+    Ok(rows
+        .iter()
+        .filter_map(|row| supabase_row_to_servizio_completo(row, &vuoti))
+        .collect())
+}
+
+/// Tolto dalla spunta: azzera i dati di pagamento e toglie il flag cumulativo.
+#[tauri::command]
+async fn rimuovi_pagamento_cumulativo(
+    id: u32,
+    modificato_da: Option<String>,
+) -> Result<(), String> {
+    if id == 0 {
+        return Err("ID servizio non valido".to_string());
+    }
+    println!("=== rimuovi_pagamento_cumulativo id={} ===", id);
+    ensure_supabase_client().await?;
+
+    let row = fetch_servizio_row_template(id).await?;
+    let note_pulite = strip_pcum_marker(&note_fine_da_riga(&row));
+    let note_originali = note_fine_da_riga(&row);
+
+    let mut body = serde_json::Map::new();
+    put_opt_string_field(
+        &mut body,
+        Some(&row),
+        &["Incassato", "INCASSATO"],
+        "Incassato",
+        Some("DA INCASSARE".to_string()),
+    );
+    put_opt_nullable_string_field(
+        &mut body,
+        Some(&row),
+        &["TipoPagamento", "TIPOPAGAMENTO"],
+        "TipoPagamento",
+        Some(String::new()),
+    );
+    put_opt_date_field(
+        &mut body,
+        Some(&row),
+        &["Bonifico_Data", "DATABONIFICO", "DataBonifico"],
+        "Bonifico_Data",
+        Some(String::new()),
+    );
+    put_opt_date_field(
+        &mut body,
+        Some(&row),
+        &["Ricevuta_Data", "DATARICEVUTA", "DataRicevuta"],
+        "Ricevuta_Data",
+        Some(String::new()),
+    );
+    put_opt_numeric_field(
+        &mut body,
+        Some(&row),
+        &[
+            "Ricevuta_numero",
+            "Ricevuta_Numero",
+            "RICEVUTA_NUMERO",
+            "NumeroRicevuta",
+            "Numero_Ricevuta",
+            "ricevuta_numero",
+        ],
+        "Ricevuta_numero",
+        Some(String::new()),
+    );
+    put_pagamento_cumulativo_flag(&mut body, &row, false);
+    put_opt_nullable_string_field(
+        &mut body,
+        Some(&row),
+        &[
+            "PagamentoCumulativo_Rif",
+            "PagamentoCumulativo_RIF",
+            "pagamento_cumulativo_rif",
+        ],
+        "PagamentoCumulativo_Rif",
+        Some(String::new()),
+    );
+    put_opt_nullable_string_field(
+        &mut body,
+        Some(&row),
+        &[
+            "PagamentoCumulativo_Gruppo",
+            "PagamentoCumulativo_GRUPPO",
+            "pagamento_cumulativo_gruppo",
+        ],
+        "PagamentoCumulativo_Gruppo",
+        Some(String::new()),
+    );
+    put_opt_numeric_field(
+        &mut body,
+        Some(&row),
+        &[
+            "PagamentoCumulativo_Numero",
+            "PagamentoCumulativo_NUMERO",
+            "pagamento_cumulativo_numero",
+        ],
+        "PagamentoCumulativo_Numero",
+        Some(String::new()),
+    );
+    if !body.contains_key("PagamentoCumulativo_Rif") {
+        body.insert(
+            "PagamentoCumulativo_Rif".to_string(),
+            serde_json::Value::Null,
+        );
+    }
+    if !body.contains_key("PagamentoCumulativo_Gruppo") {
+        body.insert(
+            "PagamentoCumulativo_Gruppo".to_string(),
+            serde_json::Value::Null,
+        );
+    }
+    if !body.contains_key("PagamentoCumulativo_Numero") {
+        body.insert(
+            "PagamentoCumulativo_Numero".to_string(),
+            serde_json::Value::Null,
+        );
+    }
+    if note_pulite != note_originali.trim() {
+        put_opt_nullable_string_field(
+            &mut body,
+            Some(&row),
+            &[
+                "NoteFineServizio",
+                "NOTAFINESERVIZIO",
+                "NOTE_FINE_SERVIZIO",
+                "NotaFineServizio",
+            ],
+            "NoteFineServizio",
+            Some(note_pulite),
+        );
+    }
+    strip_servizio_audit_fields(&mut body);
+    apply_servizio_audit_fields(
+        &mut body,
+        Some(&row),
+        None,
+        modificato_da.as_deref(),
+        false,
+        true,
+    );
+
+    let guard = get_supabase_client().lock().await;
+    let client = guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+    client
+        .patch_servizio(id, &body)
+        .await
+        .map_err(|e| {
+            let msg = format_supabase_error(&e);
+            if msg.to_lowercase().contains("pagamento")
+                || msg.to_lowercase().contains("column")
+                || msg.to_lowercase().contains("schema cache")
+            {
+                format!(
+                    "{msg}\n\nEsegui prima lo script SQL supabase-pagamento-cumulativo.sql su Supabase."
+                )
+            } else {
+                msg
+            }
+        })?;
+    println!("✓ Pagamento cumulativo rimosso dal servizio {}", id);
+    Ok(())
 }
 
 // Comando per creare un nuovo servizio (Supabase / Servizi_supa)
@@ -10109,6 +11071,358 @@ async fn complete_oauth_authentication(
     }))
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+struct BackupSettings {
+    /// Cartella base scelta dall'utente (es. Proton Drive). Dentro creiamo AUSER-Backup/
+    cartella: String,
+}
+
+const BACKUP_KEEP: usize = 7;
+const BACKUP_SUBDIR: &str = "AUSER-Backup";
+const BACKUP_TABLE_TYPES: &[&str] = &[
+    "tesserati",
+    "servizi",
+    "automezzi",
+    "dotazioni_mezzi",
+    "impostazioni",
+    "motivazioni_trasporto",
+    "motorizzazioni",
+    "richiedenti",
+    "stato_del_servizio",
+    "telefoni",
+    "email",
+    "tipo_pagamenti",
+    "tipo_socio",
+    "tipologia_socio",
+    "tratte",
+    "user_permissions",
+    "tesseramenti",
+    "mansioni",
+    "appunti",
+    "appunti_destinatari",
+    "appunti_risposte",
+    "manutenzioni",
+];
+
+fn backup_settings_file(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app
+        .path_resolver()
+        .app_data_dir()
+        .ok_or_else(|| "Impossibile determinare la cartella dati app".to_string())?;
+    Ok(dir.join("backup_settings.json"))
+}
+
+fn load_backup_settings(app: &tauri::AppHandle) -> BackupSettings {
+    let Ok(path) = backup_settings_file(app) else {
+        return BackupSettings::default();
+    };
+    match fs::read_to_string(&path) {
+        Ok(txt) => serde_json::from_str(&txt).unwrap_or_default(),
+        Err(_) => BackupSettings::default(),
+    }
+}
+
+fn save_backup_settings(app: &tauri::AppHandle, settings: &BackupSettings) -> Result<(), String> {
+    let path = backup_settings_file(app)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Creazione cartella impostazioni: {}", e))?;
+    }
+    let txt = serde_json::to_string_pretty(settings)
+        .map_err(|e| format!("Serializzazione impostazioni backup: {}", e))?;
+    fs::write(&path, txt).map_err(|e| format!("Salvataggio impostazioni backup: {}", e))?;
+    Ok(())
+}
+
+fn pulisci_backup_vecchi(root_backup: &std::path::Path) -> Result<usize, String> {
+    if !root_backup.is_dir() {
+        return Ok(0);
+    }
+    let mut dirs: Vec<_> = fs::read_dir(root_backup)
+        .map_err(|e| format!("Lettura cartella backup: {}", e))?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .collect();
+    // Nome cartella = YYYY-MM-DD_HH-mm → ordine lessicografico = cronologico
+    dirs.sort_by(|a, b| {
+        b.file_name()
+            .to_string_lossy()
+            .cmp(&a.file_name().to_string_lossy())
+    });
+    let mut eliminati = 0usize;
+    for entry in dirs.into_iter().skip(BACKUP_KEEP) {
+        let p = entry.path();
+        if let Err(e) = fs::remove_dir_all(&p) {
+            println!("⚠️ Impossibile eliminare backup vecchio {:?}: {}", p, e);
+        } else {
+            eliminati += 1;
+            println!("🗑️ Backup vecchio eliminato: {:?}", p);
+        }
+    }
+    Ok(eliminati)
+}
+
+fn messaggio_accesso_negato(path: &std::path::Path, dettaglio: &std::io::Error) -> String {
+    format!(
+        "Accesso negato sulla cartella:\n{}\n\nDettaglio Windows: {}\n\nCosa fare (semplice):\n\
+1. Apri Esplora file e vai in Proton Drive\n\
+2. Crea a mano una cartella chiamata «AUSER-Backup»\n\
+3. Nell'app premi SFOGLIA e seleziona proprio quella cartella AUSER-Backup\n\
+4. Riprova il backup\n\n\
+Se Proton Drive è in pausa o non sincronizzato, avvialo e riprova.",
+        path.display(),
+        dettaglio
+    )
+}
+
+/// Verifica che si possa scrivere un file di prova nella cartella.
+fn verifica_cartella_scrivibile(dir: &std::path::Path) -> Result<(), String> {
+    let probe = dir.join(".auser_backup_write_test.tmp");
+    match fs::write(&probe, b"ok") {
+        Ok(()) => {
+            let _ = fs::remove_file(&probe);
+            Ok(())
+        }
+        Err(e) if e.raw_os_error() == Some(5) || e.kind() == std::io::ErrorKind::PermissionDenied => {
+            Err(messaggio_accesso_negato(dir, &e))
+        }
+        Err(e) => Err(format!(
+            "Non posso scrivere in:\n{}\n\nMotivo: {}",
+            dir.display(),
+            e
+        )),
+    }
+}
+
+fn crea_cartella(path: &std::path::Path) -> Result<(), String> {
+    if path.is_dir() {
+        return Ok(());
+    }
+    match fs::create_dir_all(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.raw_os_error() == Some(5) || e.kind() == std::io::ErrorKind::PermissionDenied => {
+            Err(messaggio_accesso_negato(path, &e))
+        }
+        Err(e) => Err(format!("Creazione cartella backup fallita ({}): {}", path.display(), e)),
+    }
+}
+
+/// Se l'utente ha già selezionato AUSER-Backup, usala così com'è.
+/// Altrimenti prova a creare AUSER-Backup dentro; se Proton lo blocca, usa la cartella scelta.
+fn risolvi_root_backup(base_path: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    verifica_cartella_scrivibile(base_path)?;
+
+    let nome = base_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+    if nome.eq_ignore_ascii_case(BACKUP_SUBDIR) {
+        return Ok(base_path.to_path_buf());
+    }
+
+    let candidate = base_path.join(BACKUP_SUBDIR);
+    if candidate.is_dir() {
+        verifica_cartella_scrivibile(&candidate)?;
+        return Ok(candidate);
+    }
+
+    match fs::create_dir(&candidate) {
+        Ok(()) => Ok(candidate),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            if candidate.is_dir() {
+                Ok(candidate)
+            } else {
+                Err(format!(
+                    "Esiste già un file chiamato {} in {}",
+                    BACKUP_SUBDIR,
+                    base_path.display()
+                ))
+            }
+        }
+        Err(e) => {
+            // Molti client cloud bloccano la creazione di sottocartelle dalla root:
+            // in quel caso salviamo direttamente nella cartella selezionata.
+            println!(
+                "⚠️ Impossibile creare {:?} ({}). Uso direttamente {:?}",
+                candidate, e, base_path
+            );
+            Ok(base_path.to_path_buf())
+        }
+    }
+}
+
+#[tauri::command]
+fn get_backup_settings(app: tauri::AppHandle) -> BackupSettings {
+    load_backup_settings(&app)
+}
+
+#[tauri::command]
+fn scegli_cartella_backup(app: tauri::AppHandle) -> Option<String> {
+    let iniziale = load_backup_settings(&app).cartella;
+    let mut builder = tauri::api::dialog::blocking::FileDialogBuilder::new();
+    builder = builder.set_title("Seleziona cartella Proton Drive (dove salvare i backup)");
+    if !iniziale.trim().is_empty() {
+        let p = std::path::PathBuf::from(iniziale.trim());
+        if p.is_dir() {
+            builder = builder.set_directory(p);
+        }
+    }
+    let scelta = builder.pick_folder()?;
+    let path = scelta.to_string_lossy().to_string();
+    let settings = BackupSettings {
+        cartella: path.clone(),
+    };
+    if let Err(e) = save_backup_settings(&app, &settings) {
+        println!("⚠️ Salvataggio percorso backup: {}", e);
+    }
+    Some(path)
+}
+
+#[tauri::command]
+async fn esegui_backup_dati(
+    app: tauri::AppHandle,
+    cartella: String,
+) -> Result<serde_json::Value, String> {
+    let base = cartella.trim().to_string();
+    if base.is_empty() {
+        return Err("Cartella di destinazione vuota".to_string());
+    }
+    let mut base_path = std::path::PathBuf::from(&base);
+    if !base_path.exists() {
+        return Err(format!(
+            "Cartella non trovata: {}\nControlla che Proton Drive sia installato e collegato.",
+            base
+        ));
+    }
+    if !base_path.is_dir() {
+        return Err(format!("Il percorso non è una cartella: {}", base));
+    }
+    // Normalizza percorso Windows (junction / cloud folder), senza prefisso \\?\
+    if let Ok(canon) = fs::canonicalize(&base_path) {
+        let s = canon.to_string_lossy();
+        let cleaned = s
+            .strip_prefix(r"\\?\UNC\")
+            .map(|rest| format!(r"\\{}", rest))
+            .or_else(|| s.strip_prefix(r"\\?\").map(|rest| rest.to_string()))
+            .unwrap_or_else(|| s.to_string());
+        base_path = std::path::PathBuf::from(cleaned);
+    }
+
+    // Memorizza il percorso scelto su questo PC
+    save_backup_settings(
+        &app,
+        &BackupSettings {
+            cartella: base_path.to_string_lossy().to_string(),
+        },
+    )?;
+
+    ensure_supabase_client().await?;
+
+    let stamp = Local::now().format("%Y-%m-%d_%H-%M").to_string();
+    let root_backup = risolvi_root_backup(&base_path)?;
+    let dest = root_backup.join(&stamp);
+    crea_cartella(&dest)?;
+    // Doppio controllo: a volte create_dir “passa” ma la scrittura è bloccata dal sync cloud
+    verifica_cartella_scrivibile(&dest)?;
+
+    println!("=== Backup dati → {:?} ===", dest);
+
+    let mut tabelle_ok: Vec<String> = Vec::new();
+    let mut errori: Vec<String> = Vec::new();
+    let mut gia_scritte: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for table_type in BACKUP_TABLE_TYPES {
+        let table_name = {
+            let guard = get_supabase_client().lock().await;
+            let Some(client) = guard.as_ref() else {
+                errori.push(format!("{}: client Supabase non disponibile", table_type));
+                continue;
+            };
+            match client.config.tables.table_name(table_type) {
+                Some(n) => n.to_string(),
+                None => continue,
+            }
+        };
+        if gia_scritte.contains(&table_name) {
+            continue;
+        }
+
+        let rows_result = {
+            let guard = get_supabase_client().lock().await;
+            let Some(client) = guard.as_ref() else {
+                errori.push(format!("{}: client Supabase non disponibile", table_type));
+                continue;
+            };
+            client.fetch_table(table_type, None, None, None).await
+        };
+
+        match rows_result {
+            Ok(rows) => {
+                let file_name = format!("{}.json", table_name.replace('/', "_"));
+                let file_path = dest.join(&file_name);
+                let payload = serde_json::json!({
+                    "table": table_name,
+                    "table_type": table_type,
+                    "exported_at": Local::now().to_rfc3339(),
+                    "count": rows.len(),
+                    "rows": rows,
+                });
+                match serde_json::to_string_pretty(&payload) {
+                    Ok(txt) => {
+                        if let Err(e) = fs::write(&file_path, txt) {
+                            errori.push(format!("{}: scrittura file ({})", table_name, e));
+                        } else {
+                            gia_scritte.insert(table_name.clone());
+                            tabelle_ok.push(table_name);
+                        }
+                    }
+                    Err(e) => errori.push(format!("{}: json ({})", table_name, e)),
+                }
+            }
+            Err(e) => {
+                // Tabella assente / non ancora creata: non bloccare tutto il backup
+                println!("⚠️ Backup skip {}: {}", table_type, e);
+                errori.push(format!("{}: {}", table_type, e));
+            }
+        }
+    }
+
+    let manifest = serde_json::json!({
+        "exported_at": Local::now().to_rfc3339(),
+        "destination": dest.to_string_lossy(),
+        "tables_ok": tabelle_ok,
+        "errors": errori,
+        "keep_last": BACKUP_KEEP,
+    });
+    let _ = fs::write(
+        dest.join("_manifest.json"),
+        serde_json::to_string_pretty(&manifest).unwrap_or_default(),
+    );
+
+    let eliminati = pulisci_backup_vecchi(&root_backup)?;
+
+    if tabelle_ok.is_empty() {
+        return Err(format!(
+            "Nessuna tabella esportata. Errori: {}",
+            errori.join(" | ")
+        ));
+    }
+
+    println!(
+        "✓ Backup completato: {} tabelle, {} cartelle vecchie eliminate",
+        tabelle_ok.len(),
+        eliminati
+    );
+
+    Ok(serde_json::json!({
+        "ok": true,
+        "cartella_backup": dest.to_string_lossy(),
+        "tabelle": tabelle_ok.len(),
+        "tabelle_ok": tabelle_ok,
+        "errori": errori,
+        "eliminati": eliminati,
+    }))
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|_| {
@@ -10151,11 +11465,15 @@ fn main() {
             save_socio_email,
             delete_socio_email,
             get_all_automezzi,
+            get_fogli_di_viaggio,
+            get_rifornimenti,
             get_ultimi_km_mezzi,
             create_manutenzione,
             get_manutenzione,
             salva_manutenzione,
             get_manutenzioni_mezzo,
+            get_id_mezzi_manutenzioni_aperte,
+            get_conteggio_manutenzioni_aperte,
             get_manutenzioni_scadute,
             aggiorna_stato_manutenzione,
             save_automezzo,
@@ -10203,6 +11521,9 @@ fn main() {
             update_servizio_sharepoint,
             update_servizio_completo,
             aggiorna_incasso_serie_servizi,
+            applica_pagamento_cumulativo,
+            rimuovi_pagamento_cumulativo,
+            get_servizi_pagamento_cumulativo,
             create_servizio,
             delete_servizio,
             duplicate_servizio,
@@ -10212,7 +11533,10 @@ fn main() {
             init_sharepoint_from_config,
             init_supabase_from_config,
             test_supabase_connection,
-            check_authentication
+            check_authentication,
+            get_backup_settings,
+            scegli_cartella_backup,
+            esegui_backup_dati
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

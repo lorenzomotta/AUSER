@@ -7,7 +7,8 @@
  * 3. Tabella user_permissions: user_id + Calendario = true (o is_admin = true)
  * 4. Esegui supabase-calendario-web.sql per le policy RLS
  * 5. Pubblica su GitHub Pages i file: CALENDARIO_WEB.html, calendario-web.css,
- *    calendario-web.js, calendario-web-excel.js, calendario.css, tratta-riepilogo.js, config.public.json
+ *    calendario-web.js, calendario-web-excel.js, calendario.css, tratta-riepilogo.js,
+ *    rifornimento-mobile.js, rifornimento-mobile.css, config.public.json
  */
 
 import {
@@ -25,13 +26,16 @@ import {
     buildPayloadUpdateServizio,
     payloadSenzaMeta,
     OPZIONI_DEFAULT
-} from './calendario-web-edit.js?v=28';
+} from './calendario-web-edit.js?v=29';
 import { generaExcelCalendarioWeb } from './calendario-web-excel.js?v=1';
+import { avviaMascheraRifornimento } from './rifornimento-mobile.js?v=3';
 
 let supabaseClient = null;
 let publicConfig = null;
 let nominativiMap = {};
 let allOperatori = [];
+/** Soci con mansione ACCOMPAGNATORE (per select in scheda servizio). */
+let allAccompagnatori = [];
 let calendar = null;
 let allAutomezzi = [];
 const serviziPerRangeCache = new Map();
@@ -562,6 +566,7 @@ async function gestisciLogout() {
     serviziVistaCorrente = [];
     nominativiMap = {};
     allOperatori = [];
+    allAccompagnatori = [];
     permessiCorrenti = null;
     utenteAuthCorrente = null;
     mostraSchermataLogin();
@@ -586,10 +591,18 @@ async function controllaSessioneEsistente() {
 
 // ─── Dati Supabase ───────────────────────────────────────────────────────────
 
+function haMansioneAccompagnatore(disponibilita) {
+    return String(disponibilita || '')
+        .split(/[,;]/)
+        .map((s) => s.trim().toUpperCase())
+        .includes('ACCOMPAGNATORE');
+}
+
 async function caricaNominativi() {
     if (Object.keys(nominativiMap).length) return;
     const { data } = await supabaseClient.from(tabella('tesserati')).select('*').limit(5000);
     const operatori = [];
+    const accompagnatori = [];
     (data || []).forEach(row => {
         const id = String(getFieldAny(row, ['IdSocio', 'IDSOCIO', 'idsocio']) || '').trim();
         const nom = getFieldAny(row, ['NominativoSocio', 'NOMINATIVO', 'Nominativo', 'nominativo']);
@@ -602,8 +615,13 @@ async function caricaNominativi() {
         if (id && nom && isTruthyFlag(opFlag)) {
             operatori.push({ value: idOperatoreNorm(id), label: nom });
         }
+        const disp = getFieldAny(row, ['Disponibilita', 'DISPONIBILITA', 'disponibilita']);
+        if (nom && haMansioneAccompagnatore(disp)) {
+            accompagnatori.push({ value: nom, label: nom });
+        }
     });
     allOperatori = operatori.sort((a, b) => a.label.localeCompare(b.label, 'it'));
+    allAccompagnatori = accompagnatori.sort((a, b) => a.label.localeCompare(b.label, 'it'));
 }
 
 /** Solo colonne ID operatore (non il flag/testo Operatore) */
@@ -773,7 +791,13 @@ function rowToServizioCompleto(row) {
         stato_incasso: incassato || 'DA INCASSARE',
         operatore: resolveOperatoreNome(row),
         operatore_id: resolveOperatoreId(row),
-        operatore_2: getFieldAny(row, ['Oper2', 'OPER2']),
+        operatore_2: (() => {
+            const raw = getFieldAny(row, [
+                'Accompagnatore', 'ACCOMPAGNATORE', 'accompagnatore', 'Oper2', 'OPER2'
+            ]);
+            if (!raw) return '';
+            return nomeOperatoreDaId(raw) || raw;
+        })(),
         mezzo_usato: '',
         mezzo: getFieldAny(row, ['Mezzo', 'MEZZO']),
         tempo: formatTempoDaRow(row),
@@ -795,6 +819,22 @@ function rowToServizioCompleto(row) {
             'NoteFineServizio', 'NOTAFINESERVIZIO', 'NOTE_FINE_SERVIZIO', 'NotaFineServizio'
         ]),
         archivia: getFieldAny(row, ['Archiviazione', 'ARCHIVIAZIONE']),
+        pagamento_cumulativo: isTruthyFlag(getFieldAny(row, [
+            'PagamentoCumulativo', 'PAGAMENTOCUMULATIVO', 'pagamento_cumulativo'
+        ])),
+        pagamento_cumulativo_rif: getFieldAny(row, [
+            'PagamentoCumulativo_Rif', 'PagamentoCumulativo_RIF', 'pagamento_cumulativo_rif'
+        ]),
+        pagamento_cumulativo_gruppo: getFieldAny(row, [
+            'PagamentoCumulativo_Gruppo', 'PagamentoCumulativo_GRUPPO', 'pagamento_cumulativo_gruppo'
+        ]),
+        pagamento_cumulativo_numero: (() => {
+            const raw = getFieldAny(row, [
+                'PagamentoCumulativo_Numero', 'PagamentoCumulativo_NUMERO', 'pagamento_cumulativo_numero'
+            ]);
+            const n = parseInt(String(raw || '').trim(), 10);
+            return Number.isFinite(n) && n > 0 ? n : 0;
+        })(),
         _raw: row
     };
     const fine = leggiCampiFineServizioDaRow(row);
@@ -1091,16 +1131,41 @@ function renderEventContent(arg) {
 
     const socioHtml = htmlTestoConIcona(socio, iconaTrasportato);
     const opHtml = htmlTestoConIcona(op, iconaOperatore);
-    const titleText = [ora, socio, op].filter(p => String(p).trim() !== '').join(' · ') || '—';
+    const acc = String(s.operatore_2 || '').trim();
+    const isSettimana = vista === 'dayGridWeek' || isVistaListaMobile(vista);
+    const titleText = [ora, socio, op, isSettimana || isGiorno ? acc : '']
+        .filter(p => String(p).trim() !== '')
+        .join(' · ') || '—';
     const titleAttr = escapeHtml(titleText);
 
-    if (isVistaMobileCalendario() && isVistaListaMobile(arg.view?.type)) {
-        const parti = [];
-        if (ora.trim()) parti.push(escapeHtml(ora));
-        if (socioHtml) parti.push(socioHtml);
-        if (op.trim()) parti.push(`<span class="cal-event-op">${escapeHtml(op)}</span>`);
-        const riga = parti.length ? parti.join(' · ') : '—';
-        return { html: `<div class="cal-event cal-event-week-row" title="${titleAttr}">${riga}</div>` };
+    if (isSettimana) {
+        const { mezzo, targa } = mezzoETargaDaServizio(s);
+        const mezzoTarga = [mezzo, targa].filter(p => String(p).trim() !== '');
+        const mezzoHtml = mezzoTarga.length
+            ? `<span class="cal-event-mezzo">${escapeHtml(mezzoTarga.join(' '))}</span>`
+            : '';
+        const partiSinistra = [];
+        if (ora.trim()) partiSinistra.push(`<span class="cal-event-ora">${escapeHtml(ora)}</span>`);
+        if (socioHtml) partiSinistra.push(socioHtml);
+        const sinistraHtml = partiSinistra.length
+            ? `<span class="cal-event-week-main">${partiSinistra.join(' · ')}</span>`
+            : '';
+        const riga1 = (sinistraHtml || mezzoHtml)
+            ? `<span class="cal-event-riga-settimana">${sinistraHtml}${mezzoHtml}</span>`
+            : '';
+        const accHtml = acc
+            ? `<span class="cal-event-acc">${escapeHtml(acc)}</span>`
+            : '';
+        const riga2 = (op.trim() || acc)
+            ? `<span class="cal-event-riga-op">${op.trim() ? `<span class="cal-event-op">${escapeHtml(op)}</span>` : '<span class="cal-event-op"></span>'}${accHtml}</span>`
+            : '';
+        const titleWeek = [ora, socio, op, acc, ...mezzoTarga]
+            .filter(p => String(p).trim() !== '')
+            .join(' · ') || '—';
+        const righe = [riga1, riga2].filter(Boolean);
+        return {
+            html: `<div class="cal-event cal-event-week" title="${escapeHtml(titleWeek)}">${righe.length ? righe.join('') : '—'}</div>`
+        };
     }
 
     if (isVistaMobileCalendario() && isGiorno) {
@@ -1112,13 +1177,19 @@ function renderEventContent(arg) {
         const rigaOra = (ora.trim() || mezzoHtml)
             ? `<span class="cal-event-riga-ora">${ora.trim() ? `<span class="cal-event-ora">${escapeHtml(ora)}</span>` : ''}${mezzoHtml}</span>`
             : '';
-        const titleDay = [ora, socio, op, ...mezzoTarga]
+        const accHtml = acc
+            ? `<span class="cal-event-acc">${escapeHtml(acc)}</span>`
+            : '';
+        const rigaOp = (op.trim() || acc)
+            ? `<span class="cal-event-riga-op">${opHtml || '<span class="cal-event-op"></span>'}${accHtml}</span>`
+            : '';
+        const titleDay = [ora, socio, op, acc, ...mezzoTarga]
             .filter(p => String(p).trim() !== '')
             .join(' · ') || '—';
         const righe = [
             rigaOra,
             socioHtml ? `<span class="cal-event-socio">${socioHtml}</span>` : '',
-            opHtml ? `<span class="cal-event-op">${opHtml}</span>` : ''
+            rigaOp
         ].filter(Boolean);
         const html = righe.length
             ? `<div class="cal-event cal-event-mobile" title="${escapeHtml(titleDay)}">${righe.join('')}</div>`
@@ -1140,7 +1211,7 @@ function renderEventContent(arg) {
 
 function aggiornaContatore(num) {
     const el = document.getElementById('calendario-count');
-    if (el) el.textContent = `(${num} servizi nel periodo)`;
+    if (el) el.textContent = `(${num})`;
 }
 
 function setLoading(visible, messaggio) {
@@ -1154,7 +1225,13 @@ function setLoading(visible, messaggio) {
     }
 }
 
+let modalitaAnteprima = false;
+
 async function aggiornaEventiCalendario() {
+    if (modalitaAnteprima) {
+        setLoading(false);
+        return;
+    }
     if (!calendar) return;
     const reqId = ++loadRequestId;
     setLoading(true);
@@ -1436,6 +1513,7 @@ function getOpzioniModificaAdmin() {
     return {
         ...OPZIONI_DEFAULT,
         operatori: allOperatori.length ? allOperatori : [],
+        accompagnatori: allAccompagnatori.length ? allAccompagnatori : [],
         mezzi
     };
 }
@@ -1484,6 +1562,10 @@ async function renderModalServizio(servizio) {
             && !opzioni.operatori.some((o) => idOperatoreNorm(o.value) === idOpSelect)) {
             opzioni.operatori = [{ value: idOpSelect, label: nomeOp }, ...opzioni.operatori];
         }
+        const nomeAcc = String(servizio.operatore_2 || '').trim();
+        if (nomeAcc && !opzioni.accompagnatori.some((o) => o.value === nomeAcc)) {
+            opzioni.accompagnatori = [{ value: nomeAcc, label: nomeAcc }, ...opzioni.accompagnatori];
+        }
         const servizioForm = { ...servizio, operatore_id: idOpSelect || servizio.operatore_id };
         body.innerHTML = htmlDettaglioServizioEditabile(servizioForm, opzioni, telefoni)
             + htmlRigaTrattaSePresente(servizio);
@@ -1526,7 +1608,8 @@ async function renderModalServizio(servizio) {
                 ${creaNotaDettaglio('NOTE ARRIVO', servizio.note_arrivo)}
             </div>
             <div class="dettaglio-row">
-                ${creaCampoDettaglio('OPERATORE', nominativoOperatoreVisibile(servizio), 'field-large')}
+                ${creaCampoDettaglio('OPERATORE', nominativoOperatoreVisibile(servizio), 'field-half')}
+                ${creaCampoDettaglio('ACCOMPAGNATORE', servizio.operatore_2 || '', 'field-half')}
                 ${creaCampoDettaglio('MEZZO USATO', mezzo, 'field-large')}
                 ${creaCampoDettaglio('TEMPO', servizio.tempo, 'field-small')}
                 ${creaCampoDettaglio('KM', servizio.km, 'field-small')}
@@ -2030,6 +2113,25 @@ async function avviaCalendario(user, perm) {
     setLoading(true, 'Caricamento anagrafiche...');
     await caricaNominativi();
     await caricaAutomezzi();
+    avviaMascheraRifornimento({
+        getClient: () => supabaseClient,
+        nomeTabella: tabella('rifornimenti') || 'Rifornimenti',
+        getMezzi: () => (allAutomezzi || [])
+            .map((mezzo) => {
+                const value = chiaveMezzo(mezzo.id) || chiaveMezzo(mezzo.nr_automezzo);
+                if (!value) return null;
+                return { value, label: etichettaAutomezzo(mezzo) || `Mezzo ${value}` };
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.label.localeCompare(b.label, 'it')),
+        getOperatori: () => (allOperatori || [])
+            .map((op) => {
+                const label = String(op?.label || '').trim();
+                if (!label) return null;
+                return { value: label, label };
+            })
+            .filter(Boolean)
+    });
     initCalendario();
     setupEventListenersCalendario();
     if (isVistaMobileCalendario() && calendar) {
@@ -2040,9 +2142,99 @@ async function avviaCalendario(user, perm) {
     if (calendar) await aggiornaEventiCalendario();
 }
 
+function dataOggiItaliana() {
+    const oggi = new Date();
+    const giorno = String(oggi.getDate()).padStart(2, '0');
+    const mese = String(oggi.getMonth() + 1).padStart(2, '0');
+    return `${giorno}/${mese}/${oggi.getFullYear()}`;
+}
+
+function clientSoloAnteprima() {
+    return {
+        from() {
+            return {
+                select() {
+                    return {
+                        limit() {
+                            return Promise.resolve({
+                                data: [
+                                    { Distributore: 'Q8 Asti' },
+                                    { Distributore: 'Eni centro' }
+                                ],
+                                error: null
+                            });
+                        }
+                    };
+                },
+                insert() {
+                    return Promise.resolve({
+                        error: {
+                            message: 'Anteprima: dal telefono, dopo l’accesso, il rifornimento viene salvato davvero.'
+                        }
+                    });
+                }
+            };
+        }
+    };
+}
+
+function mostraAnteprimaMobile() {
+    modalitaAnteprima = true;
+    const oggi = dataOggiItaliana();
+    allAutomezzi = [{
+        id: '15',
+        nr_automezzo: '8',
+        marca: 'FIAT',
+        modello: 'DOBLO',
+        targa: 'GB372ZG',
+        colore_mezzo: 'Bianco'
+    }];
+    allOperatori = [
+        { value: 'Luca Verdi', label: 'Luca Verdi' },
+        { value: 'Anna Neri', label: 'Anna Neri' }
+    ];
+    mostraCalendario('Anteprima · dati di esempio');
+    configuraVistaInizialeMobile();
+    avviaMascheraRifornimento({
+        getClient: clientSoloAnteprima,
+        nomeTabella: 'Rifornimenti',
+        getMezzi: () => [{ value: '15', label: etichettaAutomezzo(allAutomezzi[0]) }],
+        getOperatori: () => allOperatori.map((op) => ({ value: op.label, label: op.label }))
+    });
+    initCalendario();
+    setupEventListenersCalendario();
+    if (calendar) {
+        impostaVista('dayGridDay');
+        calendar.today();
+        const esempi = [
+            { id: 'a1', data_prelievo: oggi, ora_inizio: '08:30', socio_trasportato: 'Rossi Mario', operatore: 'Luca Verdi', mezzo: '15', stato_servizio: 'DA ESEGUIRE' },
+            { id: 'a2', data_prelievo: oggi, ora_inizio: '10:15', socio_trasportato: 'Bianchi Anna', operatore: 'Anna Neri', mezzo: '15', stato_servizio: 'ESEGUITO' },
+            { id: 'a3', data_prelievo: oggi, ora_inizio: '14:00', socio_trasportato: 'Neri Paolo', operatore: 'Luca Verdi', mezzo: '15', stato_servizio: 'COMPLETATO' }
+        ];
+        esempi.forEach((servizio) => serviziById.set(servizio.id, servizio));
+        calendar.removeAllEvents();
+        calendar.addEventSource(esempi.map(servizioToEvent).filter(Boolean));
+        aggiornaContatore(esempi.length);
+    }
+    setLoading(false);
+}
+
+function anteprimaRichiesta() {
+    return new URLSearchParams(window.location.search).get('anteprima') === 'mobile';
+}
+
 // ─── Avvio ───────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
+    if (anteprimaRichiesta()) {
+        try {
+            mostraAnteprimaMobile();
+        } catch (err) {
+            console.error(err);
+            setLoading(true, `Anteprima: ${err?.message || err}`);
+        }
+        return;
+    }
     try {
         await caricaConfigPubblica();
         document.getElementById('web-login-form')?.addEventListener('submit', gestisciLogin);

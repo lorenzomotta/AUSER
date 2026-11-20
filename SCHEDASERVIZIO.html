@@ -62,14 +62,20 @@
 
         <section class="ss-mezzo-block">
             <div class="ss-mezzo-headers">
-                <div class="ss-band ss-band-azzurro">OPERATORE</div>
+                <div class="ss-band ss-band-azzurro">OPERATORE e ACCOMPAGNATORE</div>
                 <div class="ss-band ss-band-azzurro">AUTOMEZZO</div>
                 <div class="ss-band ss-band-azzurro">TARGA</div>
             </div>
             <div class="ss-mezzo-values">
                 <div class="ss-box ss-operatore-box">
-                    <div id="ss-operatore-nome"></div>
-                    <div id="ss-operatore-tel" class="ss-sub"></div>
+                    <div class="ss-persone-riga">
+                        <span id="ss-operatore-nome"></span>
+                        <span id="ss-operatore-tel" class="ss-tel"></span>
+                    </div>
+                    <div class="ss-persone-riga">
+                        <span id="ss-accompagnatore-nome"></span>
+                        <span id="ss-accompagnatore-tel" class="ss-tel"></span>
+                    </div>
                 </div>
                 <div class="ss-box" id="ss-automezzo"></div>
                 <div class="ss-box" id="ss-targa"></div>
@@ -77,6 +83,7 @@
         </section>
 
         <section class="ss-tipo-riga">
+            <span class="ss-tipo-label">TIPO DI SERVIZIO</span>
             <label class="ss-check">
                 <input type="checkbox" id="ss-check-standard" disabled>
                 <span>STANDARD</span>

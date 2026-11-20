@@ -39,6 +39,13 @@
     box-sizing: border-box;
 }
 
+.ct-costo-km-bloccato,
+.ct-costo-km-bloccato[readonly] {
+    background: #eee;
+    color: #333;
+    cursor: default;
+}
+
 .ct-field-totale {
     margin-top: 4px;
     padding-top: 10px;

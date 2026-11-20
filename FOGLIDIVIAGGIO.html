@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fogli di viaggio - AUSER Asti</title>
+    <link rel="stylesheet" href="responsive-app.css">
+    <link rel="stylesheet" href="foglidiviaggio.css">
+</head>
+<body>
+    <header class="fdv-header">
+        <div class="fdv-header-titolo">
+            <h1>FOGLI DI VIAGGIO</h1>
+            <p class="fdv-sottotitolo" id="fdv-sottotitolo">Tutti i mezzi</p>
+        </div>
+        <div class="fdv-header-azioni">
+            <span class="fdv-stato" id="fdv-stato" aria-live="polite"></span>
+            <button type="button" class="fdv-btn fdv-btn-tutti" id="btn-mostra-tutti">MOSTRA TUTTI</button>
+            <button type="button" class="fdv-btn fdv-btn-torna" id="btn-torna">TORNA</button>
+        </div>
+    </header>
+
+    <main class="fdv-main">
+        <p class="fdv-messaggio" id="fdv-messaggio">Caricamento fogli di viaggio…</p>
+
+        <div class="fdv-tabella-wrap" id="fdv-tabella-wrap" hidden>
+            <table class="fdv-tabella">
+                <thead>
+                    <tr id="fdv-intestazione"></tr>
+                </thead>
+                <tbody id="fdv-corpo"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <footer class="fdv-footer" id="fdv-footer" hidden>
+        <p>Totale viaggi <strong id="fdv-totale-viaggi">0</strong></p>
+        <p>Totale KM <strong id="fdv-totale-km">0</strong></p>
+        <p class="fdv-footer-nota" id="fdv-footer-nota" hidden>I totali contano solo le righe visibili</p>
+    </footer>
+
+    <div class="fdv-menu" id="fdv-menu" hidden>
+        <div class="fdv-menu-ordina">
+            <button type="button" id="fdv-ordina-asc">A → Z</button>
+            <button type="button" id="fdv-ordina-desc">Z → A</button>
+        </div>
+        <div id="fdv-menu-valori">
+            <label class="fdv-menu-cerca-label" for="fdv-menu-cerca">Contiene</label>
+            <input type="search" id="fdv-menu-cerca" placeholder="Scrivi per filtrare">
+            <label class="fdv-menu-tutti">
+                <input type="checkbox" id="fdv-menu-tutti" checked>
+                <span>Seleziona tutto</span>
+            </label>
+            <div class="fdv-menu-lista" id="fdv-menu-lista"></div>
+        </div>
+        <div class="fdv-menu-date" id="fdv-menu-date" hidden>
+            <label for="fdv-data-dal">Dalla data</label>
+            <input type="date" id="fdv-data-dal">
+            <label for="fdv-data-al">Alla data</label>
+            <input type="date" id="fdv-data-al">
+            <p class="fdv-menu-vuoto">Puoi compilare solo una delle due. I giorni estremi sono compresi.</p>
+        </div>
+        <button type="button" class="fdv-menu-azzera" id="fdv-menu-azzera">Azzera filtro</button>
+    </div>
+
+    <script type="module" src="foglidiviaggio.js"></script>
+</body>
+</html>

@@ -26,6 +26,8 @@
                     </div>
                 </div>
                 <div class="page-header-actions">
+                    <button class="btn-header-viaggi" id="btn-viaggi" type="button">VIAGGI</button>
+                    <button class="btn-header-rifornimenti" id="btn-rifornimenti" type="button">RIFORNIMENTI</button>
                     <button class="btn-header-nuovo-mezzo" id="btn-nuovo-mezzo" type="button">NUOVO MEZZO</button>
                     <button class="btn btn-chiudi" id="btn-chiudi" type="button">CHIUDI</button>
                 </div>
@@ -126,43 +128,54 @@
             </div>
             <form id="form-manutenzione" class="manut-modal-body" autocomplete="off">
                 <div class="manut-modal-grid">
-                    <div class="manut-form-group">
-                        <label for="manut-tipologia">TIPOLOGIA</label>
-                        <select id="manut-tipologia">
-                            <option value="Km">Km</option>
-                            <option value="Giorni">Giorni</option>
-                        </select>
-                    </div>
-                    <div class="manut-form-group">
-                        <label for="manut-delta-km">DELTA CHILOMETRI</label>
-                        <input type="text" id="manut-delta-km" inputmode="numeric" placeholder="es. 2000">
-                    </div>
-                    <div class="manut-form-group">
-                        <label for="manut-delta-giorni">DELTA GIORNI</label>
-                        <input type="text" id="manut-delta-giorni" inputmode="numeric" placeholder="es. 90">
-                    </div>
-                    <div class="manut-form-group">
-                        <label for="manut-km-riferimento">KM RIFERIMENTO (attuale)</label>
-                        <input type="text" id="manut-km-riferimento" readonly title="Preso dall'ultimo chilometraggio del mezzo">
-                    </div>
-                    <div class="manut-form-group manut-operatore-combo">
-                        <label for="manut-operatore">OPERATORE</label>
-                        <div class="manut-combo">
-                            <input type="text" id="manut-operatore" autocomplete="off" placeholder="Digita per cercare…">
-                            <ul id="manut-operatore-lista" class="manut-combo-lista" hidden role="listbox"></ul>
+                    <div class="manut-riga-primaria">
+                        <div class="manut-form-group manut-field-tipologia">
+                            <label for="manut-tipologia">TIPOLOGIA</label>
+                            <select id="manut-tipologia">
+                                <option value="Km">Km</option>
+                                <option value="Giorni">Giorni</option>
+                            </select>
                         </div>
+                        <div class="manut-form-group manut-field-delta-km">
+                            <label for="manut-delta-km">DELTA KM</label>
+                            <input type="text" id="manut-delta-km" inputmode="numeric" placeholder="es. 2000">
+                        </div>
+                        <div class="manut-form-group manut-field-delta-giorni">
+                            <label for="manut-delta-giorni">DELTA GG</label>
+                            <input type="text" id="manut-delta-giorni" inputmode="numeric" placeholder="es. 90">
+                        </div>
+                        <div class="manut-form-group manut-field-km-rif">
+                            <label for="manut-km-riferimento">KM RIF.</label>
+                            <input type="text" id="manut-km-riferimento" readonly title="Km riferimento (attuale): preso dall'ultimo chilometraggio del mezzo">
+                        </div>
+                        <div class="manut-form-group manut-operatore-combo manut-field-operatore">
+                            <label for="manut-operatore">OPERATORE</label>
+                            <div class="manut-combo">
+                                <input type="text" id="manut-operatore" autocomplete="off" placeholder="Digita per cercare…">
+                                <ul id="manut-operatore-lista" class="manut-combo-lista" hidden role="listbox"></ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="manut-riga-preavviso">
+                        <div class="manut-form-group manut-field-preavviso">
+                            <label for="manut-preavviso" id="manut-preavviso-label">INIZIA AD AVVISARMI</label>
+                            <input type="text" id="manut-preavviso" inputmode="numeric" placeholder="es. 40" title="Quanto prima iniziare l'avviso giallo sulla Home">
+                        </div>
+                        <p id="manut-preavviso-hint" class="manut-preavviso-hint">km prima della soglia (opzionale) → avviso giallo; a scadenza diventa rosso</p>
                     </div>
                     <div class="manut-form-group manut-form-group-full">
                         <label for="manut-motivazione">MOTIVAZIONE</label>
                         <input type="text" id="manut-motivazione" placeholder="es. Controllo officina / tagliando">
                     </div>
-                    <div class="manut-form-group">
-                        <label for="manut-eseguita-presso">ESEGUITA PRESSO</label>
-                        <input type="text" id="manut-eseguita-presso" placeholder="Officina / luogo">
-                    </div>
-                    <div class="manut-form-group">
-                        <label for="manut-pagato">PAGATO (€)</label>
-                        <input type="text" id="manut-pagato" inputmode="decimal" placeholder="opzionale">
+                    <div class="manut-riga-presso-pagato">
+                        <div class="manut-form-group manut-field-presso">
+                            <label for="manut-eseguita-presso">ESEGUITA PRESSO</label>
+                            <input type="text" id="manut-eseguita-presso" placeholder="Officina / luogo">
+                        </div>
+                        <div class="manut-form-group manut-field-pagato">
+                            <label for="manut-pagato">PAGATO (€)</label>
+                            <input type="text" id="manut-pagato" inputmode="decimal" placeholder="opzionale">
+                        </div>
                     </div>
                     <div class="manut-form-group manut-form-group-full">
                         <label for="manut-note">NOTE MANUTENZIONE</label>
@@ -192,40 +205,44 @@
                 <input type="hidden" id="completa-manut-id" value="">
                 <p id="completa-manut-riepilogo" class="manut-hint"></p>
                 <div class="manut-modal-grid">
-                    <div class="manut-form-group">
-                        <label for="completa-manut-data">DATA ESECUZIONE</label>
-                        <input type="text" id="completa-manut-data" placeholder="gg/mm/aaaa">
-                    </div>
-                    <div class="manut-form-group">
-                        <label for="completa-manut-tipologia">TIPOLOGIA</label>
-                        <input type="text" id="completa-manut-tipologia" readonly>
-                    </div>
-                    <div class="manut-form-group">
-                        <label for="completa-manut-soglia">SOGLIA</label>
-                        <input type="text" id="completa-manut-soglia" readonly>
-                    </div>
-                    <div class="manut-form-group">
-                        <label for="completa-manut-stato">STATO</label>
-                        <input type="text" id="completa-manut-stato" readonly>
+                    <div class="manut-riga-completa-meta">
+                        <div class="manut-form-group manut-field-data-esec">
+                            <label for="completa-manut-data">DATA ESECUZIONE</label>
+                            <input type="text" id="completa-manut-data" placeholder="gg/mm/aaaa">
+                        </div>
+                        <div class="manut-form-group manut-field-tipologia-ro">
+                            <label for="completa-manut-tipologia">TIPOLOGIA</label>
+                            <input type="text" id="completa-manut-tipologia" readonly>
+                        </div>
+                        <div class="manut-form-group manut-field-soglia">
+                            <label for="completa-manut-soglia">SOGLIA</label>
+                            <input type="text" id="completa-manut-soglia" readonly>
+                        </div>
+                        <div class="manut-form-group manut-field-stato-ro">
+                            <label for="completa-manut-stato">STATO</label>
+                            <input type="text" id="completa-manut-stato" readonly>
+                        </div>
+                        <div class="manut-form-group manut-field-pagato">
+                            <label for="completa-manut-pagato">PAGATO (€)</label>
+                            <input type="text" id="completa-manut-pagato" inputmode="decimal" placeholder="opz.">
+                        </div>
                     </div>
                     <div class="manut-form-group manut-form-group-full">
                         <label for="completa-manut-motivazione">MOTIVAZIONE</label>
                         <input type="text" id="completa-manut-motivazione">
                     </div>
-                    <div class="manut-form-group manut-operatore-combo">
-                        <label for="completa-manut-operatore">OPERATORE</label>
-                        <div class="manut-combo">
-                            <input type="text" id="completa-manut-operatore" autocomplete="off" placeholder="Digita per cercare…">
-                            <ul id="completa-manut-operatore-lista" class="manut-combo-lista" hidden role="listbox"></ul>
+                    <div class="manut-riga-presso-pagato">
+                        <div class="manut-form-group manut-operatore-combo manut-field-operatore">
+                            <label for="completa-manut-operatore">OPERATORE</label>
+                            <div class="manut-combo">
+                                <input type="text" id="completa-manut-operatore" autocomplete="off" placeholder="Digita per cercare…">
+                                <ul id="completa-manut-operatore-lista" class="manut-combo-lista" hidden role="listbox"></ul>
+                            </div>
                         </div>
-                    </div>
-                    <div class="manut-form-group">
-                        <label for="completa-manut-presso">ESEGUITA PRESSO</label>
-                        <input type="text" id="completa-manut-presso" placeholder="Officina / luogo">
-                    </div>
-                    <div class="manut-form-group">
-                        <label for="completa-manut-pagato">PAGATO (€)</label>
-                        <input type="text" id="completa-manut-pagato" inputmode="decimal" placeholder="opzionale">
+                        <div class="manut-form-group manut-field-presso">
+                            <label for="completa-manut-presso">ESEGUITA PRESSO</label>
+                            <input type="text" id="completa-manut-presso" placeholder="Officina / luogo">
+                        </div>
                     </div>
                     <div class="manut-form-group manut-form-group-full">
                         <label for="completa-manut-note">NOTE MANUTENZIONE</label>
@@ -242,11 +259,67 @@
         </div>
     </div>
 
+    <div id="modal-modifica-manutenzione" class="manut-modal-overlay" hidden aria-hidden="true">
+        <div class="manut-modal" role="dialog" aria-labelledby="modal-modifica-manut-title" aria-modal="true">
+            <div class="manut-modal-header">
+                <div>
+                    <h2 id="modal-modifica-manut-title">MODIFICA MANUTENZIONE</h2>
+                    <p id="modal-modifica-manut-mezzo" class="manut-modal-mezzo"></p>
+                </div>
+                <button type="button" class="manut-modal-close" id="btn-modal-modifica-manut-close" title="Chiudi">&times;</button>
+            </div>
+            <form id="form-modifica-manutenzione" class="manut-modal-body" autocomplete="off">
+                <input type="hidden" id="modifica-manut-id" value="">
+                <input type="hidden" id="modifica-manut-tipologia" value="">
+                <p id="modifica-manut-riepilogo" class="manut-hint">
+                    Puoi posticipare la scadenza cambiando la data prevista (Giorni) oppure i km previsti (Km).
+                </p>
+                <div class="manut-modal-grid">
+                    <div class="manut-riga-modifica-meta">
+                        <div class="manut-form-group manut-field-tipologia-ro">
+                            <label for="modifica-manut-tipologia-vis">TIPOLOGIA</label>
+                            <input type="text" id="modifica-manut-tipologia-vis" readonly>
+                        </div>
+                        <div class="manut-form-group manut-field-mod-data-prev" id="modifica-wrap-data-prev">
+                            <label for="modifica-manut-data-prevista">DATA PREVISTA</label>
+                            <input type="text" id="modifica-manut-data-prevista" placeholder="gg/mm/aaaa">
+                        </div>
+                        <div class="manut-form-group manut-field-mod-km-prev" id="modifica-wrap-km-prev" hidden>
+                            <label for="modifica-manut-km-previsto">KM PREVISTI</label>
+                            <input type="text" id="modifica-manut-km-previsto" inputmode="numeric" placeholder="es. 85000">
+                        </div>
+                        <div class="manut-form-group manut-field-mod-km-rif" id="modifica-wrap-km-rif" hidden>
+                            <label for="modifica-manut-km-rif">KM RIF.</label>
+                            <input type="text" id="modifica-manut-km-rif" readonly>
+                        </div>
+                        <div class="manut-form-group manut-field-preavviso">
+                            <label for="modifica-manut-preavviso" id="modifica-manut-preavviso-label">AVVISA PRIMA</label>
+                            <input type="text" id="modifica-manut-preavviso" inputmode="numeric" placeholder="opzionale">
+                        </div>
+                    </div>
+                    <div class="manut-form-group manut-form-group-full">
+                        <label for="modifica-manut-motivazione">MOTIVAZIONE</label>
+                        <input type="text" id="modifica-manut-motivazione" placeholder="es. Controllo officina / tagliando">
+                    </div>
+                    <div class="manut-form-group manut-form-group-full">
+                        <label for="modifica-manut-note">NOTE</label>
+                        <textarea id="modifica-manut-note" rows="3"></textarea>
+                    </div>
+                </div>
+                <p id="modal-modifica-manut-status" class="manut-modal-status" aria-live="polite"></p>
+            </form>
+            <div class="manut-modal-footer">
+                <button type="button" class="manut-btn-annulla" id="btn-modal-modifica-manut-annulla">ANNULLA</button>
+                <button type="button" class="manut-btn-salva" id="btn-modal-modifica-manut-salva">SALVA MODIFICHE</button>
+            </div>
+        </div>
+    </div>
+
     <div id="modal-scadute-manutenzioni" class="manut-modal-overlay" hidden aria-hidden="true">
         <div class="manut-modal manut-modal-elenco" role="dialog" aria-labelledby="modal-scadute-manut-title" aria-modal="true">
             <div class="manut-modal-header">
                 <div>
-                    <h2 id="modal-scadute-manut-title">MANUTENZIONI IN SCADENZA</h2>
+                    <h2 id="modal-scadute-manut-title">MANUTENZIONI IN AVVISO</h2>
                     <p class="manut-modal-mezzo">Scegli quale scheda aprire</p>
                 </div>
                 <button type="button" class="manut-modal-close" id="btn-modal-scadute-manut-close" title="Chiudi">&times;</button>
@@ -271,12 +344,23 @@
             </div>
             <div class="manut-modal-body">
                 <p id="modal-elenco-manut-km" class="manut-hint"></p>
-                <div id="modal-elenco-manut-lista" class="manut-elenco-lista">
+                <div class="manut-schede-tabs" role="tablist" aria-label="Filtra manutenzioni">
+                    <button type="button" class="manut-scheda-tab is-active" role="tab" id="tab-manut-da-eseguire"
+                        data-scheda="da-eseguire" aria-selected="true" aria-controls="modal-elenco-manut-lista">
+                        DA ESEGUIRE <span class="manut-scheda-count" id="count-manut-da-eseguire">0</span>
+                    </button>
+                    <button type="button" class="manut-scheda-tab" role="tab" id="tab-manut-eseguite"
+                        data-scheda="eseguite" aria-selected="false" aria-controls="modal-elenco-manut-lista">
+                        ESEGUITE <span class="manut-scheda-count" id="count-manut-eseguite">0</span>
+                    </button>
+                </div>
+                <div id="modal-elenco-manut-lista" class="manut-elenco-lista" role="tabpanel" aria-labelledby="tab-manut-da-eseguire">
                     <div class="manut-elenco-loading">Caricamento…</div>
                 </div>
                 <p id="modal-elenco-manut-status" class="manut-modal-status" aria-live="polite"></p>
             </div>
             <div class="manut-modal-footer">
+                <button type="button" class="manut-btn-stampa-elenco" id="btn-modal-elenco-manut-stampa">STAMPA ELENCO</button>
                 <button type="button" class="manut-btn-annulla" id="btn-modal-elenco-manut-chiudi">CHIUDI</button>
             </div>
         </div>

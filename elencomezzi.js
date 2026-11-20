@@ -4,13 +4,16 @@ import {
     initManutenzioneMezzoModal,
     initElencoManutenzioniModal,
     initCompletaManutenzioneModal,
+    initModificaManutenzioneModal,
     initScaduteManutenzioniModal
 } from './manutenzioni-mezzo.js';
+import { etichettaMezzo } from './mezzo-etichetta.js';
 
 let invoke;
 let manutenzioneModal = null;
 let elencoManutenzioniModal = null;
 let completaManutenzioneModal = null;
+let modificaManutenzioneModal = null;
 let scaduteManutenzioniModal = null;
 
 async function initTauri() {
@@ -39,6 +42,8 @@ let nuovoMezzoModalOpen = false;
 let mezzoDaEliminareId = null;
 /** IdAutomezzo → chilometraggio di arrivo più alto trovato nei servizi */
 let ultimiKmPerMezzo = {};
+/** IdAutomezzo (stringa) con almeno una manutenzione aperta / non completata */
+let idMezziManutAperte = new Set();
 
 /** Numero mostrato in "N. MEZZO": è IdAutomezzo (il campo id del mezzo). */
 function numeroMezzoVisibile(mezzo) {
@@ -371,6 +376,58 @@ async function loadUltimiKmMezzi() {
     }
 }
 
+async function loadManutenzioniAperteMezzi() {
+    idMezziManutAperte = new Set();
+    if (!isTauri() || !invoke) return;
+    try {
+        await invoke('init_supabase_from_config').catch(() => {});
+        const ids = await invoke('get_id_mezzi_manutenzioni_aperte');
+        (Array.isArray(ids) ? ids : []).forEach((id) => {
+            const n = Number(id);
+            if (Number.isFinite(n) && n > 0) idMezziManutAperte.add(String(n));
+        });
+    } catch (error) {
+        console.error('Errore caricamento manutenzioni aperte:', error);
+    }
+}
+
+function mezzoHaManutenzioneAperta(mezzo) {
+    const id = Number(mezzo?.id);
+    if (!Number.isFinite(id) || id <= 0) return false;
+    return idMezziManutAperte.has(String(id));
+}
+
+function htmlAvvisoManutAperta(mezzo) {
+    if (!mezzoHaManutenzioneAperta(mezzo)) return '';
+    return `
+        <button type="button"
+            class="btn-mezzo-icon mezzo-manut-alert"
+            title="Manutenzioni aperte da completare — clicca per vedere"
+            aria-label="Avviso: manutenzioni aperte da completare">
+            <svg class="mezzo-btn-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="currentColor" d="M12 2L1 21h22L12 2z"/>
+                <path fill="#fff" d="M11 10h2v6h-2zm0 7h2v2h-2z"/>
+            </svg>
+        </button>
+    `;
+}
+
+/** Aggiorna solo le icone avviso senza rifare tutta la lista. */
+async function refreshAvvisiManutenzioniAperte() {
+    await loadManutenzioniAperteMezzi();
+    document.querySelectorAll('.mezzo-block').forEach((block) => {
+        const id = String(block.dataset.mezzoId || '');
+        const ha = idMezziManutAperte.has(id);
+        let btn = block.querySelector('.mezzo-manut-alert');
+        const actions = block.querySelector('.mezzo-block-actions');
+        if (ha && !btn && actions) {
+            actions.insertAdjacentHTML('afterbegin', htmlAvvisoManutAperta({ id }));
+        } else if (!ha && btn) {
+            btn.remove();
+        }
+    });
+}
+
 function updateMezzoInCache(data) {
     const index = allMezzi.findIndex(m => String(m.id) === String(data.id));
     if (index >= 0) {
@@ -387,6 +444,36 @@ function scadenzaFieldHtml(label, fieldName, value) {
             <span class="scadenza-warning">SCADUTA!</span>
         </div>
     `;
+}
+
+/** Icone SVG per azioni riga mezzo (più compatte dei pulsanti testo). */
+function iconaMezzoSvg(nome) {
+    const common = 'class="mezzo-btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+    if (nome === 'modifica') {
+        return `<svg ${common}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
+    }
+    if (nome === 'nuova-manut') {
+        return `<svg ${common}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
+    }
+    if (nome === 'vedi-manut') {
+        return `<svg ${common}><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>`;
+    }
+    if (nome === 'salva') {
+        return `<svg ${common}><path d="M20 6 9 17l-5-5"/></svg>`;
+    }
+    if (nome === 'elimina') {
+        return `<svg ${common}><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>`;
+    }
+    if (nome === 'annulla') {
+        return `<svg ${common}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`;
+    }
+    if (nome === 'fogli') {
+        return `<svg ${common}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>`;
+    }
+    if (nome === 'rifornimenti') {
+        return `<svg ${common}><path d="M3 22h12"/><path d="M4 22V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M14 10h2a2 2 0 0 1 2 2v3a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V9l-3-3"/><path d="M7 8h4"/></svg>`;
+    }
+    return '';
 }
 
 function createMezzoBlock(mezzo) {
@@ -440,12 +527,15 @@ function createMezzoBlock(mezzo) {
                 </div>
                 <div class="mezzo-form-group mezzo-form-group-actions">
                     <div class="mezzo-block-actions">
-                        <button type="button" class="btn-mezzo-modifica">MODIFICA</button>
-                        <button type="button" class="btn-mezzo-manutenzione">NUOVA MANUTENZIONE</button>
-                        <button type="button" class="btn-mezzo-vedi-manutenzioni">VEDI MANUTENZIONI</button>
-                        <button type="button" class="btn-mezzo-salva" hidden>SALVA</button>
-                        <button type="button" class="btn-mezzo-elimina" hidden>ELIMINA</button>
-                        <button type="button" class="btn-mezzo-annulla" hidden>ANNULLA</button>
+                        ${htmlAvvisoManutAperta(mezzo)}
+                        <button type="button" class="btn-mezzo-icon btn-mezzo-modifica" title="Modifica" aria-label="Modifica">${iconaMezzoSvg('modifica')}</button>
+                        <button type="button" class="btn-mezzo-icon btn-mezzo-manutenzione" title="Nuova manutenzione" aria-label="Nuova manutenzione">${iconaMezzoSvg('nuova-manut')}</button>
+                        <button type="button" class="btn-mezzo-icon btn-mezzo-vedi-manutenzioni" title="Vedi manutenzioni" aria-label="Vedi manutenzioni">${iconaMezzoSvg('vedi-manut')}</button>
+                        <button type="button" class="btn-mezzo-icon btn-mezzo-fogli" title="Fogli di viaggio" aria-label="Fogli di viaggio">${iconaMezzoSvg('fogli')}</button>
+                        <button type="button" class="btn-mezzo-icon btn-mezzo-rifornimenti" title="Rifornimenti" aria-label="Rifornimenti">${iconaMezzoSvg('rifornimenti')}</button>
+                        <button type="button" class="btn-mezzo-icon btn-mezzo-salva" title="Salva" aria-label="Salva" hidden>${iconaMezzoSvg('salva')}</button>
+                        <button type="button" class="btn-mezzo-icon btn-mezzo-elimina" title="Elimina" aria-label="Elimina" hidden>${iconaMezzoSvg('elimina')}</button>
+                        <button type="button" class="btn-mezzo-icon btn-mezzo-annulla" title="Annulla" aria-label="Annulla" hidden>${iconaMezzoSvg('annulla')}</button>
                     </div>
                     <span class="mezzo-block-status" aria-live="polite"></span>
                 </div>
@@ -492,12 +582,16 @@ function setMezzoBlockEditMode(block, editing) {
     const btnModifica = block.querySelector('.btn-mezzo-modifica');
     const btnManut = block.querySelector('.btn-mezzo-manutenzione');
     const btnVediManut = block.querySelector('.btn-mezzo-vedi-manutenzioni');
+    const btnFogli = block.querySelector('.btn-mezzo-fogli');
+    const btnRifornimenti = block.querySelector('.btn-mezzo-rifornimenti');
     const btnSalva = block.querySelector('.btn-mezzo-salva');
     const btnElimina = block.querySelector('.btn-mezzo-elimina');
     const btnAnnulla = block.querySelector('.btn-mezzo-annulla');
     if (btnModifica) btnModifica.hidden = editing;
     if (btnManut) btnManut.hidden = editing;
     if (btnVediManut) btnVediManut.hidden = editing;
+    if (btnFogli) btnFogli.hidden = editing;
+    if (btnRifornimenti) btnRifornimenti.hidden = editing;
     if (btnSalva) btnSalva.hidden = !editing;
     if (btnElimina) btnElimina.hidden = !editing;
     if (btnAnnulla) btnAnnulla.hidden = !editing;
@@ -873,6 +967,12 @@ async function saveNuovoMezzoModal() {
 
 function bindNuovoMezzoModalEvents() {
     document.getElementById('btn-nuovo-mezzo')?.addEventListener('click', openNuovoMezzoModal);
+    document.getElementById('btn-viaggi')?.addEventListener('click', () => {
+        apriFogliDiViaggio(null);
+    });
+    document.getElementById('btn-rifornimenti')?.addEventListener('click', () => {
+        apriRifornimenti(null);
+    });
     document.getElementById('btn-modal-nuovo-salva')?.addEventListener('click', saveNuovoMezzoModal);
     document.getElementById('btn-modal-nuovo-annulla')?.addEventListener('click', annullaNuovoMezzoModal);
     document.getElementById('btn-modal-nuovo-close')?.addEventListener('click', annullaNuovoMezzoModal);
@@ -927,6 +1027,100 @@ function populateListaMezzi(mezzi) {
     updateNuovoMezzoButtonState();
 }
 
+async function apriFogliDiViaggio(mezzo) {
+    const id = String(mezzo?.id ?? '').trim();
+    const haMezzo = Boolean(id) && id !== '0';
+    let url = 'FOGLIDIVIAGGIO.html';
+    let titolo = 'Fogli di viaggio';
+    if (haMezzo) {
+        const etichetta = etichettaMezzo(mezzo);
+        const qs = new URLSearchParams({ mezzo: id });
+        if (etichetta) qs.set('etichetta', etichetta);
+        url = `FOGLIDIVIAGGIO.html?${qs.toString()}`;
+        titolo = etichetta ? `Fogli di viaggio — ${etichetta}` : 'Fogli di viaggio';
+    }
+
+    if (isTauri()) {
+        try {
+            const { WebviewWindow } = await import('@tauri-apps/api/window');
+            const label = 'fogli-di-viaggio';
+            const existing = WebviewWindow.getByLabel(label);
+            if (existing) {
+                try { await existing.close(); } catch (_) { /* finestra già chiusa */ }
+                await new Promise((r) => setTimeout(r, 150));
+            }
+            const webview = new WebviewWindow(label, {
+                url,
+                title: titolo,
+                width: 1280,
+                height: 800,
+                resizable: true,
+                maximized: true,
+                decorations: true,
+                center: true
+            });
+            webview.once('tauri://created', () => {
+                webview.maximize().catch((err) => console.warn('maximize fogli di viaggio:', err));
+            });
+            webview.setFocus().catch((err) => console.warn('setFocus fogli di viaggio:', err));
+            return;
+        } catch (error) {
+            console.error('Errore apertura fogli di viaggio:', error);
+        }
+    }
+    const larghezza = window.screen?.availWidth || 1280;
+    const altezza = window.screen?.availHeight || 800;
+    window.open(url, 'fogli-di-viaggio', `width=${larghezza},height=${altezza},left=0,top=0`);
+}
+
+async function apriFinestraElenco(url, titolo, label) {
+    if (isTauri()) {
+        try {
+            const { WebviewWindow } = await import('@tauri-apps/api/window');
+            const existing = WebviewWindow.getByLabel(label);
+            if (existing) {
+                try { await existing.close(); } catch (_) { /* finestra già chiusa */ }
+                await new Promise((r) => setTimeout(r, 150));
+            }
+            const webview = new WebviewWindow(label, {
+                url,
+                title: titolo,
+                width: 1280,
+                height: 800,
+                resizable: true,
+                maximized: true,
+                decorations: true,
+                center: true
+            });
+            webview.once('tauri://created', () => {
+                webview.maximize().catch((err) => console.warn(`maximize ${label}:`, err));
+            });
+            webview.setFocus().catch((err) => console.warn(`setFocus ${label}:`, err));
+            return;
+        } catch (error) {
+            console.error(`Errore apertura ${label}:`, error);
+        }
+    }
+    const larghezza = window.screen?.availWidth || 1280;
+    const altezza = window.screen?.availHeight || 800;
+    window.open(url, label, `width=${larghezza},height=${altezza},left=0,top=0`);
+}
+
+async function apriRifornimenti(mezzo) {
+    const id = String(mezzo?.id ?? '').trim();
+    const haMezzo = Boolean(id) && id !== '0';
+    let url = 'RIFORNIMENTI.html';
+    let titolo = 'Rifornimenti';
+    if (haMezzo) {
+        const etichetta = etichettaMezzo(mezzo);
+        const qs = new URLSearchParams({ mezzo: id });
+        if (etichetta) qs.set('etichetta', etichetta);
+        url = `RIFORNIMENTI.html?${qs.toString()}`;
+        titolo = etichetta ? `Rifornimenti — ${etichetta}` : 'Rifornimenti';
+    }
+    await apriFinestraElenco(url, titolo, 'rifornimenti');
+}
+
 function bindMezzoContainerEvents() {
     const containerBody = document.getElementById('mezzi-container-body');
     if (!containerBody || containerBody.dataset.bound === '1') return;
@@ -936,21 +1130,29 @@ function bindMezzoContainerEvents() {
         const block = e.target.closest('.mezzo-block');
         if (!block) return;
 
-        if (e.target.classList.contains('btn-mezzo-modifica')) {
+        if (e.target.closest('.btn-mezzo-modifica')) {
             enableMezzoEdit(block);
-        } else if (e.target.classList.contains('btn-mezzo-manutenzione')) {
+        } else if (e.target.closest('.btn-mezzo-manutenzione')) {
             const id = parseInt(block.dataset.mezzoId, 10) || 0;
             const mezzo = allMezzi.find((m) => String(m.id) === String(id));
             if (mezzo) manutenzioneModal?.open(mezzo);
-        } else if (e.target.classList.contains('btn-mezzo-vedi-manutenzioni')) {
+        } else if (e.target.closest('.btn-mezzo-vedi-manutenzioni') || e.target.closest('.mezzo-manut-alert')) {
             const id = parseInt(block.dataset.mezzoId, 10) || 0;
             const mezzo = allMezzi.find((m) => String(m.id) === String(id));
             if (mezzo) elencoManutenzioniModal?.open(mezzo);
-        } else if (e.target.classList.contains('btn-mezzo-annulla')) {
+        } else if (e.target.closest('.btn-mezzo-fogli')) {
+            const id = parseInt(block.dataset.mezzoId, 10) || 0;
+            const mezzo = allMezzi.find((m) => String(m.id) === String(id));
+            if (mezzo) apriFogliDiViaggio(mezzo);
+        } else if (e.target.closest('.btn-mezzo-rifornimenti')) {
+            const id = parseInt(block.dataset.mezzoId, 10) || 0;
+            const mezzo = allMezzi.find((m) => String(m.id) === String(id));
+            if (mezzo) apriRifornimenti(mezzo);
+        } else if (e.target.closest('.btn-mezzo-annulla')) {
             exitMezzoEditMode(true);
-        } else if (e.target.classList.contains('btn-mezzo-salva')) {
+        } else if (e.target.closest('.btn-mezzo-salva')) {
             saveMezzoBlock(block);
-        } else if (e.target.classList.contains('btn-mezzo-elimina')) {
+        } else if (e.target.closest('.btn-mezzo-elimina')) {
             apriDialogEliminaMezzo(block);
         }
     });
@@ -996,6 +1198,7 @@ async function loadAllMezzi() {
         ];
         allMezzi = sortByNumeroMezzo(demo);
         ultimiKmPerMezzo = { '1': 45210, '2': 88102 };
+        idMezziManutAperte = new Set(['1']);
         updateMezziCount(allMezzi.length);
         populateListaMezzi(allMezzi);
         await loadDotazioniMezzi();
@@ -1012,7 +1215,8 @@ async function loadAllMezzi() {
 
         const [mezzi] = await Promise.all([
             invoke('get_all_automezzi'),
-            loadUltimiKmMezzi()
+            loadUltimiKmMezzi(),
+            loadManutenzioniAperteMezzi()
         ]);
         allMezzi = Array.isArray(mezzi) ? sortByNumeroMezzo(mezzi) : [];
 
@@ -1149,9 +1353,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         isTauriEnv: isTauri,
         etichettaMezzo: etichettaMezzoFn,
         trovaMezzo: (idMezzo) => allMezzi.find((m) => String(m.id) === String(idMezzo)) || null,
-        onSaved: (saved) => {
+        onSaved: async (saved) => {
             const mezzo = allMezzi.find((m) => String(m.id) === String(saved?.id_mezzo));
             if (mezzo) elencoManutenzioniModal?.refreshIfOpen?.(mezzo);
+            await refreshAvvisiManutenzioniAperte();
+        }
+    });
+
+    modificaManutenzioneModal = initModificaManutenzioneModal({
+        getInvoke: () => invoke,
+        isTauriEnv: isTauri,
+        etichettaMezzo: etichettaMezzoFn,
+        trovaMezzo: (idMezzo) => allMezzi.find((m) => String(m.id) === String(idMezzo)) || null,
+        onSaved: async (saved) => {
+            const mezzo = allMezzi.find((m) => String(m.id) === String(saved?.id_mezzo));
+            if (mezzo) elencoManutenzioniModal?.refreshIfOpen?.(mezzo);
+            await refreshAvvisiManutenzioniAperte();
         }
     });
 
@@ -1164,7 +1381,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         isTauriEnv: isTauri,
         etichettaMezzo: etichettaMezzoFn,
         getUltimoKm: (mezzo) => ultimoKmDiMezzo(mezzo),
-        onApriCompleta: (id, mezzo) => completaManutenzioneModal?.openById(id, mezzo)
+        onApriCompleta: (id, mezzo) => completaManutenzioneModal?.openById(id, mezzo),
+        onApriModifica: (id, mezzo) => modificaManutenzioneModal?.openById(id, mezzo),
+        onChanged: async () => {
+            await refreshAvvisiManutenzioniAperte();
+        }
     });
 
     manutenzioneModal = initManutenzioneMezzoModal({
@@ -1172,9 +1393,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         isTauriEnv: isTauri,
         getUltimoKm: (mezzo) => ultimoKmDiMezzo(mezzo),
         etichettaMezzo: etichettaMezzoFn,
-        onSaved: (mezzo) => {
+        onSaved: async (mezzo) => {
             // Se l'elenco è aperto sullo stesso mezzo, lo aggiorna
             elencoManutenzioniModal?.refreshIfOpen?.(mezzo);
+            await refreshAvvisiManutenzioniAperte();
         }
     });
 

@@ -361,6 +361,13 @@ body {
     font-style: italic;
 }
 
+.cal-event-acc {
+    color: #1565c0;
+    font-size: calc(1em + 1pt);
+    font-weight: 700;
+    font-style: italic;
+}
+
 .cal-event-socio-wrap {
     display: inline;
     white-space: nowrap;
@@ -492,6 +499,12 @@ body {
 
 .dettaglio-field.field-large {
     flex: 2 1 200px;
+}
+
+.dettaglio-field.field-half {
+    flex: 1 1 140px;
+    min-width: 120px;
+    max-width: 220px;
 }
 
 .dettaglio-field.field-trasportato {
@@ -633,6 +646,7 @@ body {
     .dettaglio-field.field-small,
     .dettaglio-field.field-medium,
     .dettaglio-field.field-large,
+    .dettaglio-field.field-half,
     .dettaglio-field.field-trasportato,
     .dettaglio-field.field-tipo-servizio,
     .dettaglio-field.field-carrozzina,

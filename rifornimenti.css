@@ -1,0 +1,193 @@
+/* Rifornimenti — elenco tabellare della tabella Supabase Rifornimenti */
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+.rif-footer[hidden],
+.rif-tabella-wrap[hidden],
+.rif-messaggio[hidden] {
+    display: none !important;
+}
+
+body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #d8d6d3;
+    color: #1a1a1a;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+.rif-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    background: #37474f;
+    color: #fff;
+    border-bottom: 3px solid #9ea09e;
+}
+
+.rif-header-titolo h1 {
+    margin: 0;
+    font-size: 20px;
+    letter-spacing: 0.04em;
+}
+
+.rif-sottotitolo {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #eceff1;
+}
+
+.rif-header-azioni {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.rif-stato {
+    font-size: 13px;
+    color: #eceff1;
+}
+
+.rif-btn {
+    border: none;
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.rif-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.rif-btn-tutti {
+    background: #6a1b9a;
+    color: #fff;
+}
+
+.rif-btn-tutti:hover:not(:disabled) {
+    background: #4a148c;
+}
+
+.rif-btn-torna {
+    background: #d32f2f;
+    color: #fff;
+}
+
+.rif-btn-torna:hover {
+    background: #b71c1c;
+}
+
+.rif-main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.rif-messaggio {
+    margin: 18px;
+    padding: 16px;
+    background: #fff;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.rif-messaggio.rif-errore {
+    color: #b71c1c;
+    font-weight: 600;
+}
+
+.rif-tabella-wrap {
+    flex: 1;
+    min-height: 0;
+    margin: 12px 16px;
+    background: #fff;
+    border-radius: 4px;
+    overflow: auto;
+}
+
+.rif-tabella {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 980px;
+}
+
+.rif-tabella th,
+.rif-tabella td {
+    border-bottom: 1px solid #e0e0e0;
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.rif-tabella th {
+    position: sticky;
+    top: 0;
+    background: #eceff1;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.rif-tabella tbody tr:nth-child(even) {
+    background: #f7f7f7;
+}
+
+.rif-tabella tbody tr:hover {
+    background: #f3e5f5;
+}
+
+.rif-tabella td.rif-num {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.rif-tabella td.rif-data {
+    white-space: nowrap;
+}
+
+.rif-tabella td.rif-note {
+    min-width: 160px;
+    max-width: 280px;
+}
+
+.rif-footer {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    flex-wrap: wrap;
+    padding: 12px 18px;
+    background: #37474f;
+    color: #fff;
+}
+
+.rif-footer p {
+    margin: 0;
+    font-size: 15px;
+}
+
+.rif-footer strong {
+    margin-left: 8px;
+    font-size: 18px;
+}

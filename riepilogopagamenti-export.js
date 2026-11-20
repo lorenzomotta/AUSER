@@ -90,6 +90,22 @@ function calcolaTotali(lista) {
     };
 }
 
+function numeroPcum(servizio) {
+    const n = Number(
+        servizio?.pagamento_cumulativo_numero
+        ?? servizio?.PagamentoCumulativo_Numero
+        ?? 0
+    );
+    if (Number.isFinite(n) && n > 0) return Math.trunc(n);
+    const gruppo = String(
+        servizio?.pagamento_cumulativo_gruppo
+        ?? servizio?.PagamentoCumulativo_Gruppo
+        ?? ''
+    ).trim();
+    if (/^\d+$/.test(gruppo)) return parseInt(gruppo, 10);
+    return 0;
+}
+
 const HEAD = [
     'Stato',
     'Richiedente',
@@ -101,10 +117,12 @@ const HEAD = [
     'Luogo destinazione',
     'Donazione',
     'Tipo pagam.',
+    'N° cum.',
     'Data incasso'
 ];
 
 function buildRow(servizio) {
+    const nPcum = numeroPcum(servizio);
     return [
         escapeText(servizio.stato_incasso || 'DA INCASSARE'),
         escapeText(servizio.richiedente),
@@ -116,6 +134,7 @@ function buildRow(servizio) {
         escapeText(servizio.luogo_destinazione),
         escapeText(servizio.pagamento),
         escapeText(servizio.tipo_pagamento),
+        nPcum > 0 ? String(nPcum) : '',
         escapeText(dataIncasso(servizio))
     ];
 }

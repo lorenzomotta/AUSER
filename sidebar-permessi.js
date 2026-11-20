@@ -6,14 +6,14 @@
 export const SIDEBAR_VOCI = [
     { key: 'calendario_servizi', btnId: 'btn-calendario-servizi', label: 'CALENDARIO SERVIZI' },
     { key: 'nuovo_servizio', btnId: 'btn-nuovo-servizio', label: 'NUOVO SERVIZIO' },
-    { key: 'elenco_servizi', btnId: 'btn-elenco-servizi', label: 'ELENCO SERVIZI' },
+    { key: 'elenco_servizi', btnId: 'btn-elenco-servizi', label: 'GESTIONE SERVIZI' },
     { key: 'report_giorno', btnId: 'btn-report-giorno', label: 'REPORT DEL GIORNO' },
     { key: 'report_settimanale', btnId: 'btn-report-settimanale', label: 'REPORT SETTIMANALE' },
-    { key: 'elenco_soci', btnId: 'btn-elenco-soci', label: 'ELENCO SOCI' },
+    { key: 'elenco_soci', btnId: 'btn-elenco-soci', label: 'GESTIONE SOCI' },
     { key: 'tratte_fuori_asti', btnId: 'btn-tratte-fuori-asti', label: 'TRATTE FUORI ASTI' },
-    { key: 'elenco_mezzi', btnId: 'btn-elenco-mezzi', label: 'ELENCO MEZZI' },
+    { key: 'elenco_mezzi', btnId: 'btn-elenco-mezzi', label: 'GESTIONE AUTOPARCO' },
     { key: 'riepilogo_incassi', btnId: 'btn-riepilogo-incassi', label: 'INCASSI GIORNALIERI' },
-    { key: 'elenco_operatori', btnId: 'btn-elenco-operatori', label: 'ELENCO OPERATORI' },
+    { key: 'elenco_operatori', btnId: 'btn-elenco-operatori', label: 'GESTIONE OPERATORI' },
     { key: 'riepilogo_pagamenti', btnId: 'btn-riepilogo-pagamenti', label: 'RIEPILOGO PAGAMENTI' },
     { key: 'verifica_tesseramenti', btnId: 'btn-verifica-tesseramenti', label: 'VERIFICA TESSERAMENTI' },
     { key: 'appunti', btnId: 'btn-appunti', label: 'AGENDA' }
@@ -86,11 +86,23 @@ export function puoVedereSidebar(key, sessione) {
     return menu[key] === true;
 }
 
+/**
+ * True se l'utente può fare backup Proton Drive alla chiusura.
+ * Colonna dedicata user_permissions.ProtonDrive (come Programma / Calendario).
+ * Admin: sempre sì.
+ */
+export function puoFareBackupProton(sessione) {
+    if (!sessione) return false;
+    if (sessione.is_admin === true) return true;
+    return sessione.protondrive === true;
+}
+
 /** Applica hidden ai pulsanti sidebar in base alla sessione. */
 export function applicaVisibilitaSidebar(sessione, root = document) {
     if (!sessione) return;
     const admin = sessione.is_admin === true;
     for (const v of SIDEBAR_VOCI) {
+        if (!v.btnId) continue;
         const el = root.getElementById?.(v.btnId) || root.querySelector?.(`#${v.btnId}`);
         if (!el) continue;
         el.hidden = admin ? false : !puoVedereSidebar(v.key, sessione);
