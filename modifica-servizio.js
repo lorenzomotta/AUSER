@@ -39,7 +39,9 @@ let allRichiedenti = [];
 let allTipiPagamento = [];
 let servizioInModifica = null;
 let solaLetturaAttiva = false;
+let azioneSolaLettura = 'pagamento';
 let pagamentoModificabile = false;
+let chiusuraModificabile = false;
 let pagamentoSerieBloccato = false;
 /** Prefisso form che riceve la prossima selezione tratta (mod / comp) */
 let trattaTargetPrefix = null;
@@ -957,7 +959,7 @@ export function costruisciFormServizio(
             ? creaSelectNs(`${p}-archivia`, 'ARCHIVIA', archiviaSi ? 'SI' : 'NO', ['NO', 'SI'], 'mod-chiusura-archivia')
             : '';
         return `
-            <section class="ns-section${chiusuraPrima ? ' ns-section-chiusura-prima' : ''}">
+            <section class="ns-section ns-section-chiusura${chiusuraPrima ? ' ns-section-chiusura-prima' : ''}">
                 <h2 class="ns-section-title">${num}. Dati di chiusura del servizio</h2>
                 <div class="ns-grid mod-chiusura-grid">
                     ${creaInputNs(`${p}-km-uscita`, 'KM USCITA', servizio.km_uscita || '', 'mod-field-km-uscita', { inputMode: 'decimal' })}
@@ -1680,6 +1682,7 @@ async function eseguiCaricaDatiModificaServizio() {
 function applicaModalitaSolaLettura(attiva) {
     solaLetturaAttiva = !!attiva;
     pagamentoModificabile = false;
+    chiusuraModificabile = false;
     const modal = document.getElementById('modal-modifica');
     const btnElimina = document.getElementById('btn-elimina-modifica');
     const btnDuplica = document.getElementById('btn-duplica-modifica');
@@ -1691,11 +1694,15 @@ function applicaModalitaSolaLettura(attiva) {
     if (modal) {
         modal.classList.toggle('modal-modifica-sola-lettura', solaLetturaAttiva);
         modal.classList.remove('modal-modifica-pagamento-edit');
+        modal.classList.remove('modal-modifica-chiusura-edit');
     }
     if (btnElimina) btnElimina.hidden = solaLetturaAttiva;
     if (btnDuplica) btnDuplica.hidden = solaLetturaAttiva;
     if (btnSalva) btnSalva.hidden = solaLetturaAttiva;
-    if (btnModPag) btnModPag.hidden = !solaLetturaAttiva;
+    if (btnModPag) {
+        btnModPag.hidden = !solaLetturaAttiva;
+        btnModPag.textContent = azioneSolaLettura === 'km' ? 'MODIFICA KM' : 'MODIFICA PAGAMENTO';
+    }
     if (btnAnnulla) btnAnnulla.textContent = solaLetturaAttiva ? 'CHIUDI' : 'ANNULLA';
 
     if (!solaLetturaAttiva || !body) return;
@@ -1732,7 +1739,7 @@ function applicaBloccoPagamentoSerie(servizio) {
 
     if (!pagamentoSerieBloccato || !sezione) return;
 
-    if (btnModPag) btnModPag.hidden = true;
+    if (btnModPag && azioneSolaLettura !== 'km') btnModPag.hidden = true;
 
     sezione.querySelectorAll('.ns-pagamento-quick-btns, .ns-pagamento-azioni-destra').forEach((el) => {
         el.hidden = true;
@@ -1795,6 +1802,37 @@ function abilitaModificaPagamento() {
     sezione.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+function abilitaModificaChiusura() {
+    if (!solaLetturaAttiva || chiusuraModificabile || azioneSolaLettura !== 'km') return;
+
+    const body = document.getElementById('modal-modifica-body');
+    const modal = document.getElementById('modal-modifica');
+    const sezione = body?.querySelector('.ns-section-chiusura');
+    if (!sezione) return;
+
+    chiusuraModificabile = true;
+    if (modal) modal.classList.add('modal-modifica-chiusura-edit');
+    sezione.classList.add('mod-chiusura-editabile');
+
+    sezione.querySelectorAll('input, select, textarea').forEach((el) => {
+        el.disabled = false;
+        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+            el.readOnly = false;
+        }
+    });
+
+    const btnKm = document.getElementById('btn-modifica-pagamento');
+    const btnSalva = document.getElementById('btn-salva-modifica');
+    const title = document.getElementById('modal-modifica-title');
+    if (btnKm) btnKm.hidden = true;
+    if (btnSalva) btnSalva.hidden = false;
+    if (title && servizioInModifica) {
+        title.textContent = `SERVIZIO ${servizioInModifica.id || ''} — KM`;
+    }
+
+    sezione.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 export async function apriModalModifica(servizioId, options = {}) {
     const avvisoIniziale = options.avvisoIniziale || '';
     const solaLettura = !!options.solaLettura;
@@ -1838,6 +1876,7 @@ export async function apriModalModifica(servizioId, options = {}) {
     }
 
     servizioInModifica = servizio;
+    azioneSolaLettura = (solaLettura && options.modificaKm) ? 'km' : 'pagamento';
     if (title) {
         title.textContent = solaLettura
             ? `SERVIZIO ${servizio.id || ''}`
@@ -1874,6 +1913,8 @@ export function chiudiModalModifica() {
     modal.setAttribute('aria-hidden', 'true');
     servizioInModifica = null;
     pagamentoModificabile = false;
+    chiusuraModificabile = false;
+    azioneSolaLettura = 'pagamento';
     pagamentoSerieBloccato = false;
     if (solaLetturaAttiva) {
         applicaModalitaSolaLettura(false);
@@ -1881,6 +1922,7 @@ export function chiudiModalModifica() {
         const btnModPag = document.getElementById('btn-modifica-pagamento');
         if (btnModPag) btnModPag.hidden = true;
         modal.classList.remove('modal-modifica-pagamento-edit');
+        modal.classList.remove('modal-modifica-chiusura-edit');
     }
 }
 
@@ -2003,7 +2045,10 @@ export function setupModaleModifica() {
     document.getElementById('btn-salva-modifica')?.addEventListener('click', salvaModificaServizio);
     document.getElementById('btn-elimina-modifica')?.addEventListener('click', eliminaServizioModifica);
     document.getElementById('btn-duplica-modifica')?.addEventListener('click', duplicaServizioModifica);
-    document.getElementById('btn-modifica-pagamento')?.addEventListener('click', abilitaModificaPagamento);
+    document.getElementById('btn-modifica-pagamento')?.addEventListener('click', () => {
+        if (azioneSolaLettura === 'km') abilitaModificaChiusura();
+        else abilitaModificaPagamento();
+    });
     document.getElementById('mod-dialog-mezzo-occupato-chiudi')
         ?.addEventListener('click', chiudiModaleMezzoOccupatoModifica);
 

@@ -15,6 +15,7 @@
         </div>
         <div class="rif-header-azioni">
             <span class="rif-stato" id="rif-stato" aria-live="polite"></span>
+            <button type="button" class="rif-btn rif-btn-nuovo" id="btn-nuovo-rifornimento">NUOVO</button>
             <button type="button" class="rif-btn rif-btn-tutti" id="btn-mostra-tutti">MOSTRA TUTTI</button>
             <button type="button" class="rif-btn rif-btn-torna" id="btn-torna">TORNA</button>
         </div>
@@ -34,6 +35,7 @@
                         <th>LITRI</th>
                         <th>COSTO</th>
                         <th>NOTE</th>
+                        <th class="rif-col-x"></th>
                     </tr>
                 </thead>
                 <tbody id="rif-corpo"></tbody>
@@ -46,6 +48,72 @@
         <p>Totale litri <strong id="rif-totale-litri">0</strong></p>
         <p>Totale costo <strong id="rif-totale-costo">0,00 €</strong></p>
     </footer>
+
+    <div id="rif-nuovo-overlay" class="rif-overlay" hidden>
+        <div class="rif-scheda" role="dialog" aria-labelledby="rif-nuovo-titolo">
+            <div class="rif-scheda-testa">
+                <h2 id="rif-nuovo-titolo">NUOVO RIFORNIMENTO</h2>
+                <button type="button" class="rif-scheda-chiudi" id="rif-nuovo-chiudi" aria-label="Chiudi">&times;</button>
+            </div>
+            <div class="rif-scheda-corpo">
+                <div class="rif-campo">
+                    <label for="rif-data">DATA</label>
+                    <input type="date" id="rif-data">
+                </div>
+                <div class="rif-campo">
+                    <label for="rif-mezzo">MEZZO</label>
+                    <select id="rif-mezzo"></select>
+                </div>
+                <div class="rif-campo">
+                    <label for="rif-operatore">OPERATORE</label>
+                    <select id="rif-operatore"></select>
+                </div>
+                <div class="rif-campo">
+                    <label for="rif-distributore-scelta">DISTRIBUTORE</label>
+                    <select id="rif-distributore-scelta"></select>
+                </div>
+                <div class="rif-campo" id="rif-nuovo-wrap" hidden>
+                    <label for="rif-distributore-nuovo">NUOVO DISTRIBUTORE</label>
+                    <input type="text" id="rif-distributore-nuovo" maxlength="120" autocomplete="off" placeholder="Scrivi il nome">
+                </div>
+                <p class="rif-aiuto">Scegli un distributore già usato, oppure «Aggiungi nuovo…» e scrivi il nome.</p>
+                <div class="rif-riga">
+                    <div class="rif-campo">
+                        <label for="rif-km">KM</label>
+                        <input type="text" id="rif-km" inputmode="decimal" autocomplete="off" placeholder="Es. 45210">
+                    </div>
+                    <div class="rif-campo">
+                        <label for="rif-litri">LITRI</label>
+                        <input type="text" id="rif-litri" inputmode="decimal" autocomplete="off" placeholder="Es. 35,5">
+                    </div>
+                </div>
+                <div class="rif-campo">
+                    <label for="rif-costo">COSTO (€)</label>
+                    <input type="text" id="rif-costo" inputmode="decimal" autocomplete="off" placeholder="Es. 58,20">
+                </div>
+                <div class="rif-campo">
+                    <label for="rif-note">NOTE</label>
+                    <textarea id="rif-note" rows="3" maxlength="500"></textarea>
+                </div>
+                <p class="rif-errore" id="rif-errore" role="alert" hidden></p>
+            </div>
+            <div class="rif-scheda-piedi">
+                <button type="button" class="rif-btn rif-btn-annulla" id="rif-btn-annulla">ANNULLA</button>
+                <button type="button" class="rif-btn rif-btn-salva" id="rif-btn-salva">SALVA</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="rif-conferma-overlay" class="rif-overlay" hidden>
+        <div class="rif-conferma" role="dialog" aria-labelledby="rif-conferma-titolo">
+            <h2 id="rif-conferma-titolo">ELIMINARE QUESTO RIFORNIMENTO?</h2>
+            <p id="rif-conferma-testo"></p>
+            <div class="rif-scheda-piedi">
+                <button type="button" class="rif-btn rif-btn-annulla" id="rif-conferma-annulla">ANNULLA</button>
+                <button type="button" class="rif-btn rif-btn-elimina-ok" id="rif-conferma-ok">ELIMINA</button>
+            </div>
+        </div>
+    </div>
 
     <script type="module" src="rifornimenti.js"></script>
 </body>

@@ -1,11 +1,9 @@
 /* Maschera rifornimento — visibile solo sul calendario web, schermo piccolo */
 
-.rif-mobile-footer,
 .rif-mobile-overlay {
     display: none;
 }
 
-.rif-mobile-footer[hidden],
 .rif-nuovo-wrap[hidden],
 .rif-mobile-errore[hidden],
 .rif-mobile-ok[hidden] {
@@ -13,48 +11,20 @@
 }
 
 @media (max-width: 768px) {
-    .web-calendario-app:has(.rif-mobile-footer:not([hidden])) .calendario-container {
-        padding-bottom: 58px;
-    }
-
-    .web-calendario-app .rif-mobile-footer {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        position: fixed;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 40;
-        padding: 6px 16px calc(6px + env(safe-area-inset-bottom));
-        background: #37474f;
-        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.18);
-    }
-
-    .rif-mobile-btn {
-        flex: 1;
-        max-width: 420px;
-        min-height: 38px;
-        border: none;
-        border-radius: 6px;
-        background: #722F37;
-        color: #fff;
-        font-size: 14px;
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        cursor: pointer;
-    }
-
-    .rif-mobile-btn:active {
-        background: #561F28;
-    }
-
     .rif-mobile-ok {
-        color: #e1bee7;
+        position: fixed;
+        left: 50%;
+        bottom: calc(16px + env(safe-area-inset-bottom));
+        transform: translateX(-50%);
+        z-index: 45;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: #1f7a4d;
+        color: #fff;
         font-size: 13px;
         font-weight: 700;
         white-space: nowrap;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
     }
 
     .rif-mobile-overlay:not([hidden]) {

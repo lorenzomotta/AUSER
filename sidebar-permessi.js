@@ -11,7 +11,7 @@ export const SIDEBAR_VOCI = [
     { key: 'report_settimanale', btnId: 'btn-report-settimanale', label: 'REPORT SETTIMANALE' },
     { key: 'elenco_soci', btnId: 'btn-elenco-soci', label: 'GESTIONE SOCI' },
     { key: 'tratte_fuori_asti', btnId: 'btn-tratte-fuori-asti', label: 'TRATTE FUORI ASTI' },
-    { key: 'elenco_mezzi', btnId: 'btn-elenco-mezzi', label: 'GESTIONE AUTOPARCO' },
+    { key: 'elenco_mezzi', btnId: 'btn-elenco-mezzi', label: 'GESTIONE MEZZI' },
     { key: 'riepilogo_incassi', btnId: 'btn-riepilogo-incassi', label: 'INCASSI GIORNALIERI' },
     { key: 'elenco_operatori', btnId: 'btn-elenco-operatori', label: 'GESTIONE OPERATORI' },
     { key: 'riepilogo_pagamenti', btnId: 'btn-riepilogo-pagamenti', label: 'RIEPILOGO PAGAMENTI' },

@@ -198,6 +198,7 @@ function disegnaRighe(righe) {
             <td class="rif-num">${escapeHtml(formatNumero(campo(row, 'Litri'), 2))}</td>
             <td class="rif-num">${escapeHtml(formatEuro(campo(row, 'Costo_Rifornimento')))}</td>
             <td class="rif-note">${escapeHtml(campo(row, 'Note_Rifornimento'))}</td>
+            <td>${bottoneElimina(row)}</td>
         </tr>
     `).join('');
 
@@ -282,6 +283,258 @@ async function tornaElencoMezzi() {
     }
     window.location.href = 'ELENCOMEZZI.html';
 }
+
+let idDaEliminare = null;
+let salvataggioInCorso = false;
+
+function escapeAttr(testo) {
+    return escapeHtml(testo).replace(/"/g, '&quot;');
+}
+
+function isTruthyFlag(valore) {
+    const s = String(valore ?? '').trim().toLowerCase();
+    return s === '1' || s === 'true' || s === 'si' || s === 'sì' || s === 'yes' || s === 'y';
+}
+
+function oggiIso() {
+    const d = new Date();
+    const mese = String(d.getMonth() + 1).padStart(2, '0');
+    const giorno = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mese}-${giorno}`;
+}
+
+function riempiSelect(select, opzioni, voceVuota) {
+    if (!select) return;
+    const pezzi = [`<option value="">${voceVuota}</option>`];
+    opzioni.forEach((op) => {
+        const value = String(op.value ?? '').trim();
+        const label = String(op.label ?? value).trim();
+        if (!value || !label) return;
+        pezzi.push(`<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`);
+    });
+    select.innerHTML = pezzi.join('');
+}
+
+function bottoneElimina(row) {
+    const id = String(campo(row, 'id') ?? '').trim();
+    const descrizione = [
+        formatData(campo(row, 'Data_Rifornimento')),
+        testoMezzo(row),
+        String(campo(row, 'Distributore') ?? '').trim()
+    ].filter(Boolean).join(' — ');
+    return `<button type="button" class="rif-x" data-id="${escapeAttr(id)}" data-desc="${escapeAttr(descrizione)}" title="Elimina" aria-label="Elimina rifornimento">X</button>`;
+}
+
+function mostraErroreNuovo(testo) {
+    const el = document.getElementById('rif-errore');
+    if (!el) return;
+    el.textContent = testo || '';
+    el.hidden = !testo;
+}
+
+function aggiornaNuovoDistributore() {
+    const scelta = document.getElementById('rif-distributore-scelta');
+    const wrap = document.getElementById('rif-nuovo-wrap');
+    wrap.hidden = scelta?.value !== '__nuovo__';
+}
+
+function opzioniMezzi() {
+    return automezzi
+        .map((mezzo) => {
+            const value = chiave(mezzo.id);
+            if (!value) return null;
+            return { value, label: etichettaMezzo(mezzo) || `Mezzo ${value}` };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.label.localeCompare(b.label, 'it'));
+}
+
+async function opzioniOperatori() {
+    const lista = await invoke('get_all_tesserati');
+    return (Array.isArray(lista) ? lista : [])
+        .filter((persona) => isTruthyFlag(persona?.operatore))
+        .map((persona) => {
+            const label = String(persona?.nominativo || '').trim();
+            if (!label) return null;
+            return { value: label, label };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.label.localeCompare(b.label, 'it'));
+}
+
+async function opzioniDistributori() {
+    const tutti = await invoke('get_rifornimenti');
+    const visti = new Set();
+    const nomi = [];
+    (Array.isArray(tutti) ? tutti : []).forEach((row) => {
+        const nome = String(campo(row, 'Distributore') ?? '').trim();
+        const chiaveNome = nome.toLocaleLowerCase('it');
+        if (!nome || visti.has(chiaveNome)) return;
+        visti.add(chiaveNome);
+        nomi.push(nome);
+    });
+    nomi.sort((a, b) => a.localeCompare(b, 'it'));
+    return nomi.map((nome) => ({ value: nome, label: nome }));
+}
+
+async function apriNuovo() {
+    const overlay = document.getElementById('rif-nuovo-overlay');
+    if (!overlay || !invoke) return;
+    mostraErroreNuovo('');
+    const data = document.getElementById('rif-data');
+    if (data) data.value = oggiIso();
+    ['rif-km', 'rif-litri', 'rif-costo', 'rif-note', 'rif-distributore-nuovo'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    riempiSelect(document.getElementById('rif-mezzo'), opzioniMezzi(), 'Scegli il mezzo…');
+    if (filtroMezzo) {
+        const mezzo = document.getElementById('rif-mezzo');
+        if (mezzo) mezzo.value = filtroMezzo;
+    }
+    try {
+        riempiSelect(document.getElementById('rif-operatore'), await opzioniOperatori(), 'Scegli l’operatore…');
+        const distributori = await opzioniDistributori();
+        distributori.push({ value: '__nuovo__', label: 'Aggiungi nuovo…' });
+        const select = document.getElementById('rif-distributore-scelta');
+        riempiSelect(select, distributori, 'Scegli…');
+        if (distributori.length === 1) select.value = '__nuovo__';
+        aggiornaNuovoDistributore();
+    } catch (err) {
+        console.error(err);
+        mostraErroreNuovo('Non riesco a caricare mezzi o operatori.');
+    }
+    overlay.hidden = false;
+}
+
+function chiudiNuovo() {
+    const overlay = document.getElementById('rif-nuovo-overlay');
+    if (overlay) overlay.hidden = true;
+    mostraErroreNuovo('');
+}
+
+function numeroOppureVuoto(raw) {
+    const testo = String(raw ?? '').trim().replace(',', '.');
+    if (!testo) return { ok: true, valore: null };
+    const n = Number(testo);
+    if (!Number.isFinite(n) || n < 0) return { ok: false, valore: null };
+    return { ok: true, valore: n };
+}
+
+function distributoreScelto() {
+    const scelta = String(document.getElementById('rif-distributore-scelta')?.value || '').trim();
+    if (scelta === '__nuovo__') {
+        return String(document.getElementById('rif-distributore-nuovo')?.value || '').trim();
+    }
+    return scelta;
+}
+
+async function salvaNuovo() {
+    if (salvataggioInCorso || !invoke) return;
+    mostraErroreNuovo('');
+    const data = String(document.getElementById('rif-data')?.value || '').trim();
+    const mezzo = String(document.getElementById('rif-mezzo')?.value || '').trim();
+    const operatore = String(document.getElementById('rif-operatore')?.value || '').trim();
+    const distributore = distributoreScelto();
+    const km = numeroOppureVuoto(document.getElementById('rif-km')?.value);
+    const litri = numeroOppureVuoto(document.getElementById('rif-litri')?.value);
+    const costo = numeroOppureVuoto(document.getElementById('rif-costo')?.value);
+    const note = String(document.getElementById('rif-note')?.value || '').trim();
+
+    if (!data) return mostraErroreNuovo('Indica la data.');
+    if (!mezzo) return mostraErroreNuovo('Scegli il mezzo.');
+    if (!operatore) return mostraErroreNuovo('Scegli l’operatore.');
+    if (!distributore) return mostraErroreNuovo('Scegli un distributore, oppure scrivine uno nuovo.');
+    if (!km.ok || !litri.ok || !costo.ok) {
+        return mostraErroreNuovo('Km, litri e costo devono essere numeri, oppure lascia la casella vuota.');
+    }
+
+    const btn = document.getElementById('rif-btn-salva');
+    salvataggioInCorso = true;
+    if (btn) btn.disabled = true;
+    try {
+        await invoke('create_rifornimento', {
+            payload: {
+                data,
+                mezzo,
+                operatore,
+                distributore,
+                km: km.valore,
+                litri: litri.valore,
+                costo: costo.valore,
+                note: note || null
+            }
+        });
+        chiudiNuovo();
+        await carica();
+        const stato = document.getElementById('rif-stato');
+        if (stato) stato.textContent = 'Rifornimento salvato';
+    } catch (err) {
+        console.error(err);
+        mostraErroreNuovo(String(err?.message || err || 'Non riesco a salvare.'));
+    } finally {
+        salvataggioInCorso = false;
+        if (btn) btn.disabled = false;
+    }
+}
+
+function chiediEliminazione(id, descrizione) {
+    idDaEliminare = id;
+    const testo = document.getElementById('rif-conferma-testo');
+    if (testo) testo.textContent = descrizione || 'Questa riga verrà tolta dall’elenco.';
+    const overlay = document.getElementById('rif-conferma-overlay');
+    if (overlay) overlay.hidden = false;
+}
+
+function chiudiConferma() {
+    idDaEliminare = null;
+    const overlay = document.getElementById('rif-conferma-overlay');
+    if (overlay) overlay.hidden = true;
+}
+
+async function confermaEliminazione() {
+    if (!invoke || idDaEliminare == null) return;
+    const id = Number(idDaEliminare);
+    const btn = document.getElementById('rif-conferma-ok');
+    if (btn) btn.disabled = true;
+    try {
+        await invoke('delete_rifornimento', { id });
+        chiudiConferma();
+        await carica();
+        const stato = document.getElementById('rif-stato');
+        if (stato) stato.textContent = 'Rifornimento eliminato';
+    } catch (err) {
+        console.error(err);
+        chiudiConferma();
+        const stato = document.getElementById('rif-stato');
+        if (stato) stato.textContent = 'Non riesco a eliminare il rifornimento.';
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+document.getElementById('btn-nuovo-rifornimento')?.addEventListener('click', () => {
+    apriNuovo();
+});
+document.getElementById('rif-nuovo-chiudi')?.addEventListener('click', chiudiNuovo);
+document.getElementById('rif-btn-annulla')?.addEventListener('click', chiudiNuovo);
+document.getElementById('rif-btn-salva')?.addEventListener('click', salvaNuovo);
+document.getElementById('rif-distributore-scelta')?.addEventListener('change', aggiornaNuovoDistributore);
+document.getElementById('rif-nuovo-overlay')?.addEventListener('click', (event) => {
+    if (event.target?.id === 'rif-nuovo-overlay') chiudiNuovo();
+});
+document.getElementById('rif-conferma-annulla')?.addEventListener('click', chiudiConferma);
+document.getElementById('rif-conferma-ok')?.addEventListener('click', confermaEliminazione);
+document.getElementById('rif-conferma-overlay')?.addEventListener('click', (event) => {
+    if (event.target?.id === 'rif-conferma-overlay') chiudiConferma();
+});
+document.getElementById('rif-corpo')?.addEventListener('click', (event) => {
+    const btn = event.target.closest('.rif-x');
+    if (!btn) return;
+    const id = String(btn.dataset.id || '').trim();
+    if (!id) return;
+    chiediEliminazione(id, btn.dataset.desc || '');
+});
 
 document.getElementById('btn-mostra-tutti')?.addEventListener('click', mostraTutti);
 document.getElementById('btn-torna')?.addEventListener('click', () => {

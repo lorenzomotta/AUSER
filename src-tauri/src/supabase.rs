@@ -1500,10 +1500,69 @@ impl SupabaseClient {
         }
     }
 
+    /// Inserisce un rifornimento.
+    pub async fn insert_rifornimento(&self, body: &serde_json::Map<String, Value>) -> Result<(), String> {
+        if body.is_empty() {
+            return Err("Nessun dato da salvare".to_string());
+        }
+        let table_name = &self.config.tables.rifornimenti;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/rest/v1/{}", base, table_name);
+        println!("📡 Supabase POST [rifornimenti → {}]", table_name);
+
+        let request = self
+            .http
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .header("Prefer", "return=minimal")
+            .json(body);
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Supabase POST rifornimenti: {}", e))?;
+        if response.status().is_success() {
+            return Ok(());
+        }
+        let status = response.status();
+        let err_body = response.text().await.unwrap_or_default();
+        Err(format!(
+            "Errore Supabase POST rifornimenti HTTP {}: {}",
+            status, err_body
+        ))
+    }
+
+    /// Elimina un rifornimento per id.
+    pub async fn delete_rifornimento(&self, id: i64) -> Result<(), String> {
+        let table_name = &self.config.tables.rifornimenti;
+        let base = self.config.url.trim_end_matches('/');
+        let url = format!("{}/rest/v1/{}?id=eq.{}", base, table_name, id);
+        println!("📡 Supabase DELETE [rifornimenti → {}] id={}", table_name, id);
+
+        let request = self.http.delete(&url).header("Prefer", "return=minimal");
+        let response = self
+            .apply_auth_headers(request)
+            .send()
+            .await
+            .map_err(|e| format!("Errore connessione Supabase DELETE rifornimenti: {}", e))?;
+        if response.status().is_success() {
+            return Ok(());
+        }
+        let status = response.status();
+        let err_body = response.text().await.unwrap_or_default();
+        Err(format!(
+            "Errore Supabase DELETE rifornimenti HTTP {}: {}",
+            status, err_body
+        ))
+    }
+
     /// Solo Mezzo + km di arrivo/rientro (leggero, per ultimo chilometraggio mezzi).
     pub async fn fetch_servizi_mezzo_km(&self) -> Result<Vec<Value>, String> {
         // Nome reale in Servizi_supa: Km_Rientro (R maiuscola)
         let select_pairs = [
+            "idservizio,Mezzo,Km_Rientro,Prelievo_Data",
+            "idservizio,Mezzo,Km_rientro,Prelievo_Data",
+            "idservizio,Mezzo,Km_Arrivo,Prelievo_Data",
             "Mezzo,Km_Rientro",
             "Mezzo,Km_rientro",
             "Mezzo,Km_Arrivo",

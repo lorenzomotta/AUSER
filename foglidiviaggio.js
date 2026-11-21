@@ -1,6 +1,7 @@
 // Fogli di viaggio — legge la vista Supabase FogliDiViaggio.
 // Ogni colonna si può ordinare e filtrare. I totali in basso contano le righe visibili.
 import { etichettaMezzo, trovaAutomezzo } from './mezzo-etichetta.js';
+import { initModificaServizio, setupModaleModifica, apriModalModifica } from './modifica-servizio.js';
 
 const COLONNE = [
     { key: 'Data', label: 'DATA', tipo: 'data', classe: 'fdv-data' },
@@ -65,6 +66,11 @@ function chiave(val) {
     return s.endsWith('.0') ? s.slice(0, -2) : s;
 }
 
+function idServizioRiga(row) {
+    const n = Number(campo(row, 'id'));
+    return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 function campo(row, nome) {
     if (!row || typeof row !== 'object') return '';
     if (Object.prototype.hasOwnProperty.call(row, nome) && row[nome] != null) {
@@ -91,6 +97,19 @@ function chiaveData(raw) {
     const it = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(s);
     if (it) return `${it[3]}-${it[2]}-${it[1]}`;
     return '';
+}
+
+function dataOggiIso() {
+    const oggi = new Date();
+    const mese = String(oggi.getMonth() + 1).padStart(2, '0');
+    const giorno = String(oggi.getDate()).padStart(2, '0');
+    return `${oggi.getFullYear()}-${mese}-${giorno}`;
+}
+
+function viaggioFinoAOggi(row) {
+    const data = chiaveData(campo(row, 'Data'));
+    if (!data) return false;
+    return data <= dataOggiIso();
 }
 
 function formatKm(raw) {
@@ -320,11 +339,15 @@ function disegnaRighe(righe) {
     if (!righe.length) {
         corpo.innerHTML = `<tr><td class="fdv-vuoto" colspan="${COLONNE.length}">Nessun viaggio con questi filtri. Apri la colonna e premi «Azzera filtro».</td></tr>`;
     } else {
-        corpo.innerHTML = righe.map((row) => `
-            <tr>
+        corpo.innerHTML = righe.map((row) => {
+            const km = numeroSort(campo(row, 'Km'));
+            const classeRiga = km == null ? 'fdv-km-vuoto' : 'fdv-km-ok';
+            const id = idServizioRiga(row);
+            return `
+            <tr class="${classeRiga}" data-servizio-id="${id}" title="Doppio clic per aprire la scheda">
                 ${COLONNE.map((col) => `<td class="${col.classe}">${escapeHtml(valoreVisibile(row, col))}</td>`).join('')}
-            </tr>
-        `).join('');
+            </tr>`;
+        }).join('');
     }
 
     if (messaggio) messaggio.hidden = true;
@@ -618,16 +641,20 @@ async function caricaAutomezzi() {
     }
 }
 
+function soloFinoAOggi(righe) {
+    return (Array.isArray(righe) ? righe : []).filter(viaggioFinoAOggi);
+}
+
 async function scaricaRighe() {
     await invoke('init_supabase_from_config').catch(() => {});
     if (filtroMezzo) {
         const filtrate = await invoke('get_fogli_di_viaggio', { mezzo: filtroMezzo });
-        if (Array.isArray(filtrate) && filtrate.length) return filtrate;
+        if (Array.isArray(filtrate) && filtrate.length) return soloFinoAOggi(filtrate);
         const tutti = await invoke('get_fogli_di_viaggio');
-        return (Array.isArray(tutti) ? tutti : []).filter((row) => stessoMezzo(campo(row, 'Mezzo'), filtroMezzo));
+        return soloFinoAOggi(tutti).filter((row) => stessoMezzo(campo(row, 'Mezzo'), filtroMezzo));
     }
     const tutti = await invoke('get_fogli_di_viaggio');
-    return Array.isArray(tutti) ? tutti : [];
+    return soloFinoAOggi(tutti);
 }
 
 async function carica() {
@@ -686,8 +713,37 @@ async function tornaElencoMezzi() {
     window.location.href = 'ELENCOMEZZI.html';
 }
 
+async function apriSchedaLettura(id) {
+    const idNum = parseInt(id, 10);
+    if (!Number.isFinite(idNum) || idNum <= 0) return;
+    if (!invoke) {
+        alert('Apri questa pagina dall\'elenco mezzi, dentro l\'app.');
+        return;
+    }
+    try {
+        await apriModalModifica(idNum, { solaLettura: true, modificaKm: true });
+    } catch (err) {
+        console.error(err);
+        alert('Non riesco ad aprire la scheda del servizio.');
+    }
+}
+
 creaIntestazioni();
 preparaMenu();
+document.getElementById('fdv-corpo')?.addEventListener('dblclick', (e) => {
+    const riga = e.target.closest('tr[data-servizio-id]');
+    if (!riga || !document.getElementById('fdv-corpo')?.contains(riga)) return;
+    apriSchedaLettura(riga.dataset.servizioId);
+});
+initModificaServizio({
+    getInvoke: () => invoke,
+    isTauriEnv: isTauri,
+    trovaServizioLocal: () => null,
+    onSaveSuccess: async () => {
+        await carica();
+    }
+});
+setupModaleModifica();
 document.getElementById('btn-mostra-tutti')?.addEventListener('click', mostraTutti);
 document.getElementById('btn-torna')?.addEventListener('click', () => {
     tornaElencoMezzi();

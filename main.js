@@ -721,7 +721,7 @@ function oggiIsoLocale() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** Numerino su GESTIONE AUTOPARCO = totale manutenzioni ancora aperte. */
+/** Numerino su GESTIONE MEZZI = totale manutenzioni ancora aperte. */
 async function aggiornaBadgeManutenzioniAperte() {
     const badge = document.getElementById('badge-manut-aperte');
     const btn = document.getElementById('btn-elenco-mezzi');
@@ -1282,7 +1282,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Alert scadute + badge aperte su GESTIONE AUTOPARCO
+    // Alert scadute + badge aperte su GESTIONE MEZZI
     if (tauriReady) {
         await Promise.all([
             aggiornaAvvisoManutenzioni(),

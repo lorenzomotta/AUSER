@@ -4780,7 +4780,37 @@ fn parse_km_value(raw: &str) -> Option<f64> {
     }
 }
 
-/// Per ogni mezzo: il chilometraggio di arrivo più alto trovato nei servizi.
+/// Data del servizio, i primi 10 caratteri (aaaa-mm-gg). Vuota se manca.
+fn data_servizio_per_ultimo_km(row: &serde_json::Value) -> String {
+    let raw = get_field_any(
+        row,
+        &["Prelievo_Data", "PRELIEVO_DATA", "Data", "DATA"],
+    );
+    let s = raw.trim();
+    if s.len() >= 10 && s.as_bytes().get(4) == Some(&b'-') {
+        return s[..10].to_string();
+    }
+    String::new()
+}
+
+fn id_servizio_per_ultimo_km(row: &serde_json::Value) -> i64 {
+    get_field_any(row, &["idservizio", "IdServizio", "IDSERVIZIO", "id"])
+        .parse::<i64>()
+        .unwrap_or(0)
+}
+
+/// true se questo servizio è più recente di quello già scelto.
+fn servizio_piu_recente(data: &str, id: i64, attuale_data: &str, attuale_id: i64) -> bool {
+    if !data.is_empty() {
+        if attuale_data.is_empty() || data > attuale_data {
+            return true;
+        }
+        return data == attuale_data && id > attuale_id;
+    }
+    attuale_data.is_empty() && id > attuale_id
+}
+
+/// Per ogni mezzo: km di arrivo dell'ultimo servizio che lo ha compilato.
 #[tauri::command]
 async fn get_ultimi_km_mezzi() -> Result<Vec<UltimoKmMezzo>, String> {
     println!("=== get_ultimi_km_mezzi chiamato (Supabase / Servizi_supa) ===");
@@ -4797,7 +4827,8 @@ async fn get_ultimi_km_mezzi() -> Result<Vec<UltimoKmMezzo>, String> {
             .map_err(|e| format_supabase_error(&e))?
     };
 
-    let mut max_per_mezzo: std::collections::HashMap<String, f64> =
+    // mezzo → (data, id servizio, km)
+    let mut ultimo_per_mezzo: std::collections::HashMap<String, (String, i64, f64)> =
         std::collections::HashMap::new();
 
     for row in &rows {
@@ -4822,19 +4853,23 @@ async fn get_ultimi_km_mezzi() -> Result<Vec<UltimoKmMezzo>, String> {
         let Some(km) = parse_km_value(&km_raw) else {
             continue;
         };
-        max_per_mezzo
+        let data = data_servizio_per_ultimo_km(row);
+        let id = id_servizio_per_ultimo_km(row);
+        ultimo_per_mezzo
             .entry(mezzo)
-            .and_modify(|cur| {
-                if km > *cur {
-                    *cur = km;
+            .and_modify(|(cur_data, cur_id, cur_km)| {
+                if servizio_piu_recente(&data, id, cur_data, *cur_id) {
+                    *cur_data = data.clone();
+                    *cur_id = id;
+                    *cur_km = km;
                 }
             })
-            .or_insert(km);
+            .or_insert((data, id, km));
     }
 
-    let mut list: Vec<UltimoKmMezzo> = max_per_mezzo
+    let mut list: Vec<UltimoKmMezzo> = ultimo_per_mezzo
         .into_iter()
-        .map(|(mezzo, km)| UltimoKmMezzo { mezzo, km })
+        .map(|(mezzo, (_data, _id, km))| UltimoKmMezzo { mezzo, km })
         .collect();
     list.sort_by(|a, b| {
         a.mezzo
@@ -5754,6 +5789,76 @@ async fn get_rifornimenti(mezzo: Option<String>) -> Result<Vec<serde_json::Value
         .map_err(|e| format_supabase_error(&e))?;
     println!("✓ Rifornimenti: {} righe", rows.len());
     Ok(rows)
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NuovoRifornimentoPayload {
+    data: String,
+    mezzo: String,
+    operatore: String,
+    distributore: String,
+    km: Option<f64>,
+    litri: Option<f64>,
+    costo: Option<f64>,
+    note: Option<String>,
+}
+
+/// Inserisce un rifornimento dalla pagina Rifornimenti.
+#[tauri::command]
+async fn create_rifornimento(payload: NuovoRifornimentoPayload) -> Result<(), String> {
+    let data = payload.data.trim();
+    let mezzo = payload.mezzo.trim();
+    let operatore = payload.operatore.trim();
+    let distributore = payload.distributore.trim();
+    if data.is_empty() || mezzo.is_empty() || operatore.is_empty() || distributore.is_empty() {
+        return Err("Compila data, mezzo, operatore e distributore.".to_string());
+    }
+
+    let mut body = serde_json::Map::new();
+    body.insert("Data_Rifornimento".to_string(), serde_json::json!(data));
+    body.insert("Mezzo".to_string(), serde_json::json!(mezzo));
+    body.insert("Operatore".to_string(), serde_json::json!(operatore));
+    body.insert("Distributore".to_string(), serde_json::json!(distributore));
+    if let Some(km) = payload.km {
+        body.insert("KM_Rifornimento".to_string(), serde_json::json!(km));
+    }
+    if let Some(litri) = payload.litri {
+        body.insert("Litri".to_string(), serde_json::json!(litri));
+    }
+    if let Some(costo) = payload.costo {
+        body.insert("Costo_Rifornimento".to_string(), serde_json::json!(costo));
+    }
+    if let Some(note) = payload.note.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {
+        body.insert("Note_Rifornimento".to_string(), serde_json::json!(note));
+    }
+
+    ensure_supabase_client().await?;
+    let guard = get_supabase_client().lock().await;
+    let client = guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+    client
+        .insert_rifornimento(&body)
+        .await
+        .map_err(|e| format_supabase_error(&e))
+}
+
+/// Elimina un rifornimento.
+#[tauri::command]
+async fn delete_rifornimento(id: i64) -> Result<(), String> {
+    if id <= 0 {
+        return Err("Rifornimento senza numero identificativo.".to_string());
+    }
+    ensure_supabase_client().await?;
+    let guard = get_supabase_client().lock().await;
+    let client = guard
+        .as_ref()
+        .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+    client
+        .delete_rifornimento(id)
+        .await
+        .map_err(|e| format_supabase_error(&e))
 }
 
 fn build_automezzo_body(
@@ -11467,6 +11572,8 @@ fn main() {
             get_all_automezzi,
             get_fogli_di_viaggio,
             get_rifornimenti,
+            create_rifornimento,
+            delete_rifornimento,
             get_ultimi_km_mezzi,
             create_manutenzione,
             get_manutenzione,

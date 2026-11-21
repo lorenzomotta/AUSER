@@ -138,10 +138,13 @@ body {
 
 .fdv-tabella th,
 .fdv-tabella td {
-    border-bottom: 1px solid #e0e0e0;
     padding: 8px 10px;
     text-align: left;
     vertical-align: top;
+}
+
+.fdv-tabella tbody td {
+    border-bottom: 2px solid #000;
 }
 
 .fdv-tabella th {
@@ -339,12 +342,26 @@ body {
     font-size: 12px;
 }
 
-.fdv-tabella tbody tr:nth-child(even) {
-    background: #f7f7f7;
+.fdv-tabella tbody tr[data-servizio-id] {
+    cursor: pointer;
 }
 
-.fdv-tabella tbody tr:hover {
-    background: #e3f2fd;
+.fdv-tabella tbody tr.fdv-km-ok,
+.fdv-tabella tbody tr.fdv-km-ok:nth-child(even) {
+    background: #c8e6c9;
+}
+
+.fdv-tabella tbody tr.fdv-km-vuoto,
+.fdv-tabella tbody tr.fdv-km-vuoto:nth-child(even) {
+    background: #fff59d;
+}
+
+.fdv-tabella tbody tr.fdv-km-ok:hover {
+    background: #a5d6a7;
+}
+
+.fdv-tabella tbody tr.fdv-km-vuoto:hover {
+    background: #ffe082;
 }
 
 .fdv-tabella td.fdv-num {

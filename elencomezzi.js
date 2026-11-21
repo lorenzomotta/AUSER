@@ -523,7 +523,7 @@ function createMezzoBlock(mezzo) {
                 </div>
                 <div class="mezzo-form-group mezzo-form-group-ultimo-km">
                     <label>ULTIMO KM</label>
-                    <input type="text" data-field="ultimo_km" value="${escapeHtml(ultimoKmDiMezzo(mezzo))}" readonly title="Ultimo chilometraggio (valore più alto nei servizi)">
+                    <input type="text" data-field="ultimo_km" value="${escapeHtml(ultimoKmDiMezzo(mezzo))}" readonly title="Chilometri di arrivo dell'ultimo servizio di questo mezzo">
                 </div>
                 <div class="mezzo-form-group mezzo-form-group-actions">
                     <div class="mezzo-block-actions">

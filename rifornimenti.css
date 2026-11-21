@@ -11,7 +11,10 @@ body {
 
 .rif-footer[hidden],
 .rif-tabella-wrap[hidden],
-.rif-messaggio[hidden] {
+.rif-messaggio[hidden],
+.rif-overlay[hidden],
+.rif-errore[hidden],
+#rif-nuovo-wrap[hidden] {
     display: none !important;
 }
 
@@ -75,6 +78,17 @@ body {
 .rif-btn:disabled {
     opacity: 0.45;
     cursor: default;
+}
+
+.rif-btn-nuovo,
+.rif-btn-salva {
+    background: #722F37;
+    color: #fff;
+}
+
+.rif-btn-nuovo:hover,
+.rif-btn-salva:hover:not(:disabled) {
+    background: #561F28;
 }
 
 .rif-btn-tutti {
@@ -190,4 +204,148 @@ body {
 .rif-footer strong {
     margin-left: 8px;
     font-size: 18px;
+}
+
+.rif-col-x {
+    width: 46px;
+}
+
+.rif-x {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 4px;
+    background: #000;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.rif-x:hover {
+    background: #333;
+}
+
+.rif-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.rif-scheda,
+.rif-conferma {
+    width: min(100%, 520px);
+    max-height: min(92vh, 760px);
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+.rif-scheda-testa {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #37474f;
+    color: #fff;
+    border-radius: 8px 8px 0 0;
+}
+
+.rif-scheda-testa h2,
+.rif-conferma h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.rif-scheda-chiudi {
+    border: none;
+    background: transparent;
+    color: #fff;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.rif-scheda-corpo {
+    overflow: auto;
+    padding: 14px 16px 4px;
+}
+
+.rif-campo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.rif-campo label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #37474f;
+}
+
+.rif-campo input,
+.rif-campo select,
+.rif-campo textarea {
+    width: 100%;
+    min-height: 36px;
+    border: 1px solid #bdbdbd;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.rif-riga {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.rif-aiuto {
+    margin: -4px 0 12px;
+    font-size: 12px;
+    color: #616161;
+}
+
+.rif-errore {
+    margin: 0 0 8px;
+    color: #b71c1c;
+    font-weight: 700;
+}
+
+.rif-scheda-piedi {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 12px 16px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.rif-btn-annulla {
+    background: #eceff1;
+    color: #37474f;
+}
+
+.rif-btn-elimina-ok {
+    background: #000;
+    color: #fff;
+}
+
+.rif-conferma {
+    padding: 18px 18px 8px;
+}
+
+.rif-conferma p {
+    margin: 12px 0 4px;
+    font-size: 15px;
 }

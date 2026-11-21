@@ -454,8 +454,10 @@ function mostraCalendario(email) {
     app?.removeAttribute('hidden');
     const label = document.getElementById('web-user-label');
     if (label && email) {
-        const adminTag = isUtenteAdmin(permessiCorrenti) ? ' · ADMIN' : '';
-        label.textContent = `${email}${adminTag}`;
+        const ruolo = isUtenteAdmin(permessiCorrenti)
+            ? '<span class="web-user-ruolo">ADMIN</span>'
+            : '';
+        label.innerHTML = `<span class="web-user-dot" aria-hidden="true"></span><span class="web-user-nome">${escapeHtml(email)}</span>${ruolo}`;
     }
 }
 
@@ -1245,7 +1247,10 @@ async function aggiornaEventiCalendario() {
         calendar.addEventSource(eventi);
         aggiornaContatore(eventi.length);
         setLoading(false);
-        requestAnimationFrame(() => applicaIntestazioniGiornoListaMobile());
+        requestAnimationFrame(() => {
+            applicaIntestazioniGiornoListaMobile();
+            aggiornaSottotitoloMobile();
+        });
     } catch (error) {
         if (reqId !== loadRequestId) return;
         serviziVistaCorrente = [];
@@ -2019,7 +2024,10 @@ function initCalendario() {
         },
         datesSet() {
             aggiornaEventiCalendario();
-            requestAnimationFrame(() => applicaIntestazioniGiornoListaMobile());
+            requestAnimationFrame(() => {
+                applicaIntestazioniGiornoListaMobile();
+                aggiornaSottotitoloMobile();
+            });
         }
     });
 
@@ -2028,14 +2036,44 @@ function initCalendario() {
 }
 
 function aggiornaPulsanteRifornimento() {
-    const footer = document.querySelector('.rif-mobile-footer');
-    if (!footer) return;
-    const giorno = vistaCorrente === 'dayGridDay';
-    footer.hidden = !giorno;
+    const btn = document.getElementById('btn-apri-rifornimento');
+    if (!btn) return;
+    const giorno = vistaCorrente === 'dayGridDay' && isVistaMobileCalendario();
+    btn.hidden = !giorno;
     if (!giorno) {
         const overlay = document.getElementById('rif-mobile-overlay');
         if (overlay) overlay.hidden = true;
     }
+}
+
+function contaServiziNelGiornoVisibile() {
+    if (!calendar?.view) return 0;
+    const inizio = calendar.view.currentStart;
+    const fine = calendar.view.currentEnd;
+    return calendar.getEvents().filter((ev) => ev.start && ev.start >= inizio && ev.start < fine).length;
+}
+
+function aggiornaSottotitoloMobile() {
+    const chunk = document.querySelector('.web-calendario-app .fc-toolbar-chunk:nth-child(2)');
+    if (!chunk) return;
+    const mostra = isVistaMobileCalendario() && vistaCorrente === 'dayGridDay' && calendar;
+    let sub = chunk.querySelector('.cal-sottotitolo-giorno');
+    if (!mostra) {
+        if (sub) sub.remove();
+        return;
+    }
+    if (!sub) {
+        sub = document.createElement('p');
+        sub.className = 'cal-sottotitolo-giorno';
+        chunk.appendChild(sub);
+    }
+    const data = calendar.view?.currentStart || new Date();
+    const nomi = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+    const n = contaServiziNelGiornoVisibile();
+    let frase = 'Nessun servizio in programma';
+    if (n === 1) frase = '1 servizio in programma';
+    else if (n > 1) frase = `${n} servizi in programma`;
+    sub.textContent = `${nomi[data.getDay()]} (${frase})`;
 }
 
 function impostaVista(nomeVista) {
@@ -2083,6 +2121,9 @@ function setupEventListenersCalendario() {
     });
 
     document.getElementById('btn-export-excel-cal')?.addEventListener('click', esportaExcelVistaCorrente);
+    document.getElementById('btn-vai-oggi')?.addEventListener('click', () => {
+        calendar?.today();
+    });
     document.getElementById('btn-logout')?.addEventListener('click', gestisciLogout);
     document.getElementById('btn-close-modal')?.addEventListener('click', chiudiModalServizio);
     document.getElementById('btn-chiudi-modal')?.addEventListener('click', chiudiModalServizio);
@@ -2229,6 +2270,7 @@ function mostraAnteprimaMobile() {
         calendar.removeAllEvents();
         calendar.addEventSource(esempi.map(servizioToEvent).filter(Boolean));
         aggiornaContatore(esempi.length);
+        aggiornaSottotitoloMobile();
     }
     setLoading(false);
 }

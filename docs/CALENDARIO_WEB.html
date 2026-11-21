@@ -13,8 +13,8 @@
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/@fullcalendar/list@6.1.15/index.global.min.css" rel="stylesheet">
     <link rel="stylesheet" href="calendario.css?v=18">
-    <link rel="stylesheet" href="calendario-web.css?v=35">
-    <link rel="stylesheet" href="rifornimento-mobile.css?v=5">
+    <link rel="stylesheet" href="calendario-web.css?v=38">
+    <link rel="stylesheet" href="rifornimento-mobile.css?v=6">
 </head>
 <body>
     <!-- Schermata login operatori -->
@@ -57,14 +57,56 @@
                 </div>
                 <div class="header-toolbar">
                     <div class="header-left">
-                        <button type="button" class="btn btn-chiudi" id="btn-logout">ESCI</button>
+                        <button type="button" class="btn btn-chiudi" id="btn-logout" title="Esci" aria-label="Esci">
+                            <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M10 6V4h10v16H10v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M14 12H3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M6 8l-4 4 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span class="btn-testo">ESCI</span>
+                        </button>
                     </div>
                     <div class="header-right">
                         <div class="vista-buttons" role="group" aria-label="Vista calendario">
-                            <button type="button" class="btn-vista active" data-vista="dayGridMonth">MESE</button>
-                            <button type="button" class="btn-vista" data-vista="dayGridWeek">SETTIMANA</button>
-                            <button type="button" class="btn-vista" data-vista="dayGridDay">GIORNO</button>
+                            <button type="button" class="btn-vista active" data-vista="dayGridMonth" title="Mese" aria-label="Vista mese">
+                                <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                    <rect x="3.5" y="4.5" width="17" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                                    <path d="M3.5 9.5h17M8 3.2v3.2M16 3.2v3.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                                    <path d="M8 13h.01M12 13h.01M16 13h.01M8 16.5h.01M12 16.5h.01M16 16.5h.01" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+                                </svg>
+                                <span class="btn-testo">MESE</span>
+                            </button>
+                            <button type="button" class="btn-vista" data-vista="dayGridWeek" title="Settimana" aria-label="Vista settimana">
+                                <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                    <rect x="4" y="3.5" width="16" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                                    <path d="M8 2.8v3M16 2.8v3M4 9h16M8 13h8M8 16.5h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                                </svg>
+                                <span class="btn-testo">SETTIMANA</span>
+                            </button>
+                            <button type="button" class="btn-vista" data-vista="dayGridDay" title="Giorno" aria-label="Vista giorno">
+                                <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                    <rect x="4" y="4" width="16" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                                    <path d="M8 3v3M16 3v3M4 9h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                                    <rect x="10" y="12" width="4" height="4" rx="0.6" fill="currentColor"/>
+                                </svg>
+                                <span class="btn-testo">GIORNO</span>
+                            </button>
                         </div>
+                        <button type="button" class="btn-oggi-mobile" id="btn-vai-oggi" title="Oggi" aria-label="Vai a oggi">
+                            <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <rect x="4" y="4" width="16" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                                <path d="M8 3v3M16 3v3M4 9h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            </svg>
+                            <span class="btn-oggi-dot" aria-hidden="true"></span>
+                        </button>
+                        <button type="button" class="btn-rif-mobile" id="btn-apri-rifornimento" title="Rifornimento" aria-label="Rifornimento" hidden>
+                            <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <rect x="3.5" y="3" width="10" height="18" rx="1.6" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M6 7h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M13.5 8.5H16a1.8 1.8 0 0 1 1.8 1.8v4.4a1.8 1.8 0 0 1-3.6 0V10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M17.8 7.4 16.1 5.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </button>
                         <button type="button" class="btn btn-export-excel-cal" id="btn-export-excel-cal" title="Esporta in Excel i servizi della vista corrente">
                             ESPORTA EXCEL
                         </button>
@@ -76,10 +118,7 @@
             <div id="calendario-mount"></div>
         </div>
 
-        <footer class="rif-mobile-footer">
-            <button type="button" class="rif-mobile-btn" id="btn-apri-rifornimento">RIFORNIMENTO</button>
-            <span class="rif-mobile-ok" id="rif-mobile-ok" hidden>Salvato</span>
-        </footer>
+        <span class="rif-mobile-ok" id="rif-mobile-ok" hidden>Salvato</span>
     </div>
 
     <div id="modal-servizio" class="modal-servizio-overlay" style="display: none;" aria-hidden="true">
@@ -201,6 +240,6 @@
         </div>
     </div>
 
-    <script type="module" src="calendario-web.js?v=62"></script>
+    <script type="module" src="calendario-web.js?v=63"></script>
 </body>
 </html>
