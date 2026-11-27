@@ -11,7 +11,8 @@ body {
 }
 
 .report-container {
-    max-width: 1400px;
+    width: 100%;
+    max-width: none;
     margin: 0 auto;
     padding: 12px 16px 24px;
 }

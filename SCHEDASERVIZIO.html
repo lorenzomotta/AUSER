@@ -138,7 +138,7 @@
         </section>
 
         <section class="ss-pagamento">
-            <div class="ss-band">PAGAMENTO DEL SERVIZIO</div>
+            <div class="ss-band">DONAZIONE PER IL SERVIZIO</div>
             <div class="ss-pagamento-riga1">
                 <label class="ss-check ss-pagamento-gratis">
                     <input type="checkbox" id="ss-check-gratis" disabled>
@@ -190,6 +190,17 @@
             <div class="ss-box ss-box-note-fine" id="ss-note-fine"></div>
         </section>
     </article>
+
+    <div id="ss-dialog-km" class="ss-km-overlay no-print" hidden aria-hidden="true">
+        <div class="ss-km-dialog" role="dialog" aria-modal="true" aria-labelledby="ss-dialog-km-titolo">
+            <h2 id="ss-dialog-km-titolo" class="ss-km-titolo">ATTENZIONE</h2>
+            <p id="ss-dialog-km-messaggio" class="ss-km-messaggio"></p>
+            <div class="ss-km-azioni">
+                <button type="button" id="ss-dialog-km-usa" class="ss-km-btn ss-km-btn-usa">Usa KM memorizzati</button>
+                <button type="button" id="ss-dialog-km-ignora" class="ss-km-btn ss-km-btn-ignora">Ignora</button>
+            </div>
+        </div>
+    </div>
 
     <script type="module" src="schedaservizio.js"></script>
 </body>

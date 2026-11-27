@@ -3,7 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a8f3c">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Calendario">
     <title>Calendario Servizi — Accesso Operatori</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="pwa/icon-192.png" type="image/png">
+    <link rel="apple-touch-icon" href="pwa/apple-touch-icon.png">
     <script>
         if (new URLSearchParams(location.search).get('anteprima') === 'mobile') {
             document.documentElement.classList.add('anteprima-mobile');
@@ -43,6 +51,9 @@
 
             <p class="web-login-hint">
                 Se non riesci ad accedere, contatta l'amministratore per l'attivazione dell'account operatore.
+            </p>
+            <p class="web-login-hint" id="web-login-installa">
+                Sul telefono: menu del browser, poi «Aggiungi a schermata Home». Aprila dall’icona: si chiude come un’app e l’accesso resta salvato. ESCI serve solo per cambiare account.
             </p>
         </div>
     </div>
@@ -251,6 +262,7 @@
         </div>
     </div>
 
+    <script src="calendario-pwa.js?v=1"></script>
     <script type="module" src="calendario-web.js?v=64"></script>
 </body>
 </html>

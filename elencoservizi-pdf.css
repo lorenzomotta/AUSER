@@ -25,6 +25,32 @@
     background-color: #0d47a1;
 }
 
+.page-elenco-servizi .header-right > .btn.btn-stampa-pdf-header.btn-stampa-pdf-icona {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 60px;
+    height: 38px;
+    padding: 3px 6px;
+    background: #fff;
+    border: 2px solid #333;
+    border-radius: 6px;
+    line-height: 0;
+}
+
+.page-elenco-servizi .header-right > .btn.btn-stampa-pdf-header.btn-stampa-pdf-icona img {
+    height: 28px;
+    width: auto;
+    display: block;
+    pointer-events: none;
+}
+
+.page-elenco-servizi .header-right > .btn.btn-stampa-pdf-header.btn-stampa-pdf-icona:hover,
+.page-elenco-servizi .header-right > .btn.btn-stampa-pdf-header.btn-stampa-pdf-icona:active {
+    background: #fff;
+    border-color: #111;
+}
+
 .es-pdf-overlay {
     position: fixed;
     inset: 0;

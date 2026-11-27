@@ -31,3 +31,77 @@
     width: 100%;
     resize: vertical;
 }
+
+.comp-km-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 3400;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    padding: 16px;
+}
+
+.comp-km-overlay[hidden] {
+    display: none !important;
+}
+
+.comp-km-dialog {
+    width: 100%;
+    max-width: 460px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+    padding: 20px 22px 16px;
+}
+
+.comp-km-titolo {
+    margin: 0 0 10px;
+    font-size: 22px;
+    color: #b71c1c;
+    text-align: center;
+}
+
+.comp-km-messaggio {
+    margin: 0 0 18px;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.4;
+    text-align: center;
+    color: #222;
+}
+
+.comp-km-azioni {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.comp-km-btn {
+    border: none;
+    border-radius: 5px;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.comp-km-btn-usa {
+    background: #2e7d32;
+    color: #fff;
+}
+
+.comp-km-btn-usa:hover {
+    background: #1b5e20;
+}
+
+.comp-km-btn-ignora {
+    background: #78909c;
+    color: #fff;
+}
+
+.comp-km-btn-ignora:hover {
+    background: #607d8b;
+}

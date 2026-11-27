@@ -100,6 +100,16 @@ function minutiDaOra(oraStr) {
     return h * 60 + m;
 }
 
+/** Ore e minuti, senza i secondi. Vuoto se l'orario non c'è. */
+function formatOraVisibile(oraStr) {
+    const p = String(oraStr || '').trim().split(':');
+    if (p.length < 2) return '';
+    const h = parseInt(p[0], 10);
+    const m = parseInt(p[1], 10);
+    if (Number.isNaN(h) || Number.isNaN(m)) return '';
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 async function fetchServiziSettimana(giorni) {
     const dal = giorni[0].dataStr;
     const al = giorni[6].dataStr;
@@ -232,7 +242,14 @@ function renderCorpo(righe) {
             }
             const sorted = [...items].sort((a, b) => minutiDaOra(a.ora) - minutiDaOra(b.ora));
             const contenuto = sorted
-                .map(it => `<span class="servizio-item">${escapeHtml(it.trasportato)}</span>`)
+                .map(it => {
+                    const ora = formatOraVisibile(it.ora);
+                    const nome = escapeHtml(it.trasportato);
+                    const testo = ora
+                        ? `<span class="servizio-ora">${escapeHtml(ora)}</span> ${nome}`
+                        : nome;
+                    return `<span class="servizio-item">${testo}</span>`;
+                })
                 .join('');
             return `<td class="day-cell">${contenuto}</td>`;
         }).join('');

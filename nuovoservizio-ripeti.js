@@ -267,6 +267,7 @@ export function setupRipetiServizio(deps = {}) {
             aggiornaHintKmTutteLeRighe();
         }
         aggiornaConteggio();
+        deps.onAttivoCambio?.(checkbox.checked);
     }
 
     function leggiOccorrenze() {
@@ -346,6 +347,7 @@ export function setupRipetiServizio(deps = {}) {
         if (inputNuovaData) inputNuovaData.value = '';
         rigaSeq = 0;
         aggiornaConteggio();
+        deps.onAttivoCambio?.(false);
     }
 
     function aggiornaOpzioniNelleRighe() {

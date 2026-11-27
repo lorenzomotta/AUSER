@@ -486,7 +486,7 @@ async function apriModalServizio(servizio) {
                 ${creaCampoDettaglio('MOTIVAZIONE', servizio.motivazione, 'field-large')}
             </div>
             <div class="dettaglio-row">
-                ${creaCampoDettaglio('ORA ARRIVO', servizio.ora_arrivo, 'field-small')}
+                ${creaCampoDettaglio('ORA ARRIVO', servizio.ora_destinazione || '', 'field-small')}
                 ${creaCampoDettaglio('COMUNE DESTINAZIONE', servizio.comune_destinazione)}
                 ${creaCampoDettaglio('LUOGO DESTINAZIONE', servizio.luogo_destinazione, 'field-large')}
                 ${creaCampoDettaglio('STATO INCASSO', servizio.stato_incasso)}

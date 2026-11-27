@@ -85,8 +85,57 @@ body {
 
 .btn-chiudi { background-color: #d32f2f; color: #fff; }
 .btn-chiudi:hover { background-color: #b71c1c; }
+
+.btn-chiudi.btn-chiudi-icona {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 37px;
+    height: 37px;
+    padding: 0;
+    line-height: 0;
+    background-color: #d32f2f;
+    color: #fff;
+    border-radius: 3px;
+}
+
+.btn-chiudi.btn-chiudi-icona:hover {
+    background-color: #b71c1c;
+}
+
+.btn-chiudi.btn-chiudi-icona svg {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    flex: 0 0 22px;
+    display: block;
+}
 .btn-modifica { background-color: #e65100; color: #fff; }
 .btn-modifica:hover { background-color: #bf360c; }
+
+.btn-modifica.btn-modifica-icona {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 37px;
+    height: 37px;
+    line-height: 0;
+    padding: 4px;
+    background-color: #2e7d32;
+}
+
+.btn-modifica.btn-modifica-icona:hover {
+    background-color: #1b5e20;
+}
+
+.btn-modifica.btn-modifica-icona img {
+    height: 28px;
+    width: auto;
+    display: block;
+    pointer-events: none;
+}
 .btn-salva, .btn-salva-tess { background-color: #2e7d32; color: #fff; }
 .btn-salva:hover, .btn-salva-tess:hover { background-color: #1b5e20; }
 .btn-salva:disabled, .btn-salva-tess:disabled { opacity: 0.55; cursor: not-allowed; }

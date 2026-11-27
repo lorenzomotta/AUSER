@@ -64,8 +64,30 @@ body {
     white-space: nowrap;
 }
 
-.btn-header-viaggi:hover {
-    background-color: #004d40;
+.btn-header-viaggi.btn-header-viaggi-icona {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: auto;
+    padding: 3px 6px;
+    background: #fff;
+    border: 2px solid #333;
+    border-radius: 6px;
+    line-height: 0;
+}
+
+.btn-header-viaggi.btn-header-viaggi-icona img {
+    height: 28px;
+    width: auto;
+    display: block;
+    pointer-events: none;
+}
+
+.btn-header-viaggi.btn-header-viaggi-icona:hover {
+    background: #fff;
+    border-color: #111;
+    filter: none;
 }
 
 .btn-header-rifornimenti {
@@ -81,8 +103,29 @@ body {
     white-space: nowrap;
 }
 
-.btn-header-rifornimenti:hover {
-    background-color: #561F28;
+.btn-header-rifornimenti.btn-header-rifornimenti-icona {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: auto;
+    padding: 3px 6px;
+    background: #fff;
+    border: 2px solid #333;
+    border-radius: 6px;
+    line-height: 0;
+}
+
+.btn-header-rifornimenti.btn-header-rifornimenti-icona img {
+    height: 28px;
+    width: auto;
+    display: block;
+    pointer-events: none;
+}
+
+.btn-header-rifornimenti.btn-header-rifornimenti-icona:hover {
+    background: #fff;
+    border-color: #111;
 }
 
 .btn-header-nuovo-mezzo {
@@ -98,8 +141,29 @@ body {
     white-space: nowrap;
 }
 
-.btn-header-nuovo-mezzo:hover {
-    background-color: #1b5e20;
+.btn-header-nuovo-mezzo.btn-header-nuovo-mezzo-icona {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: auto;
+    padding: 3px 6px;
+    background: #fff;
+    border: 2px solid #333;
+    border-radius: 6px;
+    line-height: 0;
+}
+
+.btn-header-nuovo-mezzo.btn-header-nuovo-mezzo-icona img {
+    height: 28px;
+    width: auto;
+    display: block;
+    pointer-events: none;
+}
+
+.btn-header-nuovo-mezzo.btn-header-nuovo-mezzo-icona:hover {
+    background: #fff;
+    border-color: #111;
 }
 
 .btn-header-nuovo-mezzo:disabled {
@@ -107,21 +171,37 @@ body {
     cursor: not-allowed;
 }
 
-.page-header-actions .btn-chiudi {
-    background-color: #d32f2f;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    padding: 8px 14px;
-    font-size: 14px;
-    font-weight: 700;
+.page-header-actions .btn-chiudi.btn-chiudi-icona {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: auto;
+    padding: 3px 6px;
+    background: #fff;
+    border: 2px solid #333;
+    border-radius: 6px;
+    line-height: 0;
     cursor: pointer;
-    white-space: nowrap;
-    transition: background-color 0.2s;
 }
 
-.page-header-actions .btn-chiudi:hover {
-    background-color: #b71c1c;
+.page-header-actions .btn-chiudi.btn-chiudi-icona svg {
+    height: 28px;
+    width: 28px;
+    display: block;
+    pointer-events: none;
+}
+
+.page-header-actions .btn-chiudi.btn-chiudi-icona svg path {
+    fill: none;
+    stroke: #d32f2f;
+    stroke-width: 3.4;
+    stroke-linecap: round;
+}
+
+.page-header-actions .btn-chiudi.btn-chiudi-icona:hover {
+    background: #fff;
+    border-color: #111;
 }
 
 .page-title {

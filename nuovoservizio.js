@@ -911,25 +911,37 @@ function popolaSelectStatiServizio(valoreSelezionato = '') {
 
     const opzioni = getStatiServizioOptions();
     select.innerHTML = '';
-    if (!opzioni.length) {
-        const opt = document.createElement('option');
-        opt.value = '';
-        opt.textContent = '— Nessuno stato da Supabase —';
-        select.appendChild(opt);
-        return;
-    }
+    if (opzioni.length) {
+        opzioni.forEach(stato => {
+            const opt = document.createElement('option');
+            opt.value = stato;
+            opt.textContent = stato;
+            select.appendChild(opt);
+        });
 
-    opzioni.forEach(stato => {
+        const selezionato = valoreSelezionato
+            ? resolveStatoServizioSelezionato(valoreSelezionato)
+            : statoDefaultNuovoServizio();
+        if (selezionato) select.value = selezionato;
+    }
+    bloccaStatoNuovoServizio();
+}
+
+/** Un servizio appena creato può essere solo DA ESEGUIRE. */
+function bloccaStatoNuovoServizio() {
+    const select = document.getElementById('ns-stato-servizio');
+    if (!select) return;
+    const stato = statoDefaultNuovoServizio() || 'DA ESEGUIRE';
+    const giaPresente = [...select.options].some((opt) => opt.value === stato);
+    if (!giaPresente) {
         const opt = document.createElement('option');
         opt.value = stato;
         opt.textContent = stato;
         select.appendChild(opt);
-    });
-
-    const selezionato = valoreSelezionato
-        ? resolveStatoServizioSelezionato(valoreSelezionato)
-        : statoDefaultNuovoServizio();
-    if (selezionato) select.value = selezionato;
+    }
+    select.value = stato;
+    select.disabled = true;
+    select.title = 'Un nuovo servizio è sempre DA ESEGUIRE';
 }
 
 function parseDisponibilitaCodici(value) {
@@ -1353,6 +1365,21 @@ async function toggleModificaNoteMezzo() {
     await salvaNoteMezzo();
 }
 
+/** Con «Ripeti su più date» operatore e mezzo si scelgono nella tabella della sezione 2. */
+function impostaSezione5PerRipeti(attivo) {
+    const bloccato = Boolean(attivo);
+    ['ns-operatore', 'ns-mezzo'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.disabled = bloccato;
+        if (bloccato) {
+            el.title = 'Si sceglie nella tabella «Ripeti su più date», sezione 2';
+        } else {
+            el.removeAttribute('title');
+        }
+    });
+}
+
 function setupMezzoListener() {
     document.getElementById('ns-mezzo')?.addEventListener('change', async () => {
         aggiornaDettaglioDaMezzo();
@@ -1500,7 +1527,7 @@ function chiediSiNo(messaggio) {
 function aggiornaPulsantiTipoServizioAttivi() {
     const select = document.getElementById('ns-tipo-servizio');
     const valore = String(select?.value || '').trim().toUpperCase();
-    document.querySelectorAll('.ns-btn-tipo-servizio').forEach((btn) => {
+    document.querySelectorAll('.ns-btn-tipo-servizio[data-tipo]').forEach((btn) => {
         const tipo = String(btn.getAttribute('data-tipo') || '').toUpperCase();
         btn.classList.toggle('ns-btn-tipo-attivo', tipo !== '' && tipo === valore);
     });
@@ -1574,6 +1601,7 @@ async function onClickTipoServizioRapido(tipo) {
 
     if (valore === 'STANDARD') {
         if (selectCarr) selectCarr.value = '';
+        aggiornaPulsantiCarrozzinaAttivi();
         return;
     }
 
@@ -1583,6 +1611,62 @@ async function onClickTipoServizioRapido(tipo) {
         selectCarr.value = scelta;
         selectCarr.dispatchEvent(new Event('change', { bubbles: true }));
     }
+    aggiornaPulsantiCarrozzinaAttivi();
+}
+
+/** Evidenzia AUSER / SOCIO in base alla casella carrozzina. */
+function aggiornaPulsantiCarrozzinaAttivi() {
+    const select = document.getElementById('ns-carrozzina');
+    const valore = String(select?.value || '').trim().toUpperCase();
+    document.querySelectorAll('.ns-btn-carrozzina').forEach((btn) => {
+        const tipo = String(btn.getAttribute('data-carrozzina') || '').toUpperCase();
+        btn.classList.toggle('ns-btn-tipo-attivo', tipo !== '' && tipo === valore);
+    });
+}
+
+/** Stesso richiedente anche se in elenco c'è uno spazio al posto del trattino basso. */
+function chiaveRichiedente(testo) {
+    return String(testo || '').trim().toUpperCase().replace(/[\s_]+/g, '');
+}
+
+/** Evidenzia il pulsante richiedente che corrisponde alla casella. */
+function aggiornaPulsantiRichiedenteAttivi() {
+    const select = document.getElementById('ns-richiedente');
+    const valore = chiaveRichiedente(select?.value);
+    document.querySelectorAll('.ns-btn-richiedente').forEach((btn) => {
+        const tipo = chiaveRichiedente(btn.getAttribute('data-richiedente'));
+        btn.classList.toggle('ns-btn-tipo-attivo', tipo !== '' && tipo === valore);
+    });
+}
+
+function onClickRichiedenteRapido(valore) {
+    const select = document.getElementById('ns-richiedente');
+    if (!select) return;
+    const scelto = String(valore || '').trim();
+    const chiave = chiaveRichiedente(scelto);
+    if (!chiave) return;
+    let opzione = [...select.options].find((o) => chiaveRichiedente(o.value) === chiave);
+    if (!opzione) {
+        opzione = document.createElement('option');
+        opzione.value = scelto;
+        opzione.textContent = scelto;
+        select.appendChild(opzione);
+    }
+    select.value = opzione.value;
+    select.classList.remove('ns-campo-errore');
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    aggiornaPulsantiRichiedenteAttivi();
+}
+
+function onClickCarrozzinaRapida(valore) {
+    const select = document.getElementById('ns-carrozzina');
+    if (!select) return;
+    const scelto = String(valore || '').trim().toUpperCase();
+    if (scelto !== 'AUSER' && scelto !== 'SOCIO') return;
+    select.value = scelto;
+    select.classList.remove('ns-campo-errore');
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    aggiornaPulsantiCarrozzinaAttivi();
 }
 
 function setupPulsantiTipoServizio() {
@@ -1594,6 +1678,23 @@ function setupPulsantiTipoServizio() {
     });
     document.getElementById('ns-tipo-servizio')?.addEventListener('change', aggiornaPulsantiTipoServizioAttivi);
     aggiornaPulsantiTipoServizioAttivi();
+
+    document.getElementById('btn-carrozzina-auser')?.addEventListener('click', () => {
+        onClickCarrozzinaRapida('AUSER');
+    });
+    document.getElementById('btn-carrozzina-socio')?.addEventListener('click', () => {
+        onClickCarrozzinaRapida('SOCIO');
+    });
+    document.getElementById('ns-carrozzina')?.addEventListener('change', aggiornaPulsantiCarrozzinaAttivi);
+    aggiornaPulsantiCarrozzinaAttivi();
+
+    document.querySelectorAll('.ns-btn-richiedente').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            onClickRichiedenteRapido(btn.getAttribute('data-richiedente'));
+        });
+    });
+    document.getElementById('ns-richiedente')?.addEventListener('change', aggiornaPulsantiRichiedenteAttivi);
+    aggiornaPulsantiRichiedenteAttivi();
 }
 
 function avvisaSeTrattaRimossa(trattaRimossa) {
@@ -1773,6 +1874,13 @@ async function applicaTotaleTrattaFuoriAsti(payload) {
         } else {
             attivaCampoDonazionePagamento();
         }
+
+        const motivazioneFuori = await chiediSiNo('La motivazione è TRASPORTO FUORI PROVINCIA?');
+        if (motivazioneFuori) {
+            setValore('ns-motivazione', 'TRASPORTO FUORI PROVINCIA');
+            document.getElementById('ns-motivazione')?.classList.remove('ns-campo-errore');
+            document.getElementById('ns-motivazione-suggestions')?.replaceChildren();
+        }
         await avvisaLimiteKmNuovoServizio(undefined, undefined, undefined, conRuolo);
         kmHintNs?.refresh?.({ tratta: conRuolo });
         ripetiApi?.aggiornaHintKmTutteLeRighe?.();
@@ -1810,7 +1918,9 @@ function impostaValoriPredefiniti() {
     if (richiedenteDefault) {
         setValore('ns-richiedente', richiedenteDefault);
     }
-    setValore('ns-stato-servizio', statoDefaultNuovoServizio());
+    aggiornaPulsantiRichiedenteAttivi();
+    setValore('ns-stato-servizio', statoDefaultNuovoServizio() || 'DA ESEGUIRE');
+    bloccaStatoNuovoServizio();
     setValore('ns-stato-incasso', 'DA INCASSARE');
 }
 
@@ -1877,6 +1987,31 @@ function compilaPrelievoDaCasaTrasportato() {
 
 function compilaDestinazioneCasaTrasportato() {
     compilaDaResidenzaTrasportato('ns-comune-destinazione', 'ns-luogo-destinazione');
+    controllaServiziStessoLuogoDestinazione();
+}
+
+/** Scorciatoia: Ospedale Cardinal Massaia ad Asti. */
+function compilaLocalitaOspedaleMassaia(idComune, idLuogo) {
+    const comune = document.getElementById(idComune);
+    const luogo = document.getElementById(idLuogo);
+    if (comune) {
+        comune.value = 'ASTI';
+        comune.classList.remove('ns-campo-errore');
+    }
+    if (luogo) {
+        luogo.value = 'OSPEDALE CARDINAL MASSAIA';
+        luogo.classList.remove('ns-campo-errore');
+    }
+    document.getElementById(`${idComune}-suggestions`)?.replaceChildren();
+    document.getElementById(`${idLuogo}-suggestions`)?.replaceChildren();
+}
+
+function compilaPrelievoOspedaleMassaia() {
+    compilaLocalitaOspedaleMassaia('ns-comune-prelievo', 'ns-luogo-prelievo');
+}
+
+function compilaDestinazioneOspedaleMassaia() {
+    compilaLocalitaOspedaleMassaia('ns-comune-destinazione', 'ns-luogo-destinazione');
     controllaServiziStessoLuogoDestinazione();
 }
 
@@ -2316,7 +2451,9 @@ function setupEventListeners() {
     document.getElementById('btn-annulla')?.addEventListener('click', annulla);
 
     document.getElementById('btn-prelievo-da-casa')?.addEventListener('click', compilaPrelievoDaCasaTrasportato);
+    document.getElementById('btn-prelievo-hcm')?.addEventListener('click', compilaPrelievoOspedaleMassaia);
     document.getElementById('btn-destinazione-casa-trasportato')?.addEventListener('click', compilaDestinazioneCasaTrasportato);
+    document.getElementById('btn-destinazione-hcm')?.addEventListener('click', compilaDestinazioneOspedaleMassaia);
     document.getElementById('btn-modifica-nota-aggiuntiva')?.addEventListener('click', toggleModificaNotaAggiuntiva);
     document.getElementById('btn-modifica-note-mezzo')?.addEventListener('click', toggleModificaNoteMezzo);
 
@@ -2335,7 +2472,8 @@ function setupEventListeners() {
         getTrattaCorrente: () => leggiTrattaDalDom('ns-tratta-fuori-asti'),
         getStatoServizio: () => getValore('ns-stato-servizio'),
         getKmReali: () => getValore('ns-km'),
-        getRichiedente: () => getValore('ns-richiedente')
+        getRichiedente: () => getValore('ns-richiedente'),
+        onAttivoCambio: impostaSezione5PerRipeti
     });
     setupNuovoSocioTrasportato({
         getInvoke: () => invoke,

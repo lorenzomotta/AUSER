@@ -12,7 +12,6 @@ import {
 import {
     richiediSessione,
     isAdmin,
-    logout,
     leggiSessione
 } from './auth-session.js';
 import {
@@ -721,6 +720,250 @@ function oggiIsoLocale() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** Giorni che mancano alla scadenza. Negativo = già passata. null = data vuota o non valida. */
+function giorniMancantiScadenza(dateStr) {
+    if (!dateStr || !String(dateStr).trim()) return null;
+    const s = String(dateStr).trim();
+    let year;
+    let month;
+    let day;
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+        [year, month, day] = s.slice(0, 10).split('-').map((v) => parseInt(v, 10));
+    } else {
+        const parts = s.split('/');
+        if (parts.length !== 3) return null;
+        day = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10);
+        year = parseInt(parts[2], 10);
+    }
+    const scadenza = new Date(year, month - 1, day);
+    if (scadenza.getFullYear() !== year || scadenza.getMonth() !== month - 1 || scadenza.getDate() !== day) {
+        return null;
+    }
+    const oggi = new Date();
+    oggi.setHours(0, 0, 0, 0);
+    scadenza.setHours(0, 0, 0, 0);
+    return Math.round((scadenza - oggi) / (1000 * 60 * 60 * 24));
+}
+
+function dateDocumentiMezzo(mezzo) {
+    if (!mezzo) return [];
+    return [
+        mezzo.scadenza_ztl || mezzo.scadenzaZtl || '',
+        mezzo.scadenza_assicurazione || mezzo.scadenzaAssicurazione || ''
+    ];
+}
+
+function mezzoHaDocumentoScaduto(mezzo) {
+    return dateDocumentiMezzo(mezzo).some((data) => {
+        const giorni = giorniMancantiScadenza(data);
+        return giorni !== null && giorni < 0;
+    });
+}
+
+/** Manca da 0 a 30 giorni. Se la data è già passata non conta: resta solo l'avviso rosso. */
+function mezzoHaDocumentoEntro30Giorni(mezzo) {
+    return dateDocumentiMezzo(mezzo).some((data) => {
+        const giorni = giorniMancantiScadenza(data);
+        return giorni !== null && giorni >= 0 && giorni <= 30;
+    });
+}
+
+function nomeMezzoPerAvviso(mezzo) {
+    const targa = String(mezzo?.targa || '').trim();
+    const numero = String(mezzo?.nr_automezzo || mezzo?.nrAutomezzo || '').trim();
+    if (targa && numero) return `${numero} ${targa}`;
+    return targa || numero || 'un mezzo';
+}
+
+function mostraAvvisoScadenza(alertEl, mezzi, titolo) {
+    if (!alertEl) return;
+    if (mezzi.length > 0) {
+        const nomi = mezzi.slice(0, 4).map(nomeMezzoPerAvviso).join(', ');
+        const altri = mezzi.length > 4 ? ` e altri ${mezzi.length - 4}` : '';
+        alertEl.hidden = false;
+        alertEl.title = `${titolo}: ${nomi}${altri}`;
+        alertEl.setAttribute('aria-label', alertEl.title);
+    } else {
+        alertEl.hidden = true;
+        alertEl.title = titolo;
+        alertEl.setAttribute('aria-label', titolo);
+    }
+}
+
+/** Due punti esclamativi accanto al numerino: giallo entro 30 giorni, bianco se già scaduta. */
+async function aggiornaAvvisoScadenzeMezzi() {
+    const alertRosso = document.getElementById('badge-scadenze-mezzi');
+    const alertGiallo = document.getElementById('badge-scadenze-mezzi-30');
+    if (!alertRosso && !alertGiallo) return;
+    if (!invoke) {
+        if (alertRosso) alertRosso.hidden = true;
+        if (alertGiallo) alertGiallo.hidden = true;
+        return;
+    }
+
+    try {
+        await invoke('init_supabase_from_config').catch(() => {});
+        const list = await invoke('get_all_automezzi');
+        const mezzi = Array.isArray(list) ? list : [];
+        mostraAvvisoScadenza(
+            alertRosso,
+            mezzi.filter(mezzoHaDocumentoScaduto),
+            'Assicurazione o ZTL scaduta'
+        );
+        mostraAvvisoScadenza(
+            alertGiallo,
+            mezzi.filter(mezzoHaDocumentoEntro30Giorni),
+            'Assicurazione o ZTL in scadenza entro 30 giorni'
+        );
+    } catch (err) {
+        console.warn('Avviso scadenze mezzi non disponibile:', err);
+        if (alertRosso) alertRosso.hidden = true;
+        if (alertGiallo) alertGiallo.hidden = true;
+    }
+}
+
+function tesseraGiaScaduta(dateStr) {
+    if (!dateStr || !String(dateStr).trim()) return false;
+    const s = String(dateStr).trim();
+    let year;
+    let month;
+    let day;
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+        [year, month, day] = s.slice(0, 10).split('-').map((v) => parseInt(v, 10));
+    } else {
+        const parts = s.split('/');
+        if (parts.length !== 3) return false;
+        day = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10);
+        year = parseInt(parts[2], 10);
+    }
+    const scadenza = new Date(year, month - 1, day);
+    if (scadenza.getFullYear() !== year || scadenza.getMonth() !== month - 1 || scadenza.getDate() !== day) {
+        return false;
+    }
+    const oggi = new Date();
+    oggi.setHours(0, 0, 0, 0);
+    scadenza.setHours(0, 0, 0, 0);
+    return scadenza < oggi;
+}
+
+function socioArchiviato(socio) {
+    const value = socio?.archivia;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    const s = String(value || '').trim().toUpperCase();
+    return s === 'TRUE' || s === 'SI' || s === 'SÌ' || s === 'S' || s === '1' || s === 'YES' || s === 'Y';
+}
+
+function dataOggiItaliana() {
+    const d = new Date();
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
+function incassoDiOggi(servizio) {
+    const valore = String(
+        servizio?.data_bonifico
+        || servizio?.dataBonifico
+        || servizio?.data_ricevuta
+        || servizio?.dataRicevuta
+        || ''
+    ).trim();
+    if (!valore) return false;
+    if (valore === dataOggiItaliana()) return true;
+    return valore.slice(0, 10) === oggiIsoLocale();
+}
+
+/** Numerino su INCASSI GIORNALIERI = pagamenti con data incasso di oggi. */
+async function aggiornaBadgeIncassiOggi() {
+    const badge = document.getElementById('badge-incassi-oggi');
+    const btn = document.getElementById('btn-riepilogo-incassi');
+    if (!badge) return;
+    if (!invoke) {
+        badge.hidden = true;
+        badge.textContent = '0';
+        return;
+    }
+
+    try {
+        await invoke('init_supabase_from_config').catch(() => {});
+        let list = [];
+        try {
+            list = await invoke('get_servizi_incassati_giorno', { data: oggiIsoLocale() });
+        } catch (veloceErr) {
+            console.warn('Ricerca incassi del giorno non disponibile, scarico l\'anno:', veloceErr);
+            const anno = new Date().getFullYear();
+            const liste = await Promise.all([anno, anno - 1].map((a) =>
+                invoke('get_all_servizi_completi', { anno: a, tuttiAnni: false })
+            ));
+            const visti = new Set();
+            liste.forEach((parte) => {
+                (Array.isArray(parte) ? parte : []).forEach((servizio) => {
+                    const id = String(servizio?.id || '');
+                    if (!id || visti.has(id)) return;
+                    visti.add(id);
+                    list.push(servizio);
+                });
+            });
+        }
+        const n = (Array.isArray(list) ? list : []).filter(incassoDiOggi).length;
+        if (n > 0) {
+            badge.hidden = false;
+            badge.textContent = String(n);
+            badge.title = n === 1
+                ? '1 pagamento incassato oggi'
+                : `${n} pagamenti incassati oggi`;
+            if (btn) btn.title = badge.title;
+        } else {
+            badge.hidden = true;
+            badge.textContent = '0';
+            badge.title = 'Pagamenti incassati oggi';
+            if (btn) btn.removeAttribute('title');
+        }
+    } catch (err) {
+        console.warn('Badge incassi di oggi non disponibile:', err);
+        badge.hidden = true;
+        badge.textContent = '0';
+    }
+}
+
+/** Numerino su GESTIONE SOCI = tessere già scadute, senza i soci archiviati. */
+async function aggiornaBadgeTessereScadute() {
+    const badge = document.getElementById('badge-tessere-scadute');
+    const btn = document.getElementById('btn-elenco-soci');
+    if (!badge) return;
+    if (!invoke) {
+        badge.hidden = true;
+        badge.textContent = '0';
+        return;
+    }
+
+    try {
+        await invoke('init_supabase_from_config').catch(() => {});
+        const list = await invoke('get_all_tesserati', { escludiArchiviati: true });
+        const n = (Array.isArray(list) ? list : []).filter((socio) => {
+            return !socioArchiviato(socio) && tesseraGiaScaduta(socio?.scadenzatessera);
+        }).length;
+        if (n > 0) {
+            badge.hidden = false;
+            badge.textContent = String(n);
+            badge.title = n === 1
+                ? '1 tessera scaduta'
+                : `${n} tessere scadute`;
+            if (btn) btn.title = badge.title;
+        } else {
+            badge.hidden = true;
+            badge.textContent = '0';
+            badge.title = 'Tessere scadute';
+            if (btn) btn.removeAttribute('title');
+        }
+    } catch (err) {
+        console.warn('Badge tessere scadute non disponibile:', err);
+        badge.hidden = true;
+        badge.textContent = '0';
+    }
+}
+
 /** Numerino su GESTIONE MEZZI = totale manutenzioni ancora aperte. */
 async function aggiornaBadgeManutenzioniAperte() {
     const badge = document.getElementById('badge-manut-aperte');
@@ -882,7 +1125,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (sidebarUserLabel) {
         sidebarUserLabel.textContent = sessione.username || sessione.email || 'Utente';
     }
-    document.getElementById('btn-logout')?.addEventListener('click', () => logout());
     
     const tauriReady = await initApp();
     console.log('Tauri ready per caricamento dati:', tauriReady, 'invoke:', typeof invoke);
@@ -1286,11 +1528,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (tauriReady) {
         await Promise.all([
             aggiornaAvvisoManutenzioni(),
-            aggiornaBadgeManutenzioniAperte()
+            aggiornaBadgeManutenzioniAperte(),
+            aggiornaAvvisoScadenzeMezzi(),
+            aggiornaBadgeTessereScadute(),
+            aggiornaBadgeIncassiOggi()
         ]);
         window.addEventListener('focus', () => {
             aggiornaAvvisoManutenzioni();
             aggiornaBadgeManutenzioniAperte();
+            aggiornaAvvisoScadenzeMezzi();
+            aggiornaBadgeTessereScadute();
+            aggiornaBadgeIncassiOggi();
         });
         document.getElementById('sidebar-manutenzione-alert')?.addEventListener('click', async () => {
             try {

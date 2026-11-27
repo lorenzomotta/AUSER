@@ -9,7 +9,8 @@ import {
     aggiornaEtichetteAudit,
     propagaIncassoSerieDaPayload,
     abilitaPulsantiApriPrincipaleSerie,
-    mostraAvvisoModifica
+    mostraAvvisoModifica,
+    verificaKmUscitaServizio
 } from './modifica-servizio.js';
 import { isServizioSerieAggiuntivo } from './nuovoservizio-ripeti.js';
 import { ensureTariffeDonazione } from './tariffe-donazione.js';
@@ -38,12 +39,33 @@ const MODALE_COMPLETA_MARKUP = `
         </header>
         <div class="modal-modifica-body" id="modal-completa-body"></div>
     </div>
+</div>
+<div id="comp-dialog-km" class="comp-km-overlay" hidden aria-hidden="true">
+    <div class="comp-km-dialog" role="dialog" aria-modal="true" aria-labelledby="comp-dialog-km-titolo">
+        <h2 id="comp-dialog-km-titolo" class="comp-km-titolo">ATTENZIONE</h2>
+        <p id="comp-dialog-km-messaggio" class="comp-km-messaggio"></p>
+        <div class="comp-km-azioni">
+            <button type="button" id="comp-dialog-km-usa" class="comp-km-btn comp-km-btn-usa">Usa KM memorizzati</button>
+            <button type="button" id="comp-dialog-km-ignora" class="comp-km-btn comp-km-btn-ignora">Ignora</button>
+        </div>
+    </div>
 </div>`;
 
+function injectDialogKm() {
+    if (document.getElementById('comp-dialog-km')) return;
+    const inizio = MODALE_COMPLETA_MARKUP.indexOf('<div id="comp-dialog-km"');
+    if (inizio < 0) return;
+    document.body.insertAdjacentHTML('beforeend', MODALE_COMPLETA_MARKUP.slice(inizio));
+}
+
 function injectModaleCompletaMarkup() {
-    if (document.getElementById('modal-completa')) {
-        const header = document.querySelector('#modal-completa .modal-modifica-header');
-        if (!header) return;
+    if (!document.getElementById('modal-completa')) {
+        document.body.insertAdjacentHTML('beforeend', MODALE_COMPLETA_MARKUP);
+        return;
+    }
+    injectDialogKm();
+    const header = document.querySelector('#modal-completa .modal-modifica-header');
+    if (!header) return;
         header.querySelectorAll('.modal-modifica-audit').forEach((el) => el.remove());
         let titleRow = header.querySelector('.modal-modifica-title-row');
         const title = header.querySelector('.ns-title, h1');
@@ -71,9 +93,6 @@ function injectModaleCompletaMarkup() {
             while (top.firstChild) header.insertBefore(top.firstChild, top);
             top.remove();
         }
-        return;
-    }
-    document.body.insertAdjacentHTML('beforeend', MODALE_COMPLETA_MARKUP);
 }
 
 export function initCompletaServizio(options = {}) {
@@ -162,6 +181,9 @@ export async function apriModalCompleta(servizioId) {
 }
 
 async function salvaCompletaServizio() {
+    const esitoKm = await verificaKmUscitaServizio('comp');
+    if (esitoKm === 'annulla') return;
+
     const payload = raccogliPayloadServizio('comp');
     if (!payload.id || Number.isNaN(payload.id)) {
         mostraErroreCompleta('ID servizio non valido.');
@@ -228,6 +250,8 @@ export function setupModaleCompleta() {
     }
 
     document.addEventListener('keydown', (e) => {
+        const dialogKm = document.getElementById('comp-dialog-km');
+        if (dialogKm && !dialogKm.hidden) return;
         if (e.key === 'Escape' && modal?.style.display === 'flex') {
             chiudiModalCompleta();
         }

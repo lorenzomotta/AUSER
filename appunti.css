@@ -125,7 +125,6 @@ html {
     border-radius: 4px;
 }
 
-.ap-btn-salva { background: #1565c0; color: #fff; }
 .ap-btn-duplica { background: #00897b; color: #fff; }
 .ap-btn-sposta { background: #ef6c00; color: #fff; }
 .ap-btn-elimina { background: #c62828; color: #fff; }
@@ -837,10 +836,9 @@ html {
 .ap-item-azioni {
     display: flex;
     flex-direction: row;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 3px;
     justify-content: flex-end;
-    max-width: 64px;
 }
 
 .ap-stato {
@@ -959,7 +957,6 @@ html {
     }
     .ap-item-azioni {
         grid-column: 1 / -1;
-        max-width: none;
         flex-direction: row;
         justify-content: flex-end;
     }

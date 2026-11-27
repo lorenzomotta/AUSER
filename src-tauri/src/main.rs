@@ -981,6 +981,9 @@ struct ServizioCompleto {
     richiedente: String,
     motivazione: String,
     ora_arrivo: String,
+    /// Orario di arrivo a destinazione (non la data)
+    #[serde(default)]
+    ora_destinazione: String,
     comune_destinazione: String,
     luogo_destinazione: String,
     pagamento: String,
@@ -1899,6 +1902,28 @@ fn servizio_ora_prelievo(row: &serde_json::Value) -> String {
     ))
 }
 
+/// Ora di arrivo a destinazione. Non usa Destinazione_Data: quella è una data,
+/// e se l'orario in tabella è vuoto il campo a schermo deve restare vuoto.
+fn servizio_ora_destinazione(row: &serde_json::Value) -> String {
+    let raw = get_field_any(
+        row,
+        &[
+            "Destinazione_Ora",
+            "ORA_DESTINAZIONE",
+            "OraDestinazione",
+            "Ora_Destinazione",
+            "DestinazioneOra",
+            "Ora_Arrivo",
+            "ORA_ARRIVO",
+        ],
+    );
+    let formatted = format_time_iso(&raw);
+    if formatted.contains(':') && !formatted.contains('/') && !formatted.contains('-') {
+        return formatted;
+    }
+    String::new()
+}
+
 // Cache nominativi IdSocio → NominativoSocio (evita di riscaricare 900+ tesserati ogni volta)
 static NOMINATIVI_CACHE: OnceLock<Mutex<Option<HashMap<String, String>>>> = OnceLock::new();
 
@@ -2630,10 +2655,7 @@ fn supabase_row_to_servizio(
         data: servizio_data_italiana(row),
         nominativo: get_field_any(row, &["Trasportato", "TRASP", "Trasp"]),
         ora_sotto_casa: servizio_ora_prelievo(row),
-        ora_destinazione: format_date_iso(&get_field_any(
-            row,
-            &["Destinazione_Data", "DATA_DESTINAZIONE", "Data_Destinazione"],
-        )),
+        ora_destinazione: servizio_ora_destinazione(row),
         tipo_servizio: get_field_any(row, &["Motivazione", "MOTIVAZIONE"]),
     })
 }
@@ -2670,6 +2692,7 @@ fn supabase_row_to_servizio_completo(
             row,
             &["Destinazione_Data", "DATA_DESTINAZIONE"],
         )),
+        ora_destinazione: servizio_ora_destinazione(row),
         comune_destinazione: get_field_any(row, &["Destinazione_Comune", "DESTINAZIONE_COMUNE"]),
         luogo_destinazione: get_field_any(
             row,
@@ -4884,6 +4907,129 @@ async fn get_ultimi_km_mezzi() -> Result<Vec<UltimoKmMezzo>, String> {
         rows.len()
     );
     Ok(list)
+}
+
+/// Data aaaa-mm-gg, sia da ISO sia da gg/mm/aaaa.
+fn normalizza_data_confronto_km(raw: &str) -> String {
+    let s = raw.trim();
+    if s.len() >= 10 && s.as_bytes().get(4) == Some(&b'-') {
+        return s[..10].to_string();
+    }
+    let parts: Vec<&str> = s.split('/').collect();
+    if parts.len() == 3 && parts[0].len() <= 2 && parts[1].len() <= 2 && parts[2].len() == 4 {
+        return format!(
+            "{}-{:0>2}-{:0>2}",
+            parts[2],
+            parts[1].parse::<u32>().unwrap_or(0),
+            parts[0].parse::<u32>().unwrap_or(0)
+        );
+    }
+    String::new()
+}
+
+/// true se il servizio è precedente a quello che si sta completando.
+fn servizio_km_e_precedente(
+    data: &str,
+    id: i64,
+    data_corrente: &str,
+    id_corrente: i64,
+) -> bool {
+    if id == id_corrente {
+        return false;
+    }
+    if !data_corrente.is_empty() && !data.is_empty() {
+        if data < data_corrente {
+            return true;
+        }
+        return data == data_corrente && id < id_corrente;
+    }
+    data_corrente.is_empty()
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct UltimoKmRientroPrecedente {
+    km: f64,
+}
+
+/// Km di rientro del viaggio precedente dello stesso mezzo.
+/// Non considera il servizio che si sta completando.
+#[tauri::command]
+async fn get_ultimo_km_rientro_precedente(
+    mezzo: String,
+    escludi_id: i64,
+    data_servizio: String,
+) -> Result<Option<UltimoKmRientroPrecedente>, String> {
+    let mezzo_key = normalize_mezzo_key(&mezzo);
+    if mezzo_key.is_empty() {
+        return Ok(None);
+    }
+
+    ensure_supabase_client().await?;
+    let rows = {
+        let guard = get_supabase_client().lock().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| "Client Supabase non disponibile".to_string())?;
+        client
+            .fetch_servizi_mezzo_km()
+            .await
+            .map_err(|e| format_supabase_error(&e))?
+    };
+
+    let data_corrente = normalizza_data_confronto_km(&data_servizio);
+    let mut migliore_precedente: Option<(String, i64, f64)> = None;
+    let mut migliore_altro: Option<(String, i64, f64)> = None;
+
+    for row in &rows {
+        let mezzo_riga = normalize_mezzo_key(&get_field_any(row, &["Mezzo", "MEZZO"]));
+        if mezzo_riga != mezzo_key {
+            continue;
+        }
+        let km_raw = get_field_any(
+            row,
+            &[
+                "Km_Rientro",
+                "Km_rientro",
+                "KM_RIENTRO",
+                "km_rientro",
+                "KmRientro",
+                "Km_Arrivo",
+                "KM_ARRIVO",
+                "km_arrivo",
+                "Chiusura_Km_Arrivo",
+            ],
+        );
+        let Some(km) = parse_km_value(&km_raw) else {
+            continue;
+        };
+        let data_raw = get_field_any(
+            row,
+            &["Prelievo_Data", "PRELIEVO_DATA", "Data", "DATA"],
+        );
+        let data = normalizza_data_confronto_km(&data_raw);
+        let id = id_servizio_per_ultimo_km(row);
+        if id == escludi_id {
+            continue;
+        }
+        let aggiorna_altro = match &migliore_altro {
+            None => true,
+            Some((cur_data, cur_id, _)) => servizio_piu_recente(&data, id, cur_data, *cur_id),
+        };
+        if aggiorna_altro {
+            migliore_altro = Some((data.clone(), id, km));
+        }
+        let e_precedente = servizio_km_e_precedente(&data, id, &data_corrente, escludi_id);
+        let aggiorna_precedente = e_precedente && match &migliore_precedente {
+            None => true,
+            Some((cur_data, cur_id, _)) => servizio_piu_recente(&data, id, cur_data, *cur_id),
+        };
+        if aggiorna_precedente {
+            migliore_precedente = Some((data, id, km));
+        }
+    }
+
+    let scelto = migliore_precedente.or(migliore_altro);
+    Ok(scelto.map(|(_, _, km)| UltimoKmRientroPrecedente { km }))
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -9119,6 +9265,63 @@ async fn get_all_servizi_completi(
     Ok(servizi)
 }
 
+fn data_incasso_mostrata(servizio: &ServizioCompleto) -> String {
+    let bonifico = servizio.data_bonifico.trim();
+    if !bonifico.is_empty() {
+        return bonifico.to_string();
+    }
+    servizio.data_ricevuta.trim().to_string()
+}
+
+/// Solo i servizi incassati in un giorno, senza scaricare l'anno intero.
+#[tauri::command]
+async fn get_servizi_incassati_giorno(data: String) -> Result<Vec<ServizioCompleto>, String> {
+    let naive = if let Ok(d) = chrono::NaiveDate::parse_from_str(data.trim(), "%Y-%m-%d") {
+        d
+    } else if let Some(d) = parse_italian_date(data.trim()) {
+        d
+    } else {
+        return Err("Data incasso non valida".to_string());
+    };
+    let iso = naive.format("%Y-%m-%d").to_string();
+    let italiana = naive.format("%d/%m/%Y").to_string();
+    let next = naive
+        .checked_add_signed(chrono::Duration::days(1))
+        .unwrap_or(naive)
+        .format("%Y-%m-%d")
+        .to_string();
+
+    println!("=== get_servizi_incassati_giorno {} ===", italiana);
+    ensure_supabase_client().await?;
+
+    let filtro_bonifico = format!("Bonifico_Data=gte.{}&Bonifico_Data=lt.{}", iso, next);
+    let filtro_ricevuta = format!("Ricevuta_Data=gte.{}&Ricevuta_Data=lt.{}", iso, next);
+    let righe_bonifico = fetch_servizi_supabase(Some(&filtro_bonifico)).await?;
+    let righe_ricevuta = fetch_servizi_supabase(Some(&filtro_ricevuta)).await?;
+
+    let mut viste = std::collections::HashSet::new();
+    let nominativi = std::collections::HashMap::new();
+    let mut servizi: Vec<ServizioCompleto> = Vec::new();
+    for row in righe_bonifico.iter().chain(righe_ricevuta.iter()) {
+        let Some(servizio) = supabase_row_to_servizio_completo(row, &nominativi) else {
+            continue;
+        };
+        if !viste.insert(servizio.id.clone()) {
+            continue;
+        }
+        if data_incasso_mostrata(&servizio) == italiana {
+            servizi.push(servizio);
+        }
+    }
+    servizi.sort_by(|a, b| {
+        let ia = a.id.parse::<u64>().unwrap_or(0);
+        let ib = b.id.parse::<u64>().unwrap_or(0);
+        ia.cmp(&ib)
+    });
+    println!("✓ Incassi del {}: {} servizi", italiana, servizi.len());
+    Ok(servizi)
+}
+
 // Helper per formattare un valore in formato euro italiano (1.234,56 €)
 fn format_euro_italiano(value_str: &str) -> String {
     if value_str.is_empty() {
@@ -11575,6 +11778,7 @@ fn main() {
             create_rifornimento,
             delete_rifornimento,
             get_ultimi_km_mezzi,
+            get_ultimo_km_rientro_precedente,
             create_manutenzione,
             get_manutenzione,
             salva_manutenzione,
@@ -11612,6 +11816,7 @@ fn main() {
             get_servizi_report_giorno,
             get_servizi_report_settimana,
             get_all_servizi_completi,
+            get_servizi_incassati_giorno,
             get_servizi_elenco_pagina,
             get_idsocio_con_servizi,
             get_operatori_con_servizi,

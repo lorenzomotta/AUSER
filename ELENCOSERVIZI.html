@@ -18,7 +18,6 @@
     <div class="container-fluid servizi-container">
         <div class="page-header-wrapper">
             <div class="header-left">
-                <button class="btn btn-chiudi" id="btn-chiudi">CHIUDI</button>
                 <button class="btn btn-tutti-header" id="btn-tutti">TUTTI</button>
             </div>
             <div class="header-center">
@@ -40,8 +39,17 @@
                     PAGA TUTTI
                     <span class="pcum-selezione-hint">(<span id="pcum-selezione-count">0</span>)</span>
                 </button>
-                <button type="button" class="btn btn-stampa-pdf-header" id="btn-stampa-pdf-elenco">STAMPA PDF</button>
-                <button class="btn btn-ricerca-header" id="btn-ricerca">RICERCA</button>
+                <button type="button" class="btn btn-stampa-pdf-header btn-stampa-pdf-icona" id="btn-stampa-pdf-elenco" title="STAMPA PDF" aria-label="STAMPA PDF">
+                    <img src="assets/icona-stampa-pdf.png?v=1" alt="">
+                </button>
+                <button class="btn btn-ricerca-header btn-ricerca-icona" id="btn-ricerca" type="button" title="RICERCA" aria-label="RICERCA">
+                    <img src="assets/icona-ricerca.png?v=1" alt="">
+                </button>
+                <button class="btn btn-chiudi btn-chiudi-icona" id="btn-chiudi" type="button" title="CHIUDI" aria-label="CHIUDI">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 6 L18 18 M18 6 L6 18"></path>
+                    </svg>
+                </button>
             </div>
         </div>
         

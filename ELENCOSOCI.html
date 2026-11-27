@@ -19,8 +19,8 @@
                         <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
                     </svg>
                 </button>
-                <button type="button" class="btn btn-ricerca-avanzata" id="btn-ricerca-avanzata" title="Cerca nei dati anagrafici">
-                    RICERCA AVANZATA
+                <button type="button" class="btn btn-ricerca-avanzata btn-ricerca-avanzata-icona" id="btn-ricerca-avanzata" title="RICERCA AVANZATA" aria-label="RICERCA AVANZATA">
+                    <img src="assets/icona-ricerca-avanzata.png?v=1" alt="">
                 </button>
                 <button type="button" class="btn btn-rimuovi-filtro" id="btn-rimuovi-filtro" hidden title="Rimuovi il filtro avanzato">
                     RIMUOVI FILTRO
@@ -41,8 +41,17 @@
                 </div>
             </div>
             <div class="header-right">
+                <!-- Pulsante precedente, da rimettere se l'icona non piace:
                 <button class="btn btn-nuovo-socio" id="btn-nuovo-socio" type="button">NUOVO SOCIO</button>
-                <button class="btn btn-chiudi" id="btn-chiudi">CHIUDI</button>
+                -->
+                <button class="btn btn-nuovo-socio btn-nuovo-socio-icona" id="btn-nuovo-socio" type="button" title="NUOVO SOCIO" aria-label="NUOVO SOCIO">
+                    <img src="assets/icona-nuovo-socio.png?v=3" alt="">
+                </button>
+                <button class="btn btn-chiudi btn-chiudi-icona" id="btn-chiudi" type="button" title="CHIUDI" aria-label="CHIUDI">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 6L18 18M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+                    </svg>
+                </button>
             </div>
         </div>
         

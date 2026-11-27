@@ -25,9 +25,13 @@ function chiaveImpostazione(nome) {
 export function testoPulsanteTariffa(importo) {
     const n = Number(importo);
     const sicuro = Number.isFinite(n) ? n : 0;
-    const parti = sicuro.toFixed(2).split('.');
-    parti[0] = parti[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    return `${parti[0]},${parti[1]} €.`;
+    const eIntero = Math.abs(sicuro - Math.round(sicuro)) < 0.001;
+    const testo = eIntero
+        ? String(Math.round(sicuro))
+        : sicuro.toFixed(2).replace('.', ',');
+    const [intero, decimali] = testo.split(',');
+    const conMigliaia = intero.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return decimali ? `${conMigliaia},${decimali} €.` : `${conMigliaia} €.`;
 }
 
 export function leggiTariffeDaRighe(rows) {

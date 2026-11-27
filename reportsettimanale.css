@@ -247,6 +247,10 @@ body {
     word-break: break-word;
 }
 
+.day-cell .servizio-ora {
+    font-weight: 700;
+}
+
 .day-cell .servizio-item:last-child {
     margin-bottom: 0;
 }

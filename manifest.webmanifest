@@ -1,0 +1,26 @@
+{
+  "id": "./CALENDARIO_WEB.html",
+  "name": "Calendario servizi AUSER",
+  "short_name": "Calendario",
+  "description": "Calendario servizi per gli operatori AUSER",
+  "start_url": "./CALENDARIO_WEB.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a8f3c",
+  "lang": "it",
+  "icons": [
+    {
+      "src": "pwa/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

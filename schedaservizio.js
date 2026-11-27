@@ -1,6 +1,7 @@
 // Scheda del Servizio — popup stampa A4 (servizio selezionato dalla home)
 import { testoNoteFineVisibile } from './tratta-riepilogo.js';
 import { trovaAutomezzo, testoMezzoServizio } from './mezzo-etichetta.js';
+import { risolviAccountCollegato } from './auth-session.js';
 
 let invoke;
 
@@ -150,7 +151,7 @@ function popolaScheda(servizio, extra) {
     setText('ss-data-sottocasa', formatDataDisplay(servizio.data_prelievo));
     setText('ss-data-destinazione', formatDataDisplay(servizio.ora_arrivo));
     setText('ss-ora-sottocasa', formatOraDisplay(servizio.ora_inizio));
-    setText('ss-ora-arrivo', formatOraDisplay(extra.oraArrivo || ''));
+    setText('ss-ora-arrivo', formatOraDisplay(servizio.ora_destinazione || extra.oraArrivo || ''));
 
     setText('ss-trasportato', servizio.socio_trasportato || '');
     setText('ss-telefono', extra.telefonoTrasportato || '');
@@ -196,6 +197,141 @@ function popolaScheda(servizio, extra) {
     setText('ss-km', servizio.km || '');
     setText('ss-tempo', formatOraDisplay(servizio.tempo) || servizio.tempo || '');
     setHtml('ss-note-fine', escapeHtml(testoNoteFineVisibile(servizio.note_fine_servizio)).replace(/\n/g, '<br>'));
+}
+
+function parseKmConfronto(raw) {
+    const s = String(raw ?? '').trim().replace(/\s/g, '');
+    if (!s) return null;
+    let numero;
+    if (s.includes('.') && s.includes(',')) {
+        numero = parseFloat(s.replace(/\./g, '').replace(',', '.'));
+    } else if (s.includes(',')) {
+        numero = parseFloat(s.replace(',', '.'));
+    } else {
+        numero = parseFloat(s);
+    }
+    if (!Number.isFinite(numero) || numero <= 0) return null;
+    return numero;
+}
+
+function formattaKmMemorizzati(n) {
+    const arrotondato = Math.round(n * 100) / 100;
+    if (Number.isInteger(arrotondato)) return String(arrotondato);
+    return String(arrotondato).replace('.', ',');
+}
+
+function chiediKmUscitaDiversi(kmMemorizzati) {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById('ss-dialog-km');
+        const messaggio = document.getElementById('ss-dialog-km-messaggio');
+        const btnUsa = document.getElementById('ss-dialog-km-usa');
+        const btnIgnora = document.getElementById('ss-dialog-km-ignora');
+        if (!overlay || !messaggio || !btnUsa || !btnIgnora) {
+            resolve('ignora');
+            return;
+        }
+
+        messaggio.textContent = `KM IN USCITA DIVERSI DA ULTIMI KM IN RIENTRO (${formattaKmMemorizzati(kmMemorizzati)})`;
+        overlay.hidden = false;
+        overlay.setAttribute('aria-hidden', 'false');
+        btnUsa.disabled = false;
+        btnIgnora.disabled = false;
+
+        let chiuso = false;
+        const fine = (scelta) => {
+            if (chiuso) return;
+            chiuso = true;
+            overlay.hidden = true;
+            overlay.setAttribute('aria-hidden', 'true');
+            btnUsa.removeEventListener('click', onUsa);
+            btnIgnora.removeEventListener('click', onIgnora);
+            overlay.removeEventListener('click', onSfondo);
+            document.removeEventListener('keydown', onTasto);
+            resolve(scelta);
+        };
+        const onUsa = (event) => {
+            event.preventDefault();
+            btnUsa.disabled = true;
+            btnIgnora.disabled = true;
+            fine('usa');
+        };
+        const onIgnora = (event) => {
+            event.preventDefault();
+            fine('ignora');
+        };
+        const onSfondo = (event) => {
+            if (event.target === overlay) fine('annulla');
+        };
+        const onTasto = (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                fine('annulla');
+            }
+        };
+
+        btnUsa.addEventListener('click', onUsa);
+        btnIgnora.addEventListener('click', onIgnora);
+        overlay.addEventListener('click', onSfondo);
+        document.addEventListener('keydown', onTasto);
+        btnUsa.focus();
+    });
+}
+
+async function salvaKmUscitaScheda(servizio, kmMemorizzati) {
+    const testo = formattaKmMemorizzati(kmMemorizzati);
+    const rientro = parseKmConfronto(servizio.km_rientro);
+    const payload = {
+        id: parseInt(servizio.id, 10),
+        km_uscita: testo
+    };
+    setText('ss-km-uscita', testo);
+    if (rientro != null) {
+        const differenza = Math.round((rientro - kmMemorizzati) * 100) / 100;
+        const kmTesto = formattaKmMemorizzati(differenza);
+        payload.km = kmTesto;
+        setText('ss-km', kmTesto);
+    }
+    const account = await risolviAccountCollegato(invoke).catch(() => '');
+    if (account) payload.modificato_da = account;
+    await invoke('update_servizio_completo', { payload });
+    servizio.km_uscita = testo;
+    if (payload.km) servizio.km = payload.km;
+}
+
+async function controllaKmUscitaScheda(servizio) {
+    const kmInseriti = parseKmConfronto(servizio.km_uscita);
+    const mezzo = String(servizio.mezzo || '').trim();
+    if (kmInseriti == null || !mezzo || !invoke) return;
+
+    let memorizzati = null;
+    try {
+        const risposta = await invoke('get_ultimo_km_rientro_precedente', {
+            mezzo,
+            escludiId: parseInt(servizio.id, 10) || 0,
+            dataServizio: servizio.data_prelievo || ''
+        });
+        const km = Number(risposta?.km);
+        if (Number.isFinite(km) && km > 0) memorizzati = km;
+    } catch (error) {
+        console.warn('Controllo km precedenti:', error);
+        return;
+    }
+
+    if (memorizzati == null || Math.abs(kmInseriti - memorizzati) < 0.01) return;
+
+    const scelta = await chiediKmUscitaDiversi(memorizzati);
+    if (scelta !== 'usa') return;
+
+    const status = document.getElementById('ss-status');
+    try {
+        await salvaKmUscitaScheda(servizio, memorizzati);
+        if (status) status.textContent = `Servizio ${servizio.id} · km uscita aggiornati`;
+    } catch (error) {
+        console.error('Salvataggio km uscita:', error);
+        setText('ss-km-uscita', servizio.km_uscita || '');
+        setText('ss-km', servizio.km || '');
+        if (status) status.textContent = 'Non sono riuscito a salvare i km memorizzati.';
+    }
 }
 
 async function caricaScheda() {
@@ -259,6 +395,7 @@ async function caricaScheda() {
         if (page) page.hidden = false;
         if (status) status.textContent = `Servizio ${servizio.id}`;
         document.title = `Scheda servizio ${servizio.id} - AUSER Asti`;
+        await controllaKmUscitaScheda(servizio);
     } catch (error) {
         console.error('Errore caricamento scheda:', error);
         if (loading) loading.hidden = true;

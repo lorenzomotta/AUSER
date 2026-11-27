@@ -17,13 +17,19 @@
             </div>
             <div class="header-right">
                 <span class="save-status" id="save-status" aria-live="polite"></span>
-                <button type="button" class="btn btn-modifica" id="btn-modifica-anagrafica">MODIFICA</button>
+                <button type="button" class="btn btn-modifica btn-modifica-icona" id="btn-modifica-anagrafica" title="MODIFICA" aria-label="MODIFICA">
+                    <img src="assets/icona-modifica.png?v=1" alt="">
+                </button>
                 <button type="button" class="btn btn-salva" id="btn-salva-anagrafica" hidden>SALVA</button>
                 <button type="button" class="btn btn-annulla-anagrafica" id="btn-annulla-anagrafica" hidden>ANNULLA</button>
                 <button type="button" class="btn btn-elimina-socio" id="btn-elimina-socio" hidden>ELIMINA SOCIO</button>
                 <button type="button" class="btn btn-cerca-filtro" id="btn-cerca-filtro" hidden>CERCA</button>
                 <button type="button" class="btn btn-azzera-filtro" id="btn-azzera-filtro" hidden>AZZERA</button>
-                <button type="button" class="btn btn-chiudi" id="btn-chiudi">CHIUDI</button>
+                <button type="button" class="btn btn-chiudi btn-chiudi-icona" id="btn-chiudi" title="CHIUDI" aria-label="CHIUDI">
+                    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                        <path d="M6 6L18 18M18 6L6 18" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+                    </svg>
+                </button>
             </div>
         </header>
 
