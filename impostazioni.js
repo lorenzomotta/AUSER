@@ -46,6 +46,14 @@ function isPasswordField(nome) {
     return String(nome || '').toUpperCase().includes('PASSWORD');
 }
 
+/** In scheda Impostazioni questi due nomi si vedono come donazione. Il nome in tabella resta TARIFFA 1 / TARIFFA 2. */
+function etichettaImpostazione(nome) {
+    const chiave = String(nome || '').trim().toLowerCase().replace(/[\s_]+/g, '');
+    if (chiave === 'tariffa1') return 'Donazione 1';
+    if (chiave === 'tariffa2') return 'Donazione 2';
+    return nome;
+}
+
 function setStatus(message, isError = false) {
     const el = document.getElementById('imp-status');
     if (!el) return;
@@ -72,6 +80,7 @@ function renderCampi(lista) {
 
     container.innerHTML = lista.map((item, index) => {
         const nome = item.impostazione || `Impostazione ${item.id || index + 1}`;
+        const etichetta = etichettaImpostazione(nome);
         const valore = item.valore || '';
         const isPwd = isPasswordField(nome);
         const id = `imp-val-${index}`;
@@ -79,7 +88,7 @@ function renderCampi(lista) {
         if (isPwd) {
             return `
                 <div class="imp-campo" data-id="${escapeHtml(item.id)}" data-index="${index}">
-                    <label class="imp-campo-label" for="${id}">${escapeHtml(nome)}</label>
+                    <label class="imp-campo-label" for="${id}">${escapeHtml(etichetta)}</label>
                     <div class="imp-campo-password-wrap">
                         <input type="password" class="imp-campo-valore" id="${id}" value="${escapeHtml(valore)}">
                         <button type="button" class="imp-btn-mostra" data-target="${id}">MOSTRA</button>
@@ -89,7 +98,7 @@ function renderCampi(lista) {
 
         return `
             <div class="imp-campo" data-id="${escapeHtml(item.id)}" data-index="${index}">
-                <label class="imp-campo-label" for="${id}">${escapeHtml(nome)}</label>
+                <label class="imp-campo-label" for="${id}">${escapeHtml(etichetta)}</label>
                 <input type="text" class="imp-campo-valore" id="${id}" value="${escapeHtml(valore)}">
             </div>`;
     }).join('');

@@ -813,9 +813,13 @@ function updatePaginationBar(totalItems, page, totalPages) {
     const end = Math.min(page * PAGE_SIZE, totalItems);
 
     bar.innerHTML = `
-        <button type="button" class="btn-pagination" id="btn-page-prev" ${page <= 1 ? 'disabled' : ''}>← Precedente</button>
+        <button type="button" class="btn-pagination btn-page-prev" id="btn-page-prev" title="Precedente" aria-label="Precedente" ${page <= 1 ? 'disabled' : ''}>
+            <img src="assets/icona-precedente.png?v=1" alt="">
+        </button>
         <span class="soci-pagination-info">Pagina ${page} di ${totalPages} · soci ${start}-${end} di ${totalItems}</span>
-        <button type="button" class="btn-pagination" id="btn-page-next" ${page >= totalPages ? 'disabled' : ''}>Successiva →</button>
+        <button type="button" class="btn-pagination btn-page-next" id="btn-page-next" title="Successiva" aria-label="Successiva" ${page >= totalPages ? 'disabled' : ''}>
+            <img src="assets/icona-successiva.png?v=1" alt="">
+        </button>
     `;
 
     const btnPrev = document.getElementById('btn-page-prev');
@@ -840,8 +844,8 @@ function createSocioBlock(tesserato) {
     const idsocio = String(tesserato.idsocio || '').trim();
     const haServizi = socioHaServiziCollegati(idsocio);
     const serviziBtnAttrs = haServizi
-        ? ''
-        : ' disabled title="Nessun servizio collegato a questo socio"';
+        ? ' title="SERVIZI" aria-label="SERVIZI"'
+        : ' disabled title="Nessun servizio collegato a questo socio" aria-label="Nessun servizio collegato a questo socio"';
 
     const socioBlock = document.createElement('div');
     socioBlock.className = 'socio-block';
@@ -911,8 +915,12 @@ function createSocioBlock(tesserato) {
                         </div>
                     </div>
                     <div class="socio-form-actions">
-                        <button type="button" class="btn btn-anagrafica" data-socio-id="${tesserato.id || ''}" data-idsocio="${escapeHtml(tesserato.idsocio || '')}">ANAGRAFICA</button>
-                        <button type="button" class="btn btn-servizi" data-socio-id="${tesserato.id || ''}" data-idsocio="${escapeHtml(tesserato.idsocio || '')}"${serviziBtnAttrs}>SERVIZI</button>
+                        <button type="button" class="btn btn-anagrafica" data-socio-id="${tesserato.id || ''}" data-idsocio="${escapeHtml(tesserato.idsocio || '')}" title="ANAGRAFICA" aria-label="ANAGRAFICA">
+                            <img src="assets/icona-anagrafica.png" alt="">
+                        </button>
+                        <button type="button" class="btn btn-servizi" data-socio-id="${tesserato.id || ''}" data-idsocio="${escapeHtml(tesserato.idsocio || '')}"${serviziBtnAttrs}>
+                            <img src="assets/icona-servizi.png?v=2" alt="">
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1169,19 +1177,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     const containerBody = document.getElementById('soci-container-body');
     if (containerBody) {
         containerBody.addEventListener('click', (e) => {
-            if (e.target.classList.contains('btn-anagrafica')) {
+            const btnAnagrafica = e.target.closest?.('.btn-anagrafica');
+            if (btnAnagrafica) {
                 e.stopPropagation();
-                const idsocio = e.target.getAttribute('data-idsocio');
-                const blocco = e.target.closest('.socio-block');
+                const idsocio = btnAnagrafica.getAttribute('data-idsocio');
+                const blocco = btnAnagrafica.closest('.socio-block');
                 const nominativoEl = blocco?.querySelector('.socio-form-group-nominativo input');
                 const nominativo = nominativoEl?.value?.trim() || '';
                 console.log('Pulsante ANAGRAFICA cliccato, IDSOCIO:', idsocio);
                 openAnagraficaSocio(idsocio, nominativo);
-            } else if (e.target.classList.contains('btn-servizi')) {
+            } else if (e.target.closest?.('.btn-servizi')) {
+                const btnServizi = e.target.closest('.btn-servizi');
                 e.stopPropagation();
-                if (e.target.disabled) return;
-                const idsocio = e.target.getAttribute('data-idsocio');
-                const blocco = e.target.closest('.socio-block');
+                if (btnServizi.disabled) return;
+                const idsocio = btnServizi.getAttribute('data-idsocio');
+                const blocco = btnServizi.closest('.socio-block');
                 const nominativoEl = blocco?.querySelector('.socio-form-group-nominativo input');
                 const nominativo = nominativoEl?.value?.trim() || '';
                 console.log('Pulsante SERVIZI cliccato, IDSOCIO:', idsocio);

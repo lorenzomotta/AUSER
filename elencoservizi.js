@@ -34,7 +34,7 @@ function escapeHtmlElenco(str) {
 const ICONA_FILTRO = `<svg class="es-icona" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>`;
 const ICONA_FILTRO_ATTIVO = `<svg class="es-icona" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/><path fill="currentColor" d="M19.1 4.1 4.1 19.1l1.4 1.4L20.5 5.5z"/></svg>`;
 const ICONA_STAMPANTE = `<svg class="es-icona" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>`;
-const ICONA_MATITA = `<svg class="es-icona" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/></svg>`;
+const ICONA_MATITA = `<img src="assets/icona-modifica.png?v=1" alt="">`;
 const ICONA_COMPLETA = `<svg class="es-icona" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>`;
 
 function htmlBtnFiltraIcona({ attrName, attrValue, attivo, disabled = false, titoloFiltra, titoloTutti }) {
@@ -1060,7 +1060,7 @@ function createServizioBlock(servizio) {
         </div>
         <div class="form-group form-group-ora">
             <label>O.A.D</label>
-            <input type="text" value="${servizio.ora_arrivo || ''}" readonly>
+            <input type="text" value="${servizio.ora_destinazione || ''}" readonly>
         </div>
         <div class="form-group form-group-comune">
             <label>COMUNE DI DESTINAZIONE</label>
@@ -1144,7 +1144,7 @@ function createServizioBlock(servizio) {
             <input type="text" value="${servizio.data_bonifico || ''}" readonly>
         </div>
         <div class="form-group form-group-small">
-            <label>PAGAMENTO</label>
+            <label>DONAZIONE</label>
             <input type="text" value="${servizio.pagamento || ''}" readonly>
         </div>
         <div class="form-group form-group-medium">
@@ -1234,9 +1234,13 @@ function updatePaginationBar(totalItems, page, totalPages) {
     const end = Math.min(page * PAGE_SIZE, totalItems);
 
     bar.innerHTML = `
-        <button type="button" class="btn-pagination" id="btn-page-prev" ${page <= 1 ? 'disabled' : ''}>← Precedente</button>
+        <button type="button" class="btn-pagination btn-page-prev" id="btn-page-prev" title="Precedente" aria-label="Precedente" ${page <= 1 ? 'disabled' : ''}>
+            <img src="assets/icona-precedente.png?v=1" alt="">
+        </button>
         <span class="servizi-pagination-info">Pagina ${page} di ${totalPages} · servizi ${start}-${end} di ${totalItems}</span>
-        <button type="button" class="btn-pagination" id="btn-page-next" ${page >= totalPages ? 'disabled' : ''}>Successiva →</button>
+        <button type="button" class="btn-pagination btn-page-next" id="btn-page-next" title="Successiva" aria-label="Successiva" ${page >= totalPages ? 'disabled' : ''}>
+            <img src="assets/icona-successiva.png?v=1" alt="">
+        </button>
     `;
 
     const btnPrev = document.getElementById('btn-page-prev');

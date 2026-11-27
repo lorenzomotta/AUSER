@@ -86,6 +86,32 @@ function formatEuroImporto(importo) {
     return `${parti[0]},${parti[1]} €`;
 }
 
+async function fetchIncassiDelGiorno(data) {
+    if (!isTauri() || !invoke) return [];
+    await invoke('init_supabase_from_config').catch(() => {});
+    const iso = `${data.getFullYear()}-${pad2(data.getMonth() + 1)}-${pad2(data.getDate())}`;
+    const dataItaliana = formatDataItaliana(data);
+    try {
+        const servizi = await invoke('get_servizi_incassati_giorno', { data: iso });
+        return filtraPerDataIncasso(Array.isArray(servizi) ? servizi : [], dataItaliana);
+    } catch (error) {
+        console.warn('Ricerca incassi del giorno non disponibile, scarico l\'anno:', error);
+        const liste = await Promise.all([
+            fetchServiziAnno(data.getFullYear()),
+            fetchServiziAnno(data.getFullYear() - 1)
+        ]);
+        const visti = new Set();
+        const tutti = [];
+        liste.flat().forEach((servizio) => {
+            const id = String(servizio?.id || '');
+            if (!id || visti.has(id)) return;
+            visti.add(id);
+            tutti.push(servizio);
+        });
+        return filtraPerDataIncasso(tutti, dataItaliana);
+    }
+}
+
 async function fetchServiziAnno(anno) {
     if (serviziAnnoCache[anno]) return serviziAnnoCache[anno];
     if (!isTauri() || !invoke) {
@@ -98,9 +124,13 @@ async function fetchServiziAnno(anno) {
     return serviziAnnoCache[anno];
 }
 
+function dataIncassoServizio(servizio) {
+    return String(servizio?.data_bonifico || servizio?.data_ricevuta || '').trim();
+}
+
 function filtraPerDataIncasso(servizi, dataItaliana) {
     return servizi
-        .filter(s => (s.data_ricevuta || '').trim() === dataItaliana)
+        .filter(s => dataIncassoServizio(s) === dataItaliana)
         .sort((a, b) => {
             const idA = parseInt(a.id, 10) || 0;
             const idB = parseInt(b.id, 10) || 0;
@@ -133,15 +163,15 @@ function creaBloccoServizio(servizio) {
             ${creaCampo('COMUNE PRELIEVO', servizio.comune_prelievo)}
             ${creaCampo('INDIRIZZO PRELIEVO', servizio.luogo_prelievo)}
             ${creaCampo('STATO SERVIZIO', servizio.stato_servizio)}
-            ${creaCampo('TIPO PAGAMENTO', servizio.tipo_pagamento)}
-            ${creaCampo('DONAZIONE INCASSATA', servizio.pagamento, 'importo')}
+            ${creaCampo('TIPO DONAZIONE', servizio.tipo_pagamento)}
+            ${creaCampo('DONAZIONE', servizio.pagamento, 'importo')}
         </div>
         <div class="report-grid row-seconda">
             ${creaCampo('TRASPORTATO', servizio.socio_trasportato, 'trasportato col-span-3')}
             ${creaCampo('COMUNE DESTINAZIONE', servizio.comune_destinazione)}
             ${creaCampo('INDIRIZZO DESTINAZIONE', servizio.luogo_destinazione)}
             ${creaCampo('STATO INCASSO', servizio.stato_incasso)}
-            ${creaCampo('DATA INCASSO', servizio.data_ricevuta)}
+            ${creaCampo('DATA INCASSO', dataIncassoServizio(servizio))}
             ${creaCampoVuoto()}
         </div>
     </article>`;
@@ -175,12 +205,8 @@ async function caricaReport() {
     container.innerHTML = '';
     if (empty) empty.style.display = 'none';
 
-    const dataItaliana = formatDataItaliana(dataSelezionata);
-    const anno = dataSelezionata.getFullYear();
-
     try {
-        const tuttiAnno = await fetchServiziAnno(anno);
-        const servizi = filtraPerDataIncasso(tuttiAnno, dataItaliana);
+        const servizi = await fetchIncassiDelGiorno(dataSelezionata);
         const totale = calcolaTotale(servizi);
 
         if (totaleEl) {

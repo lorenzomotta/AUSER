@@ -117,9 +117,11 @@
                             <input type="checkbox" id="ns-ripeti-servizio">
                             <span>RIPETI SU PIÙ DATE</span>
                         </label>
-                        <button type="button" class="ns-btn-tratta-fuori-asti" id="btn-tratta-fuori-asti-prelievo">TRATTA FUORI ASTI</button>
-                        <button type="button" class="btn btn-prelievo-da-casa" id="btn-prelievo-da-casa">
-                            PRELIEVO DA CASA TRASPORTATO
+                        <button type="button" class="ns-btn-hcm" id="btn-prelievo-hcm"
+                            title="Imposta prelievo Ospedale Cardinal Massaia, Asti">HCM</button>
+                        <button type="button" class="ns-btn-tratta-fuori-asti" id="btn-tratta-fuori-asti-prelievo" title="Tratta fuori Asti">FUORI</button>
+                        <button type="button" class="btn btn-prelievo-da-casa" id="btn-prelievo-da-casa" title="Prelievo da casa del trasportato">
+                            CASA
                         </button>
                     </div>
                 </div>
@@ -156,9 +158,8 @@
 
                 <div id="ns-ripeti-panel" class="ns-ripeti-panel" hidden>
                     <p class="ns-ripeti-hint">
-                        La prima riga è la data principale del form (si aggiorna da sola).
-                        Per ogni altra data puoi cambiare ora, operatore e mezzo.
-                        Consiglio: scegli prima operatore e mezzo nella sezione 5, poi aggiungi le date.
+                        Operatore e mezzo si scelgono in questa tabella.
+                        La prima riga è la data principale. Per ogni altra data puoi cambiare ora, operatore e mezzo.
                     </p>
                     <div class="ns-ripeti-tabella-wrap">
                         <table class="ns-ripeti-tabella">
@@ -188,9 +189,11 @@
                 <div class="ns-section-header">
                     <h2 class="ns-section-title">3. Dati destinazione</h2>
                     <div class="ns-section-header-actions">
-                        <button type="button" class="ns-btn-tratta-fuori-asti" id="btn-tratta-fuori-asti-destinazione">TRATTA FUORI ASTI</button>
-                        <button type="button" class="btn btn-prelievo-da-casa" id="btn-destinazione-casa-trasportato">
-                            DESTINAZIONE CASA TRASPORTATO
+                        <button type="button" class="ns-btn-hcm" id="btn-destinazione-hcm"
+                            title="Imposta destinazione Ospedale Cardinal Massaia, Asti">HCM</button>
+                        <button type="button" class="ns-btn-tratta-fuori-asti" id="btn-tratta-fuori-asti-destinazione" title="Tratta fuori Asti">FUORI</button>
+                        <button type="button" class="btn btn-prelievo-da-casa" id="btn-destinazione-casa-trasportato" title="Destinazione a casa del trasportato">
+                            CASA
                         </button>
                     </div>
                 </div>
@@ -227,7 +230,21 @@
                 <h2 class="ns-section-title">4. Dati servizio</h2>
                 <div class="ns-grid">
                     <div class="ns-field">
-                        <label for="ns-richiedente">RICHIEDENTE <span class="required">*</span></label>
+                        <div class="ns-label-con-azione">
+                            <label for="ns-richiedente">RICHIEDENTE <span class="required">*</span></label>
+                            <div class="ns-tipo-servizio-azioni" role="group" aria-label="Scelta rapida richiedente">
+                                <button type="button" class="ns-btn-tipo-servizio ns-btn-richiedente" id="btn-richiedente-aug"
+                                    data-richiedente="AUSER_GRATIS" title="AUSER_GRATIS">AUG</button>
+                                <button type="button" class="ns-btn-tipo-servizio ns-btn-richiedente" id="btn-richiedente-aur"
+                                    data-richiedente="AUSER_RIMBORSO" title="AUSER_RIMBORSO">AUR</button>
+                                <button type="button" class="ns-btn-tipo-servizio ns-btn-richiedente" id="btn-richiedente-comune"
+                                    data-richiedente="COMUNE" title="COMUNE">COM</button>
+                                <button type="button" class="ns-btn-tipo-servizio ns-btn-richiedente" id="btn-richiedente-car"
+                                    data-richiedente="CARITAS" title="CARITAS">CAR</button>
+                                <button type="button" class="ns-btn-tipo-servizio ns-btn-richiedente" id="btn-richiedente-env"
+                                    data-richiedente="ENTI VARI" title="ENTI VARI">ENV</button>
+                            </div>
+                        </div>
                         <select id="ns-richiedente" class="ns-input">
                             <option value="">— Seleziona —</option>
                         </select>
@@ -249,7 +266,15 @@
                         </select>
                     </div>
                     <div class="ns-field">
-                        <label for="ns-carrozzina">CARROZZINA</label>
+                        <div class="ns-label-con-azione">
+                            <label for="ns-carrozzina">CARROZZINA</label>
+                            <div class="ns-tipo-servizio-azioni" role="group" aria-label="Scelta rapida carrozzina">
+                                <button type="button" class="ns-btn-tipo-servizio ns-btn-carrozzina" id="btn-carrozzina-auser"
+                                    data-carrozzina="AUSER" title="Imposta carrozzina AUSER">AUSER</button>
+                                <button type="button" class="ns-btn-tipo-servizio ns-btn-carrozzina" id="btn-carrozzina-socio"
+                                    data-carrozzina="SOCIO" title="Imposta carrozzina SOCIO">SOCIO</button>
+                            </div>
+                        </div>
                         <select id="ns-carrozzina" class="ns-input">
                             <option value="">— Nessuna —</option>
                             <option value="AUSER">AUSER</option>
@@ -339,14 +364,14 @@
                 <div class="ns-pagamento-layout">
                     <h2 class="ns-section-title ns-pagamento-title">6. Pagamento e incasso</h2>
                     <div class="ns-pagamento-quick-btns" aria-label="Importi rapidi donazione">
-                        <button type="button" class="ns-btn-importo" id="btn-pagamento-gratis">GRATIS</button>
+                        <button type="button" class="ns-btn-importo" id="btn-pagamento-gratis" title="Servizio Gratis">NO</button>
                         <button type="button" class="ns-btn-importo" id="btn-pagamento-10">10 €.</button>
                         <button type="button" class="ns-btn-importo" id="btn-pagamento-15">15 €.</button>
-                        <button type="button" class="ns-btn-importo" id="btn-pagamento-libero">LIBERO</button>
+                        <button type="button" class="ns-btn-importo" id="btn-pagamento-libero" title="Donazione Libera">???</button>
                     </div>
                     <div class="ns-pagamento-azioni-destra">
-                        <button type="button" class="ns-btn-calcola-tariffa" id="btn-calcola-tariffa">CALCOLA TARIFFA</button>
-                        <button type="button" class="ns-btn-tratta-fuori-asti" id="btn-tratta-fuori-asti">TRATTA FUORI ASTI</button>
+                        <button type="button" class="ns-btn-calcola-tariffa" id="btn-calcola-tariffa" title="CALCOLA TARIFFA">CALCOLA</button>
+                        <button type="button" class="ns-btn-tratta-fuori-asti" id="btn-tratta-fuori-asti" title="Tratta fuori Asti">FUORI</button>
                     </div>
                     <div class="ns-grid ns-grid-pagamento">
                     <div class="ns-field ns-field-stato-incasso">
@@ -359,7 +384,7 @@
                         </select>
                     </div>
                     <div class="ns-field ns-field-tipo-pagamento">
-                        <label for="ns-tipo-pagamento">TIPO DI PAGAMENTO</label>
+                        <label for="ns-tipo-pagamento">TIPO DONAZIONE</label>
                         <select id="ns-tipo-pagamento" class="ns-input">
                             <option value="">— Nessuno —</option>
                         </select>

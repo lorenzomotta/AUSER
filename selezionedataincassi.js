@@ -80,6 +80,7 @@ async function apriReport() {
                 webview.once('tauri://created', resolve);
                 webview.once('tauri://error', (event) => reject(event?.payload || event));
             });
+            await webview.maximize().catch(() => {});
             await webview.setFocus().catch(() => {});
             const current = getCurrent();
             if (current?.label === 'selezione-data-incassi') {

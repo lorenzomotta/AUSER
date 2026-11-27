@@ -181,6 +181,23 @@ body {
     cursor: not-allowed;
 }
 
+.ns-btn-hcm {
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #0d47a1;
+    background-color: #e3f2fd;
+    border: 1px solid #64b5f6;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.ns-btn-hcm:hover {
+    background-color: #bbdefb;
+}
+
 .ns-trasportato-header {
     display: flex;
     align-items: center;
@@ -1304,6 +1321,13 @@ body {
 .ns-field:has(.ns-tipo-servizio-azioni) .ns-label-con-azione label {
     white-space: nowrap;
     flex-shrink: 0;
+}
+
+#ns-stato-servizio:disabled {
+    background-color: #f3f3f3;
+    color: #333;
+    cursor: not-allowed;
+    opacity: 1;
 }
 
 .ns-btn-nuovo-socio {

@@ -1,5 +1,30 @@
 /* Modale Modifica Servizio — shell (form layout da nuovoservizio.css) */
 
+.mod-km-titolo {
+    margin: 0 0 8px;
+    font-size: 22px;
+    color: #b71c1c;
+    text-align: center;
+}
+
+.mod-km-btn-usa {
+    background: #2e7d32;
+    color: #fff;
+}
+
+.mod-km-btn-usa:hover {
+    background: #1b5e20;
+}
+
+.mod-km-btn-ignora {
+    background: #78909c;
+    color: #fff;
+}
+
+.mod-km-btn-ignora:hover {
+    background: #607d8b;
+}
+
 .modal-modifica-overlay {
     position: fixed;
     top: 0;

@@ -117,6 +117,33 @@ body {
     box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1565c0;
 }
 
+.btn-ricerca-avanzata.btn-ricerca-avanzata-icona {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 0;
+    padding: 0;
+    line-height: 0;
+    background-color: transparent;
+    border-radius: 6px;
+}
+
+.btn-ricerca-avanzata.btn-ricerca-avanzata-icona:hover {
+    background-color: transparent;
+    filter: brightness(0.92);
+}
+
+.btn-ricerca-avanzata.btn-ricerca-avanzata-icona.active {
+    background-color: transparent;
+}
+
+.btn-ricerca-avanzata.btn-ricerca-avanzata-icona img {
+    height: 32px;
+    width: auto;
+    display: block;
+    pointer-events: none;
+}
+
 .btn-rimuovi-filtro {
     padding: 5px 12px;
     font-size: 12px;
@@ -165,6 +192,28 @@ body {
     background-color: #1b5e20;
 }
 
+/* Prova: icona al posto della scritta. Lo sfondo verde resta quello del pulsante. */
+.btn-nuovo-socio.btn-nuovo-socio-icona {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    line-height: 0;
+    padding: 3px 8px;
+    background-color: #81c784;
+}
+
+.btn-nuovo-socio.btn-nuovo-socio-icona:hover {
+    background-color: #66bb6a;
+}
+
+.btn-nuovo-socio.btn-nuovo-socio-icona img {
+    height: 24px;
+    width: auto;
+    display: block;
+    pointer-events: none;
+}
+
 .btn-chiudi {
     padding: 8px 22px;
     font-size: 14px;
@@ -188,6 +237,29 @@ body {
 
 .btn-chiudi:hover {
     background-color: #b71c1c;
+}
+
+.btn-chiudi.btn-chiudi-icona {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 52px;
+    height: 30px;
+    padding: 0;
+    line-height: 0;
+    background-color: #d32f2f;
+    color: #fff;
+}
+
+.btn-chiudi.btn-chiudi-icona:hover {
+    background-color: #b71c1c;
+}
+
+.btn-chiudi.btn-chiudi-icona svg {
+    width: 18px;
+    height: 18px;
+    display: block;
 }
 
 .page-title {
@@ -575,6 +647,36 @@ body {
     opacity: 0.7;
 }
 
+.btn-page-prev,
+.btn-page-next {
+    height: 31px;
+    padding: 0;
+    background: transparent;
+    line-height: 0;
+    display: inline-flex;
+    align-items: center;
+}
+
+.btn-page-prev img,
+.btn-page-next img {
+    height: 31px;
+    width: auto;
+    display: block;
+    pointer-events: none;
+}
+
+.btn-page-prev:hover:not(:disabled),
+.btn-page-next:hover:not(:disabled) {
+    background: transparent;
+    filter: brightness(0.92);
+}
+
+.btn-page-prev:disabled,
+.btn-page-next:disabled {
+    background: transparent;
+    opacity: 0.45;
+}
+
 .soci-pagination-info {
     min-width: 220px;
     text-align: center;
@@ -887,28 +989,50 @@ body {
 }
 
 .btn-anagrafica {
-    background-color: #4CAF50;
-    color: white;
+    background: transparent;
+    padding: 0;
+    line-height: 0;
+    width: 36px;
+    height: 36px;
+}
+
+.btn-anagrafica img {
+    width: 36px;
+    height: 36px;
+    display: block;
+    object-fit: contain;
+    pointer-events: none;
 }
 
 .btn-anagrafica:hover {
-    background-color: #45a049;
+    background: transparent;
+    filter: brightness(0.9);
 }
 
 .btn-servizi {
-    background-color: #2196F3;
-    color: white;
+    background: transparent;
+    padding: 0;
+    line-height: 0;
+    height: 36px;
+}
+
+.btn-servizi img {
+    height: 36px;
+    width: auto;
+    display: block;
+    pointer-events: none;
 }
 
 .btn-servizi:hover {
-    background-color: #0b7dda;
+    background: transparent;
+    filter: brightness(0.9);
 }
 
 .btn-servizi:disabled {
-    background-color: #b0bec5;
-    color: #eceff1;
+    background: transparent;
+    filter: grayscale(1);
+    opacity: 0.45;
     cursor: not-allowed;
-    opacity: 0.9;
 }
 
 .btn-servizi:disabled:hover {

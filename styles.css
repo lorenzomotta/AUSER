@@ -144,7 +144,7 @@ body {
     border-radius: 999px;
     background: #c62828;
     color: #fff;
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 800;
     line-height: 1;
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
@@ -152,6 +152,37 @@ body {
 
 .sidebar-nav-badge[hidden] {
     display: none !important;
+}
+
+.sidebar-nav-badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+
+.sidebar-scadenza-alert {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5em;
+    height: 1.5em;
+    border-radius: 4px;
+    background: #d32f2f;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.sidebar-scadenza-alert[hidden] {
+    display: none !important;
+}
+
+.sidebar-scadenza-alert-giallo {
+    background: #ffeb3b;
+    color: #fff;
 }
 
 .sidebar-divider {
@@ -289,15 +320,6 @@ body {
     color: rgba(255, 255, 255, 0.9);
     text-align: center;
     word-break: break-word;
-}
-
-.btn-sidebar-logout {
-    background-color: #546e7a;
-    color: #fff;
-}
-
-.btn-sidebar-logout:hover {
-    background-color: #37474f;
 }
 
 /* Main Wrapper - contenuto sotto l'header, a sinistra della sidebar */

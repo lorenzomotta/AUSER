@@ -103,13 +103,23 @@
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-elenco-servizi">GESTIONE SERVIZI</button>
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-report-giorno">REPORT DEL GIORNO</button>
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-report-settimanale">REPORT SETTIMANALE</button>
-            <button class="btn btn-sidebar btn-sidebar-nav" id="btn-elenco-soci">GESTIONE SOCI</button>
+            <button class="btn btn-sidebar btn-sidebar-nav btn-sidebar-nav-con-badge" id="btn-elenco-soci">
+                <span class="sidebar-nav-label">GESTIONE SOCI</span>
+                <span class="sidebar-nav-badge" id="badge-tessere-scadute" hidden title="Tessere scadute">0</span>
+            </button>
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-tratte-fuori-asti">TRATTE FUORI ASTI</button>
             <button class="btn btn-sidebar btn-sidebar-nav btn-sidebar-nav-con-badge" id="btn-elenco-mezzi">
                 <span class="sidebar-nav-label">GESTIONE MEZZI</span>
-                <span class="sidebar-nav-badge" id="badge-manut-aperte" hidden title="Manutenzioni aperte da completare">0</span>
+                <span class="sidebar-nav-badges">
+                    <span class="sidebar-nav-badge" id="badge-manut-aperte" hidden title="Manutenzioni aperte da completare">0</span>
+                    <span class="sidebar-scadenza-alert sidebar-scadenza-alert-giallo" id="badge-scadenze-mezzi-30" hidden title="Assicurazione o ZTL in scadenza entro 30 giorni" aria-label="Assicurazione o ZTL in scadenza entro 30 giorni">!</span>
+                    <span class="sidebar-scadenza-alert" id="badge-scadenze-mezzi" hidden title="Assicurazione o ZTL scaduta" aria-label="Assicurazione o ZTL scaduta">!</span>
+                </span>
             </button>
-            <button class="btn btn-sidebar btn-sidebar-nav" id="btn-riepilogo-incassi" hidden>INCASSI GIORNALIERI</button>
+            <button class="btn btn-sidebar btn-sidebar-nav btn-sidebar-nav-con-badge" id="btn-riepilogo-incassi" hidden>
+                <span class="sidebar-nav-label">INCASSI GIORNALIERI</span>
+                <span class="sidebar-nav-badge" id="badge-incassi-oggi" hidden title="Pagamenti incassati oggi">0</span>
+            </button>
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-elenco-operatori" hidden>GESTIONE OPERATORI</button>
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-riepilogo-pagamenti" hidden>RIEPILOGO PAGAMENTI</button>
             <button class="btn btn-sidebar btn-sidebar-nav" id="btn-verifica-tesseramenti" hidden>VERIFICA TESSERAMENTI</button>
@@ -127,7 +137,6 @@
                 </button>
                 <div class="sidebar-user" id="sidebar-user" hidden>
                     <span class="sidebar-user-label" id="sidebar-user-label"></span>
-                    <button type="button" class="btn btn-sidebar btn-sidebar-logout" id="btn-logout">CAMBIA UTENTE</button>
                 </div>
             </div>
         </div>

@@ -170,6 +170,19 @@ function injectModaleModificaMarkup() {
 </div>`;
         document.body.insertAdjacentHTML('beforeend', pezzo);
     }
+    if (!document.getElementById('mod-dialog-km')) {
+        document.body.insertAdjacentHTML('beforeend', `
+<div id="mod-dialog-km" class="mod-dialog-overlay ns-dialog-overlay" hidden aria-hidden="true">
+    <div class="ns-dialog" role="dialog" aria-modal="true" aria-labelledby="mod-dialog-km-titolo">
+        <h2 id="mod-dialog-km-titolo" class="mod-km-titolo">ATTENZIONE</h2>
+        <p id="mod-dialog-km-messaggio" class="ns-dialog-messaggio"></p>
+        <div class="ns-dialog-actions">
+            <button type="button" id="mod-dialog-km-usa" class="ns-dialog-btn mod-km-btn-usa">Usa KM memorizzati</button>
+            <button type="button" id="mod-dialog-km-ignora" class="ns-dialog-btn mod-km-btn-ignora">Ignora</button>
+        </div>
+    </div>
+</div>`);
+    }
     if (!document.getElementById('mod-dialog-carrozzina')) {
         document.body.insertAdjacentHTML('beforeend', `
 <div id="mod-dialog-carrozzina" class="mod-dialog-overlay ns-dialog-overlay" hidden aria-hidden="true">
@@ -635,7 +648,7 @@ function getOpzioniDuplicazioneConfig() {
         { key: 'mantieniNotePartenza', label: 'Note partenza', valore: valoreDisplayDuplica(s.note_prelievo, 60) },
         { key: 'mantieniNoteArrivo', label: 'Note arrivo', valore: valoreDisplayDuplica(s.note_arrivo, 60) },
         { key: 'mantieniStatoIncasso', label: 'Stato incasso', valore: valoreDisplayDuplica(s.stato_incasso) },
-        { key: 'mantieniTipoPagamento', label: 'Tipo pagamento', valore: valoreDisplayDuplica(s.tipo_pagamento) },
+        { key: 'mantieniTipoPagamento', label: 'Tipo donazione', valore: valoreDisplayDuplica(s.tipo_pagamento) },
         { key: 'mantieniDonazione', label: 'Donazione', valore: valoreDisplayDuplica(s.pagamento) }
     ];
 }
@@ -1049,10 +1062,10 @@ export function costruisciFormServizio(
                 <div class="ns-pagamento-layout">
                     <h2 class="ns-section-title ns-pagamento-title">${num}. Pagamento e incasso</h2>
                     <div class="ns-pagamento-quick-btns" aria-label="Importi rapidi donazione">
-                        <button type="button" class="ns-btn-importo" data-serv-importo="${p}" data-importo="GRATIS">GRATIS</button>
+                        <button type="button" class="ns-btn-importo" data-serv-importo="${p}" data-importo="GRATIS" title="Servizio Gratis">NO</button>
                         <button type="button" class="ns-btn-importo" data-serv-importo="${p}" data-importo="tariffa1">${escapeHtmlModifica(testoPulsanteTariffa(getTariffeDonazione().tariffa1))}</button>
                         <button type="button" class="ns-btn-importo" data-serv-importo="${p}" data-importo="tariffa2">${escapeHtmlModifica(testoPulsanteTariffa(getTariffeDonazione().tariffa2))}</button>
-                        <button type="button" class="ns-btn-importo" data-serv-importo="${p}" data-importo="LIBERO">LIBERO</button>
+                        <button type="button" class="ns-btn-importo" data-serv-importo="${p}" data-importo="LIBERO" title="Donazione Libera">???</button>
                     </div>
                     <div class="ns-pagamento-azioni-destra">
                         <button type="button" class="ns-btn-calcola-tariffa" id="${p}-btn-calcola-tariffa">CALCOLA TARIFFA</button>
@@ -1060,7 +1073,7 @@ export function costruisciFormServizio(
                     </div>
                     <div class="ns-grid ns-grid-pagamento">
                         ${creaSelectStatoIncassoNs(`${p}-stato-incasso`, servizio.stato_incasso, servizio)}
-                        ${creaSelectNs(`${p}-tipo-pagamento`, 'TIPO DI PAGAMENTO', servizio.tipo_pagamento, tipiPagamentoOpts, 'ns-field-tipo-pagamento')}
+                        ${creaSelectNs(`${p}-tipo-pagamento`, 'TIPO DONAZIONE', servizio.tipo_pagamento, tipiPagamentoOpts, 'ns-field-tipo-pagamento')}
                         ${creaInputNs(`${p}-pagamento`, 'DONAZIONE / PAGAMENTO', servizio.pagamento, 'ns-field-donazione')}
                         ${creaInputNs(`${p}-numero-ricevuta`, 'NUMERO RICEVUTA', servizio.numero_ricevuta || '', 'ns-field-numero-ricevuta')}
                         ${creaInputNs(`${p}-data-ricevuta`, 'DATA RICEVUTA', valorePerInputData(servizio.data_ricevuta), 'ns-field-data-ricevuta', { type: 'date' })}
@@ -1284,17 +1297,26 @@ export function setupFormServizioListeners(idPrefix = 'mod') {
     }
 
     document.getElementById(`${idPrefix}-km-uscita`)?.addEventListener('input', () => aggiornaKmCalcolatoServizio(idPrefix));
+    document.getElementById(`${idPrefix}-km-uscita`)?.addEventListener('blur', () => {
+        const campo = document.getElementById(`${idPrefix}-km-uscita`);
+        if (!campo || campo.readOnly || campo.disabled) return;
+        verificaKmUscitaServizio(idPrefix);
+    });
     document.getElementById(`${idPrefix}-km-rientro`)?.addEventListener('input', () => aggiornaKmCalcolatoServizio(idPrefix));
     document.getElementById(`${idPrefix}-mezzo`)?.addEventListener('change', async () => {
+        precaricaKmMemorizzati(idPrefix);
         aggiornaDettagliMezzoServizio(idPrefix);
         await controllaMezzoGiaUsatoNellaDataModifica(idPrefix);
     });
     document.getElementById(`${idPrefix}-data-prelievo`)?.addEventListener('change', async () => {
+        precaricaKmMemorizzati(idPrefix);
         await controllaMezzoGiaUsatoNellaDataModifica(idPrefix);
     });
     document.getElementById(`${idPrefix}-data-prelievo`)?.addEventListener('input', async () => {
+        precaricaKmMemorizzati(idPrefix);
         await controllaMezzoGiaUsatoNellaDataModifica(idPrefix);
     });
+    precaricaKmMemorizzati(idPrefix);
     kmHintMod = collegaHintKmOperatore({
         hintId: `${idPrefix}-operatore-km-hint`,
         operatoreId: `${idPrefix}-operatore`,
@@ -1999,7 +2021,195 @@ async function duplicaServizioModifica() {
     }
 }
 
+function parseKmConfrontoModifica(raw) {
+    const s = String(raw ?? '').trim().replace(/\s/g, '');
+    if (!s) return null;
+    let numero;
+    if (s.includes('.') && s.includes(',')) {
+        numero = parseFloat(s.replace(/\./g, '').replace(',', '.'));
+    } else if (s.includes(',')) {
+        numero = parseFloat(s.replace(',', '.'));
+    } else {
+        numero = parseFloat(s);
+    }
+    if (!Number.isFinite(numero) || numero <= 0) return null;
+    return numero;
+}
+
+function formattaKmMemorizzatiModifica(n) {
+    const arrotondato = Math.round(n * 100) / 100;
+    if (Number.isInteger(arrotondato)) return String(arrotondato);
+    return String(arrotondato).replace('.', ',');
+}
+
+function chiediKmUscitaDiversiModifica(kmMemorizzati) {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById('mod-dialog-km');
+        const messaggio = document.getElementById('mod-dialog-km-messaggio');
+        const btnUsa = document.getElementById('mod-dialog-km-usa');
+        const btnIgnora = document.getElementById('mod-dialog-km-ignora');
+        if (!overlay || !messaggio || !btnUsa || !btnIgnora) {
+            resolve('ignora');
+            return;
+        }
+
+        messaggio.textContent = `KM IN USCITA DIVERSI DA ULTIMI KM IN RIENTRO (${formattaKmMemorizzatiModifica(kmMemorizzati)})`;
+        overlay.hidden = false;
+        overlay.setAttribute('aria-hidden', 'false');
+        // Il clic che fa uscire dal campo non deve chiudere subito l'avviso.
+        const ignoraSfondoFino = Date.now() + 350;
+
+        let chiuso = false;
+        const fine = (scelta) => {
+            if (chiuso) return;
+            chiuso = true;
+            overlay.hidden = true;
+            overlay.setAttribute('aria-hidden', 'true');
+            btnUsa.removeEventListener('click', onUsa);
+            btnIgnora.removeEventListener('click', onIgnora);
+            overlay.removeEventListener('click', onSfondo);
+            document.removeEventListener('keydown', onTasto, true);
+            resolve(scelta);
+        };
+        const onUsa = (event) => {
+            event.preventDefault();
+            fine('usa');
+        };
+        const onIgnora = (event) => {
+            event.preventDefault();
+            fine('ignora');
+        };
+        const onSfondo = (event) => {
+            if (event.target !== overlay) return;
+            if (Date.now() < ignoraSfondoFino) return;
+            fine('annulla');
+        };
+        const onTasto = (event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            fine('annulla');
+        };
+
+        btnUsa.addEventListener('click', onUsa);
+        btnIgnora.addEventListener('click', onIgnora);
+        overlay.addEventListener('click', onSfondo);
+        document.addEventListener('keydown', onTasto, true);
+        btnUsa.focus();
+    });
+}
+
+let verificaKmInCorso = null;
+let kmUscitaIgnorato = null;
+let kmMemorizzatiCache = null;
+let kmMemorizzatiToken = 0;
+
+function chiaveKmMemorizzati(idPrefix) {
+    return [
+        idPrefix,
+        getValoreModifica(`${idPrefix}-mezzo`),
+        String(parseInt(getValoreModifica(`${idPrefix}-id`), 10) || 0),
+        valoreDaInputData(getValoreModifica(`${idPrefix}-data-prelievo`))
+    ].join('|');
+}
+
+function precaricaKmMemorizzati(idPrefix) {
+    const chiave = chiaveKmMemorizzati(idPrefix);
+    if (kmMemorizzatiCache && kmMemorizzatiCache.chiave === chiave) {
+        return kmMemorizzatiCache.promise;
+    }
+
+    const mezzo = getValoreModifica(`${idPrefix}-mezzo`);
+    const invoke = getInvokeFn();
+    const token = ++kmMemorizzatiToken;
+    const promise = (async () => {
+        if (!mezzo || !isTauriEnv() || typeof invoke !== 'function') return null;
+        await invoke('init_supabase_from_config').catch(() => {});
+        const risposta = await invoke('get_ultimo_km_rientro_precedente', {
+            mezzo,
+            escludiId: parseInt(getValoreModifica(`${idPrefix}-id`), 10) || 0,
+            dataServizio: valoreDaInputData(getValoreModifica(`${idPrefix}-data-prelievo`))
+        });
+        const km = Number(risposta?.km);
+        return Number.isFinite(km) && km > 0 ? km : null;
+    })().then((km) => {
+        if (kmMemorizzatiCache && kmMemorizzatiCache.token === token) {
+            kmMemorizzatiCache.km = km;
+            kmMemorizzatiCache.pronto = true;
+        }
+        return km;
+    }).catch((error) => {
+        console.warn('Controllo km precedenti:', error);
+        if (kmMemorizzatiCache && kmMemorizzatiCache.token === token) {
+            kmMemorizzatiCache.km = null;
+            kmMemorizzatiCache.pronto = true;
+        }
+        return null;
+    });
+
+    kmMemorizzatiCache = { chiave, token, promise, pronto: false, km: null };
+    return promise;
+}
+
+export function verificaKmUscitaServizio(idPrefix = 'mod') {
+    if (verificaKmInCorso) return verificaKmInCorso;
+    verificaKmInCorso = eseguiVerificaKmUscita(idPrefix).finally(() => {
+        verificaKmInCorso = null;
+    });
+    return verificaKmInCorso;
+}
+
+async function eseguiVerificaKmUscita(idPrefix) {
+    const campo = document.getElementById(`${idPrefix}-km-uscita`);
+    const kmInseriti = parseKmConfrontoModifica(campo?.value);
+    const mezzo = getValoreModifica(`${idPrefix}-mezzo`);
+    if (kmInseriti == null || !mezzo) return 'procedi';
+
+    const chiave = chiaveKmMemorizzati(idPrefix);
+    let memorizzati = null;
+    if (kmMemorizzatiCache && kmMemorizzatiCache.chiave === chiave && kmMemorizzatiCache.pronto) {
+        memorizzati = kmMemorizzatiCache.km;
+    } else {
+        try {
+            memorizzati = await precaricaKmMemorizzati(idPrefix);
+        } catch (error) {
+            console.warn('Controllo km precedenti:', error);
+            return 'procedi';
+        }
+    }
+
+    if (memorizzati == null || Math.abs(kmInseriti - memorizzati) < 0.01) {
+        kmUscitaIgnorato = null;
+        return 'procedi';
+    }
+
+    if (
+        kmUscitaIgnorato
+        && kmUscitaIgnorato.prefix === idPrefix
+        && Math.abs(kmUscitaIgnorato.inseriti - kmInseriti) < 0.01
+        && Math.abs(kmUscitaIgnorato.memorizzati - memorizzati) < 0.01
+    ) {
+        return 'procedi';
+    }
+
+    const scelta = await chiediKmUscitaDiversiModifica(memorizzati);
+    if (scelta === 'usa' && campo) {
+        campo.value = formattaKmMemorizzatiModifica(memorizzati);
+        campo.dispatchEvent(new Event('input', { bubbles: true }));
+        kmUscitaIgnorato = null;
+        return 'procedi';
+    }
+    if (scelta === 'ignora') {
+        kmUscitaIgnorato = { prefix: idPrefix, inseriti: kmInseriti, memorizzati };
+        return 'procedi';
+    }
+    return 'annulla';
+}
+
 async function salvaModificaServizio() {
+    const esitoKm = await verificaKmUscitaServizio('mod');
+    if (esitoKm === 'annulla') return;
+
     const payload = raccogliPayloadModifica();
     if (!payload.id || Number.isNaN(payload.id)) {
         mostraErroreModifica('ID servizio non valido.');
@@ -2060,6 +2270,8 @@ export function setupModaleModifica() {
     }
 
     document.addEventListener('keydown', (e) => {
+        const dialogKm = document.getElementById('mod-dialog-km');
+        if (dialogKm && !dialogKm.hidden) return;
         if (e.key === 'Escape' && modal?.style.display === 'flex') {
             chiudiModalModifica();
         }

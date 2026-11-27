@@ -661,7 +661,6 @@ function renderLista() {
             : '';
         const azioni = mio
             ? `<div class="ap-item-azioni">
-                    <button type="button" class="ap-btn ap-btn-icona ap-btn-salva" data-azione="salva" title="Salva">💾</button>
                     <button type="button" class="ap-btn ap-btn-icona ap-btn-duplica" data-azione="duplica" title="Copia su altra data">⧉</button>
                     <button type="button" class="ap-btn ap-btn-icona ap-btn-sposta" data-azione="sposta" title="Cambia data">✏️</button>
                     <button type="button" class="ap-btn ap-btn-icona ap-btn-elimina" data-azione="elimina" title="Elimina">🗑️</button>
@@ -905,18 +904,25 @@ async function aggiungiAppunto() {
     }
 }
 
-async function salvaAppuntoDaRiga(article) {
+let salvataggioAppunti = new Set();
+
+async function salvaAppuntoDaRiga(article, opzioni = {}) {
     if (article?.dataset?.mio !== '1') return;
     const id = article?.dataset?.id;
     if (!id || !invoke || !sessione?.user_id) return;
     const testo = String(article.querySelector('.ap-item-testo')?.value || '').trim();
     const fatto = !!article.querySelector('.ap-item-check')?.checked;
+    const idx = parseInt(article.dataset.idx || '0', 10);
+    const prev = appunti[idx] || {};
+    const testoSalvato = String(prev.testo || '').trim();
+    const fattoSalvato = prev.fatto === true;
+    if (testo === testoSalvato && fatto === fattoSalvato) return;
     if (!testo) {
         alert('Il testo non può essere vuoto.');
         return;
     }
-    const idx = parseInt(article.dataset.idx || '0', 10);
-    const prev = appunti[idx] || {};
+    if (salvataggioAppunti.has(id)) return;
+    salvataggioAppunti.add(id);
 
     try {
         setStato('Salvataggio…');
@@ -934,12 +940,20 @@ async function salvaAppuntoDaRiga(article) {
                 destinatari_nomi: []
             }
         });
-        await caricaGiorno();
+        if (appunti[idx] && String(appunti[idx].id) === String(id)) {
+            appunti[idx].testo = testo;
+            appunti[idx].fatto = fatto;
+        }
+        if (!opzioni.senzaRicarica) {
+            await caricaGiorno();
+        }
         setStato('Appunto aggiornato');
     } catch (error) {
         console.error(error);
         alert(`Impossibile aggiornare:\n${error?.message || error}`);
         setStato('Errore salvataggio');
+    } finally {
+        salvataggioAppunti.delete(id);
     }
 }
 
@@ -1245,13 +1259,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         const article = btn.closest('.ap-item');
         if (!article) return;
         const azione = btn.dataset.azione;
-        if (azione === 'salva') salvaAppuntoDaRiga(article);
-        else if (azione === 'duplica') duplicaAppunto(article);
+        if (azione === 'duplica') duplicaAppunto(article);
         else if (azione === 'sposta') spostaAppunto(article);
         else if (azione === 'elimina') eliminaAppunto(article);
         else if (azione === 'toggle-chat') toggleChat(article);
         else if (azione === 'invia-risposta') inviaRisposta(article);
         else if (azione === 'elimina-risposta') eliminaRisposta(btn, article);
+    });
+
+    document.getElementById('ap-lista')?.addEventListener('focusout', (ev) => {
+        const campo = ev.target;
+        if (!campo?.matches?.('.ap-item-testo')) return;
+        const article = campo.closest('.ap-item');
+        if (!article || article.dataset.mio !== '1') return;
+        salvaAppuntoDaRiga(article, { senzaRicarica: true });
     });
 
     document.getElementById('ap-lista')?.addEventListener('change', (ev) => {

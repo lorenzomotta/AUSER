@@ -3,7 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a8f3c">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Calendario">
     <title>Calendario Servizi — Accesso Operatori</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="pwa/icon-192.png" type="image/png">
+    <link rel="apple-touch-icon" href="pwa/apple-touch-icon.png">
     <script>
         if (new URLSearchParams(location.search).get('anteprima') === 'mobile') {
             document.documentElement.classList.add('anteprima-mobile');
@@ -13,7 +21,7 @@
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/@fullcalendar/list@6.1.15/index.global.min.css" rel="stylesheet">
     <link rel="stylesheet" href="calendario.css?v=18">
-    <link rel="stylesheet" href="calendario-web.css?v=38">
+    <link rel="stylesheet" href="calendario-web.css?v=39">
     <link rel="stylesheet" href="rifornimento-mobile.css?v=6">
 </head>
 <body>
@@ -43,6 +51,9 @@
 
             <p class="web-login-hint">
                 Se non riesci ad accedere, contatta l'amministratore per l'attivazione dell'account operatore.
+            </p>
+            <p class="web-login-hint" id="web-login-installa">
+                Sul telefono: menu del browser, poi «Aggiungi a schermata Home». Aprila dall’icona: si chiude come un’app e l’accesso resta salvato. ESCI serve solo per cambiare account.
             </p>
         </div>
     </div>
@@ -181,6 +192,17 @@
         </div>
     </div>
 
+    <div id="compila-dialog-km" class="compila-km-overlay" hidden aria-hidden="true">
+        <div class="compila-km-dialog" role="dialog" aria-modal="true" aria-labelledby="compila-dialog-km-titolo">
+            <h2 id="compila-dialog-km-titolo" class="compila-km-titolo">ATTENZIONE</h2>
+            <p id="compila-dialog-km-messaggio" class="compila-km-messaggio"></p>
+            <div class="compila-km-azioni">
+                <button type="button" id="compila-dialog-km-usa" class="compila-km-btn compila-km-btn-usa">Usa KM memorizzati</button>
+                <button type="button" id="compila-dialog-km-ignora" class="compila-km-btn compila-km-btn-ignora">Ignora</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.15/locales/it.global.min.js"></script>
@@ -240,6 +262,7 @@
         </div>
     </div>
 
-    <script type="module" src="calendario-web.js?v=63"></script>
+    <script src="calendario-pwa.js?v=1"></script>
+    <script type="module" src="calendario-web.js?v=64"></script>
 </body>
 </html>

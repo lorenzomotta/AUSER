@@ -13,6 +13,7 @@ const TIPO_CAMPO = {
     data_bonifico: 'data',
     ora_inizio: 'ora',
     ora_arrivo: 'ora',
+    ora_destinazione: 'ora',
     km: 'numero',
     tempo: 'numero',
     pagamento: 'numero'
@@ -29,7 +30,7 @@ export const CAMPI_PDF_SERVIZI = [
     { key: 'idsocio', label: 'ID socio', intestazione: 'Socio', gruppo: 'Percorso', predefinito: false },
     { key: 'comune_prelievo', label: 'Comune di prelievo', intestazione: 'Comune prel.', gruppo: 'Percorso', predefinito: true },
     { key: 'luogo_prelievo', label: 'Luogo di prelievo', intestazione: 'Luogo prel.', gruppo: 'Percorso', predefinito: false },
-    { key: 'ora_arrivo', label: 'O.A.D. (ora arrivo)', intestazione: 'Arrivo', gruppo: 'Percorso', predefinito: false },
+    { key: 'ora_destinazione', label: 'O.A.D. (ora arrivo)', intestazione: 'Arrivo', gruppo: 'Percorso', predefinito: false },
     { key: 'comune_destinazione', label: 'Comune di destinazione', intestazione: 'Comune dest.', gruppo: 'Percorso', predefinito: false },
     { key: 'luogo_destinazione', label: 'Luogo di destinazione', intestazione: 'Destinazione', gruppo: 'Percorso', predefinito: true },
     { key: 'motivazione', label: 'Motivazione del servizio', intestazione: 'Motivazione', gruppo: 'Percorso', predefinito: false },

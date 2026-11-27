@@ -8,7 +8,8 @@
  * 4. Esegui supabase-calendario-web.sql per le policy RLS
  * 5. Pubblica su GitHub Pages i file: CALENDARIO_WEB.html, calendario-web.css,
  *    calendario-web.js, calendario-web-excel.js, calendario.css, tratta-riepilogo.js,
- *    rifornimento-mobile.js, rifornimento-mobile.css, config.public.json
+ *    rifornimento-mobile.js, rifornimento-mobile.css, config.public.json,
+ *    calendario-pwa.js, calendario-sw.js, manifest.webmanifest e la cartella pwa/
  */
 
 import {

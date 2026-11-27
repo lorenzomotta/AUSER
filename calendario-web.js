@@ -8,7 +8,8 @@
  * 4. Esegui supabase-calendario-web.sql per le policy RLS
  * 5. Pubblica su GitHub Pages i file: CALENDARIO_WEB.html, calendario-web.css,
  *    calendario-web.js, calendario-web-excel.js, calendario.css, tratta-riepilogo.js,
- *    rifornimento-mobile.js, rifornimento-mobile.css, config.public.json
+ *    rifornimento-mobile.js, rifornimento-mobile.css, config.public.json,
+ *    calendario-pwa.js, calendario-sw.js, manifest.webmanifest e la cartella pwa/
  */
 
 import {
@@ -1890,6 +1891,258 @@ function aggiornaKmCalcolatoDaUscitaRientro() {
     kmEl.value = formattaKmCalcolato(rientro - uscita);
 }
 
+function parseKmConfrontoCompila(raw) {
+    const s = String(raw ?? '').trim().replace(/\s/g, '');
+    if (!s) return null;
+    let numero;
+    if (s.includes('.') && s.includes(',')) {
+        numero = parseFloat(s.replace(/\./g, '').replace(',', '.'));
+    } else if (s.includes(',')) {
+        numero = parseFloat(s.replace(',', '.'));
+    } else {
+        numero = parseFloat(s);
+    }
+    if (!Number.isFinite(numero) || numero <= 0) return null;
+    return numero;
+}
+
+function formattaKmMemorizzatiCompila(n) {
+    const arrotondato = Math.round(n * 100) / 100;
+    if (Number.isInteger(arrotondato)) return String(arrotondato);
+    return String(arrotondato).replace('.', ',');
+}
+
+function normalizzaMezzoKeyCompila(raw) {
+    let t = String(raw ?? '').trim();
+    if (!t) return '';
+    if (t.endsWith('.0')) t = t.slice(0, -2);
+    if (/^\d+$/.test(t)) return String(parseInt(t, 10));
+    return t.toUpperCase();
+}
+
+function normalizzaDataKmCompila(raw) {
+    const s = String(raw ?? '').trim();
+    if (s.length >= 10 && s[4] === '-') return s.slice(0, 10);
+    const parts = s.split('/');
+    if (parts.length === 3 && parts[2].length === 4) {
+        const mese = parts[1].padStart(2, '0');
+        const giorno = parts[0].padStart(2, '0');
+        return `${parts[2]}-${mese}-${giorno}`;
+    }
+    return '';
+}
+
+function servizioKmPiuRecente(data, id, attualeData, attualeId) {
+    if (data) {
+        if (!attualeData || data > attualeData) return true;
+        return data === attualeData && id > attualeId;
+    }
+    return !attualeData && id > attualeId;
+}
+
+function servizioKmEPrecedente(data, id, dataCorrente, idCorrente) {
+    if (id === idCorrente) return false;
+    if (dataCorrente && data) {
+        if (data < dataCorrente) return true;
+        return data === dataCorrente && id < idCorrente;
+    }
+    return !dataCorrente;
+}
+
+function scegliKmRientroPrecedente(rows, servizio) {
+    const mezzoKey = normalizzaMezzoKeyCompila(servizio?.mezzo);
+    const escludiId = parseInt(servizio?.id, 10) || 0;
+    const dataCorrente = normalizzaDataKmCompila(servizio?.data_prelievo);
+    let precedente = null;
+    let altro = null;
+
+    for (const row of rows || []) {
+        const mezzoRiga = normalizzaMezzoKeyCompila(getFieldAny(row, ['Mezzo', 'MEZZO']));
+        if (!mezzoKey || mezzoRiga !== mezzoKey) continue;
+        const km = parseKmConfrontoCompila(getFieldAny(row, [
+            'Km_Rientro', 'Km_rientro', 'KM_RIENTRO', 'km_rientro'
+        ]));
+        if (km == null) continue;
+        const data = normalizzaDataKmCompila(getFieldAny(row, [
+            'Prelievo_Data', 'PRELIEVO_DATA', 'Data', 'DATA'
+        ]));
+        const id = parseInt(getFieldAny(row, ['idservizio', 'IdServizio', 'IDSERVIZIO', 'id']), 10) || 0;
+        if (id === escludiId) continue;
+
+        const meglio = (slot) => {
+            if (!slot || servizioKmPiuRecente(data, id, slot.data, slot.id)) {
+                return { data, id, km };
+            }
+            return slot;
+        };
+        altro = meglio(altro);
+        if (servizioKmEPrecedente(data, id, dataCorrente, escludiId)) {
+            precedente = meglio(precedente);
+        }
+    }
+
+    return (precedente || altro)?.km ?? null;
+}
+
+let kmCompilaCache = null;
+let kmCompilaToken = 0;
+let kmCompilaIgnorato = null;
+let verificaCompilaInCorso = null;
+
+function precaricaKmCompila() {
+    const servizio = servizioCorrente;
+    const chiave = [
+        servizio?.id || '',
+        normalizzaMezzoKeyCompila(servizio?.mezzo),
+        normalizzaDataKmCompila(servizio?.data_prelievo)
+    ].join('|');
+    if (kmCompilaCache && kmCompilaCache.chiave === chiave) return kmCompilaCache.promise;
+
+    const token = ++kmCompilaToken;
+    const promise = leggiKmRientroPrecedenteCompila(servizio).then((km) => {
+        if (kmCompilaCache && kmCompilaCache.token === token) {
+            kmCompilaCache.km = km;
+            kmCompilaCache.pronto = true;
+        }
+        return km;
+    }).catch((error) => {
+        console.warn('Controllo km precedenti:', error);
+        if (kmCompilaCache && kmCompilaCache.token === token) {
+            kmCompilaCache.km = null;
+            kmCompilaCache.pronto = true;
+        }
+        return null;
+    });
+    kmCompilaCache = { chiave, token, promise, pronto: false, km: null };
+    return promise;
+}
+
+async function leggiKmRientroPrecedenteCompila(servizio) {
+    const mezzo = String(servizio?.mezzo ?? '').trim();
+    if (!mezzo || !supabaseClient) return null;
+
+    const table = tabella('servizi');
+    let query = supabaseClient
+        .from(table)
+        .select('idservizio,Mezzo,Km_Rientro,Prelievo_Data')
+        .eq('Mezzo', mezzo);
+    const dataIso = normalizzaDataKmCompila(servizio.data_prelievo);
+    if (dataIso) query = query.lte('Prelievo_Data', dataIso);
+    const { data, error } = await query
+        .order('Prelievo_Data', { ascending: false })
+        .limit(100);
+    if (error) throw error;
+    return scegliKmRientroPrecedente(data, servizio);
+}
+
+function chiediKmUscitaDiversiCompila(kmMemorizzati) {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById('compila-dialog-km');
+        const messaggio = document.getElementById('compila-dialog-km-messaggio');
+        const btnUsa = document.getElementById('compila-dialog-km-usa');
+        const btnIgnora = document.getElementById('compila-dialog-km-ignora');
+        if (!overlay || !messaggio || !btnUsa || !btnIgnora) {
+            resolve('ignora');
+            return;
+        }
+
+        messaggio.textContent = `KM IN USCITA DIVERSI DA ULTIMI KM IN RIENTRO (${formattaKmMemorizzatiCompila(kmMemorizzati)})`;
+        overlay.hidden = false;
+        overlay.setAttribute('aria-hidden', 'false');
+        const ignoraSfondoFino = Date.now() + 350;
+
+        let chiuso = false;
+        const fine = (scelta) => {
+            if (chiuso) return;
+            chiuso = true;
+            overlay.hidden = true;
+            overlay.setAttribute('aria-hidden', 'true');
+            btnUsa.removeEventListener('click', onUsa);
+            btnIgnora.removeEventListener('click', onIgnora);
+            overlay.removeEventListener('click', onSfondo);
+            document.removeEventListener('keydown', onTasto, true);
+            resolve(scelta);
+        };
+        const onUsa = (event) => {
+            event.preventDefault();
+            fine('usa');
+        };
+        const onIgnora = (event) => {
+            event.preventDefault();
+            fine('ignora');
+        };
+        const onSfondo = (event) => {
+            if (event.target !== overlay) return;
+            if (Date.now() < ignoraSfondoFino) return;
+            fine('annulla');
+        };
+        const onTasto = (event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            fine('annulla');
+        };
+
+        btnUsa.addEventListener('click', onUsa);
+        btnIgnora.addEventListener('click', onIgnora);
+        overlay.addEventListener('click', onSfondo);
+        document.addEventListener('keydown', onTasto, true);
+        btnUsa.focus();
+    });
+}
+
+function verificaKmUscitaCompila() {
+    if (verificaCompilaInCorso) return verificaCompilaInCorso;
+    verificaCompilaInCorso = eseguiVerificaKmCompila().finally(() => {
+        verificaCompilaInCorso = null;
+    });
+    return verificaCompilaInCorso;
+}
+
+async function eseguiVerificaKmCompila() {
+    const campo = document.getElementById('compila-km-uscita');
+    const kmInseriti = parseKmConfrontoCompila(campo?.value);
+    const mezzo = normalizzaMezzoKeyCompila(servizioCorrente?.mezzo);
+    if (kmInseriti == null || !mezzo) return 'procedi';
+
+    const chiave = [
+        servizioCorrente?.id || '',
+        mezzo,
+        normalizzaDataKmCompila(servizioCorrente?.data_prelievo)
+    ].join('|');
+    let memorizzati = null;
+    if (kmCompilaCache && kmCompilaCache.chiave === chiave && kmCompilaCache.pronto) {
+        memorizzati = kmCompilaCache.km;
+    } else {
+        memorizzati = await precaricaKmCompila();
+    }
+
+    if (memorizzati == null || Math.abs(kmInseriti - memorizzati) < 0.01) {
+        kmCompilaIgnorato = null;
+        return 'procedi';
+    }
+    if (
+        kmCompilaIgnorato
+        && Math.abs(kmCompilaIgnorato.inseriti - kmInseriti) < 0.01
+        && Math.abs(kmCompilaIgnorato.memorizzati - memorizzati) < 0.01
+    ) {
+        return 'procedi';
+    }
+
+    const scelta = await chiediKmUscitaDiversiCompila(memorizzati);
+    if (scelta === 'usa' && campo) {
+        campo.value = formattaKmMemorizzatiCompila(memorizzati);
+        campo.dispatchEvent(new Event('input', { bubbles: true }));
+        kmCompilaIgnorato = null;
+        return 'procedi';
+    }
+    if (scelta === 'ignora') {
+        kmCompilaIgnorato = { inseriti: kmInseriti, memorizzati };
+        return 'procedi';
+    }
+    return 'annulla';
+}
+
 function mostraErroreCompila(msg) {
     const el = document.getElementById('modal-compila-errore');
     if (!el) return;
@@ -1924,6 +2177,8 @@ function apriModalCompila() {
     tempoInput.value = formatTimeIso(s.tempo) || '';
     noteInput.value = testoNoteFineVisibile(s.note_fine_servizio);
     mostraErroreCompila('');
+    kmCompilaIgnorato = null;
+    precaricaKmCompila();
 
     modal.style.display = 'flex';
     modal.setAttribute('aria-hidden', 'false');
@@ -1931,6 +2186,11 @@ function apriModalCompila() {
 }
 
 function chiudiModalCompila() {
+    const dialogKm = document.getElementById('compila-dialog-km');
+    if (dialogKm) {
+        dialogKm.hidden = true;
+        dialogKm.setAttribute('aria-hidden', 'true');
+    }
     const modal = document.getElementById('modal-compila-servizio');
     if (!modal) return;
     modal.style.display = 'none';
@@ -1940,6 +2200,9 @@ function chiudiModalCompila() {
 
 async function salvaDatiFineServizio() {
     if (!servizioCorrente?.id) return;
+
+    const esitoKm = await verificaKmUscitaCompila();
+    if (esitoKm === 'annulla') return;
 
     const btn = document.getElementById('btn-salva-compila');
     const tempoRaw = document.getElementById('compila-tempo')?.value.trim() ?? '';
@@ -2134,6 +2397,11 @@ function setupEventListenersCalendario() {
     document.getElementById('btn-salva-compila')?.addEventListener('click', salvaDatiFineServizio);
 
     document.getElementById('compila-km-uscita')?.addEventListener('input', aggiornaKmCalcolatoDaUscitaRientro);
+    document.getElementById('compila-km-uscita')?.addEventListener('blur', () => {
+        const campo = document.getElementById('compila-km-uscita');
+        if (!campo) return;
+        verificaKmUscitaCompila();
+    });
     document.getElementById('compila-km-rientro')?.addEventListener('input', aggiornaKmCalcolatoDaUscitaRientro);
 
     const modal = document.getElementById('modal-servizio');
@@ -2148,6 +2416,8 @@ function setupEventListenersCalendario() {
 
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
+        const dialogKm = document.getElementById('compila-dialog-km');
+        if (dialogKm && !dialogKm.hidden) return;
         const compilaAperto = document.getElementById('modal-compila-servizio');
         if (compilaAperto && compilaAperto.style.display === 'flex') {
             chiudiModalCompila();
