@@ -20,6 +20,10 @@ ALTER TABLE public.appunti_utente
 ALTER TABLE public.appunti_utente
     ADD COLUMN IF NOT EXISTS autore_username text NOT NULL DEFAULT '';
 
+-- Foto dell'appunto (indirizzo data:image/... ridotto dal programma)
+ALTER TABLE public.appunti_utente
+    ADD COLUMN IF NOT EXISTS immagine text NOT NULL DEFAULT '';
+
 ALTER TABLE public.appunti_utente
     DROP CONSTRAINT IF EXISTS appunti_utente_visibilita_check;
 

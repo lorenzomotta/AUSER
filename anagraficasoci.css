@@ -1158,3 +1158,217 @@ body.schermo-intero .btn-modifica-tess {
     font-size: 13px;
     padding: 3px 8px;
 }
+
+/*
+ * Ricerca soci (finestra 1100×640).
+ * I campi della scheda socio restano compatti.
+ * Qui li allarghiamo e li spezziamo su più righe.
+ * Lo zoom dei monitor piccoli non si applica: in questa finestra
+ * renderebbe di nuovo illeggibili caselle e scritte.
+ */
+html:has(.anagrafica-container.mode-ricerca) {
+    zoom: 1;
+}
+
+.anagrafica-container.mode-ricerca {
+    max-width: none;
+    padding: 8px 16px 12px;
+}
+
+.anagrafica-container.mode-ricerca .anagrafica-header {
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+}
+
+.anagrafica-container.mode-ricerca .page-title {
+    font-size: 22px;
+}
+
+.anagrafica-container.mode-ricerca .socio-subtitle {
+    font-size: 14px;
+}
+
+.anagrafica-container.mode-ricerca .btn {
+    padding: 7px 14px;
+    font-size: 14px;
+}
+
+.anagrafica-container.mode-ricerca .anagraficasoci-hint-ricerca {
+    font-size: 13px;
+    line-height: 1.35;
+    margin: 0 0 10px;
+    padding: 8px 12px;
+}
+
+.anagrafica-container.mode-ricerca .anagrafica-section {
+    padding: 10px 14px 12px;
+}
+
+.anagrafica-container.mode-ricerca .section-bar {
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    gap: 8px 14px;
+}
+
+.anagrafica-container.mode-ricerca .section-title {
+    font-size: 16px;
+}
+
+.anagrafica-container.mode-ricerca .inline-flags {
+    gap: 8px 12px;
+}
+
+.anagrafica-container.mode-ricerca .flag-item {
+    font-size: 15px;
+    gap: 6px;
+}
+
+.anagrafica-container.mode-ricerca .flag-item input {
+    width: 16px;
+    height: 16px;
+}
+
+.anagrafica-container.mode-ricerca .anagrafica-rows {
+    gap: 14px;
+}
+
+.anagrafica-container.mode-ricerca .form-row-line {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 14px 16px;
+    align-items: end;
+}
+
+.anagrafica-container.mode-ricerca .form-row-line .form-group {
+    min-width: 0;
+    width: auto;
+    max-width: none;
+    flex: none;
+}
+
+/* Riga identità: ID + nominativo + tipologia, poi fiscale / sesso / nascita */
+.anagrafica-container.mode-ricerca .row-anagrafica > .field-xs,
+.anagrafica-container.mode-ricerca .row-anagrafica > .field-nominativo,
+.anagrafica-container.mode-ricerca .row-anagrafica > .field-tipologia,
+.anagrafica-container.mode-ricerca .row-anagrafica > .field-cf,
+.anagrafica-container.mode-ricerca .row-anagrafica > .field-nasc-comune,
+.anagrafica-container.mode-ricerca .row-anagrafica > .field-data,
+.anagrafica-container.mode-ricerca .row-residenza > .field-xs,
+.anagrafica-container.mode-ricerca .row-residenza > .field-indirizzo,
+.anagrafica-container.mode-ricerca .row-residenza > .field-cap,
+.anagrafica-container.mode-ricerca .row-residenza > .field-comune,
+.anagrafica-container.mode-ricerca .row-residenza > .field-tel {
+    max-width: none;
+    min-width: 0;
+    flex: none;
+}
+
+.anagrafica-container.mode-ricerca .row-anagrafica > .field-xs:first-child {
+    grid-column: span 2;
+}
+
+.anagrafica-container.mode-ricerca .row-anagrafica > .field-nominativo {
+    grid-column: span 6;
+}
+
+.anagrafica-container.mode-ricerca .row-anagrafica > .field-tipologia {
+    grid-column: span 4;
+}
+
+.anagrafica-container.mode-ricerca .row-anagrafica > .field-cf {
+    grid-column: span 4;
+}
+
+.anagrafica-container.mode-ricerca .row-anagrafica > .field-xs:not(:first-child) {
+    grid-column: span 2;
+}
+
+.anagrafica-container.mode-ricerca .row-anagrafica > .field-nasc-comune {
+    grid-column: span 3;
+}
+
+.anagrafica-container.mode-ricerca .row-anagrafica > .field-data {
+    grid-column: span 3;
+}
+
+/* Residenza: indirizzo da solo con civico e CAP, poi comune / provincia / telefono */
+.anagrafica-container.mode-ricerca .row-residenza > .field-indirizzo {
+    grid-column: span 8;
+}
+
+.anagrafica-container.mode-ricerca .row-residenza > .field-xs:nth-child(2),
+.anagrafica-container.mode-ricerca .row-residenza > .field-cap,
+.anagrafica-container.mode-ricerca .row-residenza > .field-xs:nth-child(5) {
+    grid-column: span 2;
+}
+
+.anagrafica-container.mode-ricerca .row-residenza > .field-comune {
+    grid-column: span 6;
+    flex: none;
+    min-width: 0;
+}
+
+.anagrafica-container.mode-ricerca .row-residenza > .field-tel {
+    grid-column: span 4;
+}
+
+.anagrafica-container.mode-ricerca .row-nota {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.anagrafica-container.mode-ricerca .form-group label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 5px;
+    letter-spacing: 0.03em;
+    line-height: 1.25;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+}
+
+.anagrafica-container.mode-ricerca .form-control {
+    font-size: 17px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    border-color: #8a8a8a;
+}
+
+.anagrafica-container.mode-ricerca .field-xs input,
+.anagrafica-container.mode-ricerca .field-xs select {
+    padding: 6px 8px;
+    text-align: center;
+}
+
+.anagrafica-container.mode-ricerca .field-data input[type="date"],
+.anagrafica-container.mode-ricerca #field-codicefiscale,
+.anagrafica-container.mode-ricerca .field-tipologia input,
+.anagrafica-container.mode-ricerca .field-tipologia select {
+    font-size: 15px;
+}
+
+.anagrafica-container.mode-ricerca .field-data input[type="date"] {
+    padding: 6px 8px;
+}
+
+.anagrafica-container.mode-ricerca .field-tipologia .tipologia-select {
+    height: 44px;
+    margin-bottom: 0;
+    font-size: 16px;
+}
+
+.anagrafica-container.mode-ricerca .ricerca-comuni-toggle {
+    min-height: 44px;
+    font-size: 17px;
+    padding: 8px 28px 8px 12px;
+    border-radius: 4px;
+}
+
+.anagrafica-container.mode-ricerca .nota-compact {
+    min-height: 48px;
+    max-height: 80px;
+}

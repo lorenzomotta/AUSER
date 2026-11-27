@@ -244,13 +244,17 @@ export async function apriFinestraSelezioneTratta() {
 
     if (isTauriRuntime()) {
         try {
-            const { WebviewWindow } = await import('@tauri-apps/api/window');
+            const { WebviewWindow, LogicalSize } = await import('@tauri-apps/api/window');
             const label = 'tratte-fuori-asti-select';
+            const larghezza = 933;
+            const altezza = 680;
 
             const existing = WebviewWindow.getByLabel(label);
             if (existing) {
                 try {
                     await existing.show();
+                    await existing.setSize(new LogicalSize(larghezza, altezza)).catch(() => {});
+                    await existing.center().catch(() => {});
                     await existing.setFocus();
                     return;
                 } catch (err) {
@@ -262,8 +266,8 @@ export async function apriFinestraSelezioneTratta() {
             const webview = new WebviewWindow(label, {
                 url,
                 title: 'Costo Tratte Fuori Asti',
-                width: 900,
-                height: 800,
+                width: larghezza,
+                height: altezza,
                 resizable: true,
                 maximized: false,
                 decorations: true,
@@ -276,7 +280,7 @@ export async function apriFinestraSelezioneTratta() {
         }
     }
 
-    window.open(url, 'tratte-fuori-asti-select', 'width=900,height=800');
+    window.open(url, 'tratte-fuori-asti-select', 'width=933,height=680');
 }
 
 let listenerTrattaGlobaleAttivo = false;

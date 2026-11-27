@@ -505,6 +505,69 @@ html {
     line-height: 1.3;
 }
 
+.ap-immagine {
+    margin-top: 6px;
+}
+
+.ap-immagine-azioni,
+.ap-item-foto-azioni {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.ap-btn-foto {
+    background: #1565c0;
+    color: #fff;
+}
+
+.ap-btn-foto-togli {
+    background: #eceff1;
+    color: #37474f;
+    border: 1px solid #90a4ae;
+}
+
+.ap-immagine-hint {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: #607d8b;
+}
+
+.ap-immagine-anteprima,
+.ap-item-foto-img {
+    display: block;
+    max-width: 100%;
+    max-height: 180px;
+    margin-top: 6px;
+    border: 1px solid #cfd8dc;
+    border-radius: 4px;
+    background: #fff;
+    cursor: zoom-in;
+    object-fit: contain;
+}
+
+.ap-item-foto {
+    grid-column: 1 / -1;
+}
+
+.ap-item-foto-img[hidden],
+.ap-immagine-anteprima[hidden],
+.ap-btn-foto-togli[hidden] {
+    display: none;
+}
+
+.ap-dialog-foto {
+    max-width: min(720px, 96vw);
+}
+
+.ap-foto-grande {
+    display: block;
+    max-width: 100%;
+    max-height: 70vh;
+    margin: 0 auto 10px;
+    object-fit: contain;
+}
+
 .ap-visibilita {
     margin: 4px 0 0;
     padding: 2px 6px 3px;

@@ -240,6 +240,7 @@ function createTrattaEntry(tratta) {
             <input type="text" class="tratta-note-input" id="note-${tratta.id}" data-field="note_aggiuntive" value="${escapeHtml(tratta.note_aggiuntive)}" readonly>
     `;
 
+    div.dataset.ordine = String(tratta._ordine ?? tratta.id ?? 0);
     div.querySelector('.btn-seleziona')?.addEventListener('click', () => selezionaTratta(tratta.id));
 
     const bindRecalc = (field) => {
@@ -258,6 +259,235 @@ function createTrattaEntry(tratta) {
     return div;
 }
 
+const VUOTO_COMUNE = '(vuoto)';
+let filtroComune = { testo: '', esclusi: new Set() };
+let ordinamentoComune = '';
+let menuComuneAperto = false;
+
+function etichettaComune(valore) {
+    const testo = String(valore || '').trim();
+    return testo || VUOTO_COMUNE;
+}
+
+function leggiComuneEntry(entry) {
+    return etichettaComune(entry.querySelector('[data-field="comune"]')?.value);
+}
+
+function filtroComuneAttivo() {
+    return Boolean(filtroComune.testo || filtroComune.esclusi.size > 0);
+}
+
+function entryPassaFiltro(entry) {
+    const nome = leggiComuneEntry(entry);
+    if (filtroComune.testo && !nome.toLocaleLowerCase('it').includes(filtroComune.testo)) return false;
+    if (filtroComune.esclusi.has(nome)) return false;
+    return true;
+}
+
+function aggiornaBottoneFiltro() {
+    const btn = document.getElementById('btn-filtro-comune');
+    if (!btn) return;
+    const filtrato = filtroComuneAttivo();
+    btn.classList.toggle('is-filtrato', filtrato);
+    btn.classList.toggle('is-ordinato', Boolean(ordinamentoComune));
+    btn.classList.toggle('is-aperto', menuComuneAperto);
+    btn.setAttribute('aria-expanded', menuComuneAperto ? 'true' : 'false');
+    if (ordinamentoComune === 'asc') btn.textContent = '▲';
+    else if (ordinamentoComune === 'desc') btn.textContent = '▼';
+    else btn.textContent = '▾';
+}
+
+function applicaVistaTratte() {
+    const container = document.getElementById('tratte-lista');
+    if (!container) return;
+
+    container.querySelector('.tratte-filtro-vuoto')?.remove();
+    const entries = [...container.querySelectorAll('.tratta-entry')];
+    entries.sort((a, b) => {
+        if (ordinamentoComune) {
+            const cmp = leggiComuneEntry(a).localeCompare(leggiComuneEntry(b), 'it', { sensitivity: 'base' });
+            if (cmp !== 0) return ordinamentoComune === 'desc' ? -cmp : cmp;
+        }
+        return (parseInt(a.dataset.ordine, 10) || 0) - (parseInt(b.dataset.ordine, 10) || 0);
+    });
+    entries.forEach((entry) => container.appendChild(entry));
+
+    let visibili = 0;
+    entries.forEach((entry) => {
+        const ok = entryPassaFiltro(entry);
+        entry.hidden = !ok;
+        if (ok) visibili += 1;
+    });
+
+    if (entries.length && visibili === 0) {
+        const vuoto = document.createElement('div');
+        vuoto.className = 'tratte-empty tratte-filtro-vuoto';
+        vuoto.textContent = 'Nessuna tratta con questo filtro. Apri COMUNE e premi «Azzera filtro».';
+        container.appendChild(vuoto);
+    }
+
+    aggiornaBottoneFiltro();
+}
+
+function valoriComune() {
+    const unici = new Set();
+    document.querySelectorAll('.tratta-entry').forEach((entry) => {
+        unici.add(leggiComuneEntry(entry));
+    });
+    return [...unici].sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
+}
+
+function chiudiMenuComune() {
+    menuComuneAperto = false;
+    const menu = document.getElementById('tratte-menu');
+    if (menu) menu.hidden = true;
+    aggiornaBottoneFiltro();
+}
+
+function posizionaMenuComune() {
+    const btn = document.getElementById('btn-filtro-comune');
+    const menu = document.getElementById('tratte-menu');
+    if (!btn || !menu) return;
+    const riquadro = btn.getBoundingClientRect();
+    const larghezza = menu.offsetWidth || 260;
+    let sinistra = Math.min(riquadro.left, window.innerWidth - larghezza - 8);
+    sinistra = Math.max(8, sinistra);
+    let alto = riquadro.bottom + 4;
+    menu.style.left = `${sinistra}px`;
+    menu.style.top = `${alto}px`;
+    const altezza = menu.offsetHeight;
+    if (alto + altezza > window.innerHeight - 8) {
+        menu.style.top = `${Math.max(8, riquadro.top - altezza - 4)}px`;
+    }
+}
+
+function aggiornaCasellaTutti(mostrati) {
+    const tutti = document.getElementById('tratte-menu-tutti');
+    if (!tutti) return;
+    const inclusi = mostrati.filter((valore) => !filtroComune.esclusi.has(valore));
+    tutti.checked = mostrati.length > 0 && inclusi.length === mostrati.length;
+    tutti.indeterminate = inclusi.length > 0 && inclusi.length < mostrati.length;
+}
+
+function disegnaListaComuni() {
+    const lista = document.getElementById('tratte-menu-lista');
+    if (!lista) return;
+    lista.innerHTML = '';
+
+    const cerca = filtroComune.testo;
+    const mostrati = valoriComune().filter((valore) => !cerca || valore.toLocaleLowerCase('it').includes(cerca));
+
+    if (!mostrati.length) {
+        const vuoto = document.createElement('p');
+        vuoto.className = 'tratte-menu-vuoto';
+        vuoto.textContent = 'Nessun comune';
+        lista.appendChild(vuoto);
+        aggiornaCasellaTutti([]);
+        return;
+    }
+
+    mostrati.slice(0, 300).forEach((valore) => {
+        const label = document.createElement('label');
+        label.className = 'tratte-menu-valore';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = !filtroComune.esclusi.has(valore);
+        input.addEventListener('change', () => {
+            if (input.checked) filtroComune.esclusi.delete(valore);
+            else filtroComune.esclusi.add(valore);
+            applicaVistaTratte();
+            aggiornaCasellaTutti(mostrati);
+        });
+        const testo = document.createElement('span');
+        testo.textContent = valore;
+        label.appendChild(input);
+        label.appendChild(testo);
+        lista.appendChild(label);
+    });
+
+    aggiornaCasellaTutti(mostrati);
+}
+
+function apriMenuComune() {
+    const menu = document.getElementById('tratte-menu');
+    const cerca = document.getElementById('tratte-menu-cerca');
+    if (!menu) return;
+    menuComuneAperto = true;
+    menu.hidden = false;
+    if (cerca) cerca.value = filtroComune.testo;
+    document.getElementById('tratte-ordina-asc')?.classList.toggle('is-scelto', ordinamentoComune === 'asc');
+    document.getElementById('tratte-ordina-desc')?.classList.toggle('is-scelto', ordinamentoComune === 'desc');
+    disegnaListaComuni();
+    posizionaMenuComune();
+    aggiornaBottoneFiltro();
+    cerca?.focus();
+}
+
+function impostaOrdineComune(direzione) {
+    ordinamentoComune = ordinamentoComune === direzione ? '' : direzione;
+    document.getElementById('tratte-ordina-asc')?.classList.toggle('is-scelto', ordinamentoComune === 'asc');
+    document.getElementById('tratte-ordina-desc')?.classList.toggle('is-scelto', ordinamentoComune === 'desc');
+    applicaVistaTratte();
+}
+
+function azzeraFiltroComune() {
+    filtroComune = { testo: '', esclusi: new Set() };
+    ordinamentoComune = '';
+    const cerca = document.getElementById('tratte-menu-cerca');
+    if (cerca) cerca.value = '';
+    document.getElementById('tratte-ordina-asc')?.classList.remove('is-scelto');
+    document.getElementById('tratte-ordina-desc')?.classList.remove('is-scelto');
+    applicaVistaTratte();
+    if (menuComuneAperto) disegnaListaComuni();
+}
+
+function preparaFiltroComune() {
+    const btn = document.getElementById('btn-filtro-comune');
+    btn?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (menuComuneAperto) chiudiMenuComune();
+        else apriMenuComune();
+    });
+
+    document.getElementById('tratte-ordina-asc')?.addEventListener('click', () => impostaOrdineComune('asc'));
+    document.getElementById('tratte-ordina-desc')?.addEventListener('click', () => impostaOrdineComune('desc'));
+    document.getElementById('tratte-menu-azzera')?.addEventListener('click', azzeraFiltroComune);
+
+    document.getElementById('tratte-menu-cerca')?.addEventListener('input', (event) => {
+        filtroComune.testo = event.target.value.trim().toLocaleLowerCase('it');
+        disegnaListaComuni();
+        applicaVistaTratte();
+    });
+
+    document.getElementById('tratte-menu-tutti')?.addEventListener('change', (event) => {
+        const includi = event.target.checked;
+        const cerca = filtroComune.testo;
+        valoriComune()
+            .filter((valore) => !cerca || valore.toLocaleLowerCase('it').includes(cerca))
+            .forEach((valore) => {
+                if (includi) filtroComune.esclusi.delete(valore);
+                else filtroComune.esclusi.add(valore);
+            });
+        disegnaListaComuni();
+        applicaVistaTratte();
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!menuComuneAperto) return;
+        const menu = document.getElementById('tratte-menu');
+        if (menu?.contains(event.target) || btn?.contains(event.target)) return;
+        chiudiMenuComune();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && menuComuneAperto) chiudiMenuComune();
+    });
+
+    document.getElementById('tratte-lista')?.addEventListener('scroll', () => {
+        if (menuComuneAperto) chiudiMenuComune();
+    });
+}
+
 function renderTratteList(tratte) {
     const container = document.getElementById('tratte-lista');
     if (!container) return;
@@ -266,14 +496,16 @@ function renderTratteList(tratte) {
 
     if (!tratte.length) {
         container.innerHTML = '<div class="tratte-empty">Nessuna tratta trovata</div>';
+        aggiornaBottoneFiltro();
         return;
     }
 
-    tratte.forEach((t) => {
-        container.appendChild(createTrattaEntry(t));
+    tratte.forEach((t, indice) => {
+        container.appendChild(createTrattaEntry({ ...t, _ordine: indice }));
     });
 
     applyEditModeToDom();
+    applicaVistaTratte();
 }
 
 function applyEditModeToDom() {
@@ -467,6 +699,7 @@ async function chiudiFinestra() {
 document.addEventListener('DOMContentLoaded', async () => {
     setupCampiProtettiGuard();
     setupTratteAvvisoModalEvents();
+    preparaFiltroComune();
     await initTauri();
     await loadTratte();
 

@@ -95,6 +95,15 @@
             <section class="ap-nuovo">
                 <label for="ap-nuovo-testo" class="ap-nuovo-label">Cosa da fare</label>
                 <textarea id="ap-nuovo-testo" class="ap-textarea" rows="3" placeholder="Scrivi qui un promemoria…" maxlength="2000"></textarea>
+                <div class="ap-immagine">
+                    <div class="ap-immagine-azioni">
+                        <button type="button" class="ap-btn ap-btn-foto" id="btn-immagine">INSERISCI IMMAGINE</button>
+                        <button type="button" class="ap-btn ap-btn-foto-togli" id="btn-immagine-togli" hidden>TOGLI IMMAGINE</button>
+                    </div>
+                    <p class="ap-immagine-hint">Puoi anche incollare una foto con Ctrl+V dentro il testo.</p>
+                    <img id="ap-immagine-anteprima" class="ap-immagine-anteprima" alt="Anteprima immagine" hidden>
+                </div>
+                <input type="file" id="ap-immagine-file" accept="image/*" hidden>
 
                 <fieldset class="ap-visibilita">
                     <legend>Chi può vederlo</legend>
@@ -147,6 +156,15 @@
                 <button type="button" class="ap-dialog-btn ap-dialog-btn-no" id="btn-chiudi-cerca">CHIUDI</button>
             </div>
             <div class="ap-ricerca-risultati" id="ap-ricerca-risultati" hidden></div>
+        </div>
+    </div>
+
+    <div id="ap-dialog-foto" class="ap-dialog-overlay" hidden aria-hidden="true">
+        <div class="ap-dialog ap-dialog-foto" role="dialog" aria-modal="true" aria-label="Immagine dell'appunto">
+            <img id="ap-foto-grande" class="ap-foto-grande" alt="Immagine dell'appunto">
+            <div class="ap-dialog-actions">
+                <button type="button" class="ap-dialog-btn ap-dialog-btn-no" id="ap-foto-chiudi">CHIUDI</button>
+            </div>
         </div>
     </div>
 

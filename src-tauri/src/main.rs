@@ -6818,6 +6818,9 @@ struct AppuntoRecord {
     /// Numero risposte (solo in lettura)
     #[serde(default)]
     num_risposte: i32,
+    /// Foto ridotta, come data:image/jpeg;base64,...
+    #[serde(default)]
+    immagine: String,
 }
 
 fn default_visibilita_privato() -> String {
@@ -6939,6 +6942,7 @@ fn supabase_row_to_appunto(row: &serde_json::Value) -> AppuntoRecord {
         destinatari: Vec::new(),
         destinatari_nomi: Vec::new(),
         num_risposte: 0,
+        immagine: get_field_any(row, &["immagine", "Immagine", "IMMAGINE"]),
     }
 }
 
@@ -7391,17 +7395,34 @@ async fn cerca_appunti(
     Ok(list)
 }
 
+/// Accetta solo una foto già ridotta dal programma (jpeg o png in base64).
+fn normalizza_immagine_appunto(raw: &str) -> Result<String, String> {
+    let s = raw.trim();
+    if s.is_empty() {
+        return Ok(String::new());
+    }
+    if s.len() > 500_000 {
+        return Err("L'immagine è troppo grande. Scegline una più piccola.".to_string());
+    }
+    let ok = s.starts_with("data:image/jpeg;base64,") || s.starts_with("data:image/png;base64,");
+    if !ok {
+        return Err("Formato immagine non valido.".to_string());
+    }
+    Ok(s.to_string())
+}
+
 #[tauri::command]
 async fn save_appunto(appunto: AppuntoRecord) -> Result<AppuntoRecord, String> {
     let uid = appunto.user_id.trim().to_string();
     let day = normalize_appunto_data(&appunto.data)?;
     let testo = appunto.testo.trim().to_string();
+    let immagine = normalizza_immagine_appunto(&appunto.immagine)?;
     let visibilita = normalize_visibilita(&appunto.visibilita);
     if uid.is_empty() {
         return Err("user_id obbligatorio".to_string());
     }
-    if testo.is_empty() {
-        return Err("Il testo dell'appunto non può essere vuoto".to_string());
+    if testo.is_empty() && immagine.is_empty() {
+        return Err("Scrivi un testo oppure aggiungi un'immagine".to_string());
     }
 
     let mut destinatari: Vec<String> = appunto
@@ -7458,6 +7479,7 @@ async fn save_appunto(appunto: AppuntoRecord) -> Result<AppuntoRecord, String> {
         // Sempre aggiornabile (serve per spostare l'appunto su un'altra data)
         body.insert("data".to_string(), serde_json::json!(day));
         body.insert("testo".to_string(), serde_json::json!(testo));
+        body.insert("immagine".to_string(), serde_json::json!(immagine));
         body.insert("fatto".to_string(), serde_json::json!(appunto.fatto));
         body.insert("ordine".to_string(), serde_json::json!(appunto.ordine));
         body.insert("visibilita".to_string(), serde_json::json!(visibilita));
@@ -7469,7 +7491,24 @@ async fn save_appunto(appunto: AppuntoRecord) -> Result<AppuntoRecord, String> {
             serde_json::json!(chrono::Utc::now().to_rfc3339()),
         );
 
-        let saved = match client.upsert_appunto(&body, row_id.as_deref()).await {
+        let mut tentativo = client.upsert_appunto(&body, row_id.as_deref()).await;
+        if let Err(ref e) = tentativo {
+            let msg = e.to_string();
+            if msg.contains("immagine") && !immagine.is_empty() {
+                return Err(
+                    "Per salvare le immagini aggiorna Supabase:\n\
+                     SQL Editor → esegui il file supabase-appunti-immagine.sql\n\
+                     (poi chiudi e riapri l'Agenda)."
+                        .to_string(),
+                );
+            }
+            if msg.contains("immagine") {
+                body.remove("immagine");
+                tentativo = client.upsert_appunto(&body, row_id.as_deref()).await;
+            }
+        }
+
+        let saved = match tentativo {
             Ok(row) => row,
             Err(e) => {
                 let msg = e.to_string();

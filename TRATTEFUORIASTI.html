@@ -31,7 +31,10 @@
 
         <div class="tratte-colonne-header" aria-hidden="true">
             <span class="col-id">ID</span>
-            <span class="col-comune">COMUNE</span>
+            <span class="col-comune">
+                <span>COMUNE</span>
+                <button type="button" class="tratte-filtro-btn" id="btn-filtro-comune" title="Filtra per comune" aria-label="Filtra per comune" aria-expanded="false">▾</button>
+            </span>
             <span class="col-prov">PROV</span>
             <span class="col-localita">LOCALITA</span>
             <span class="col-km">KM</span>
@@ -54,6 +57,21 @@
             <p id="modal-tratte-avviso-msg" class="tratte-modal-message"></p>
             <button type="button" class="btn-tratte-modal-ok" id="btn-modal-tratte-avviso-ok">OK</button>
         </div>
+    </div>
+
+    <div class="tratte-menu" id="tratte-menu" hidden>
+        <div class="tratte-menu-ordina">
+            <button type="button" id="tratte-ordina-asc">A → Z</button>
+            <button type="button" id="tratte-ordina-desc">Z → A</button>
+        </div>
+        <label class="tratte-menu-cerca-label" for="tratte-menu-cerca">Contiene</label>
+        <input type="search" id="tratte-menu-cerca" placeholder="Scrivi per filtrare">
+        <label class="tratte-menu-tutti">
+            <input type="checkbox" id="tratte-menu-tutti" checked>
+            <span>Seleziona tutto</span>
+        </label>
+        <div class="tratte-menu-lista" id="tratte-menu-lista"></div>
+        <button type="button" class="tratte-menu-azzera" id="tratte-menu-azzera">Azzera filtro</button>
     </div>
 
     <script type="module" src="trattefuoriasi.js"></script>

@@ -151,7 +151,7 @@ async function openRicercaAvanzata() {
             url,
             title,
             width: 1100,
-            height: 480,
+            height: 640,
             resizable: true,
             maximized: false,
             decorations: true,

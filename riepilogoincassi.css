@@ -60,6 +60,18 @@ body {
     gap: 6px;
 }
 
+.input-data-incasso {
+    height: 34px;
+    border: 2px solid #888;
+    border-radius: 4px;
+    background: #fff;
+    color: #222;
+    font-size: 15px;
+    font-weight: bold;
+    padding: 0 8px;
+    font-family: inherit;
+}
+
 .btn {
     padding: 10px 22px;
     font-size: 14px;

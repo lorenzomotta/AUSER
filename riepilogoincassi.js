@@ -38,12 +38,14 @@ function aggiungiGiorni(date, n) {
     return d;
 }
 
-function leggiDataDaUrl() {
-    const params = new URLSearchParams(window.location.search);
-    const dataIso = params.get('data');
+function dataInIso(date) {
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function parseDataIso(dataIso) {
     if (!dataIso) return null;
 
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dataIso);
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dataIso).trim());
     if (!match) return null;
 
     const anno = parseInt(match[1], 10);
@@ -57,6 +59,11 @@ function leggiDataDaUrl() {
     }
     date.setHours(0, 0, 0, 0);
     return date;
+}
+
+function leggiDataDaUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return parseDataIso(params.get('data'));
 }
 
 function escapeHtml(str) {
@@ -185,8 +192,15 @@ function aggiornaLabelData() {
     const testo = formatDataItaliana(dataSelezionata);
     const label = document.getElementById('report-data-label');
     const labelPrint = document.getElementById('report-data-label-print');
+    const input = document.getElementById('input-data-incasso');
     if (label) label.textContent = testo;
     if (labelPrint) labelPrint.textContent = testo;
+    if (input) input.value = dataInIso(dataSelezionata);
+
+    const url = `RIEPILOGOINCASSI.html?data=${encodeURIComponent(dataInIso(dataSelezionata))}`;
+    if (`${window.location.pathname.split('/').pop() || ''}${window.location.search}` !== url) {
+        history.replaceState(null, '', url);
+    }
 }
 
 function setLoading(visible) {
@@ -231,9 +245,18 @@ function cambiaGiorno(delta) {
     caricaReport();
 }
 
+function cambiaDataDaInput() {
+    const input = document.getElementById('input-data-incasso');
+    const parsed = parseDataIso(input?.value);
+    if (!parsed) return;
+    dataSelezionata = parsed;
+    caricaReport();
+}
+
 function setupEventListeners() {
     document.getElementById('btn-giorno-prev')?.addEventListener('click', () => cambiaGiorno(-1));
     document.getElementById('btn-giorno-next')?.addEventListener('click', () => cambiaGiorno(1));
+    document.getElementById('input-data-incasso')?.addEventListener('change', cambiaDataDaInput);
 
     document.getElementById('btn-stampa')?.addEventListener('click', () => window.print());
 

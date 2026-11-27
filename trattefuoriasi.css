@@ -1,4 +1,10 @@
 /* Tratte Fuori Asti — stili modulo */
+html:has(.tratte-page) {
+    zoom: 1;
+    height: 100%;
+    overflow: hidden;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -8,14 +14,16 @@
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #c8c6c3;
-    min-height: 100vh;
+    height: 100%;
+    overflow: hidden;
 }
 
 .tratte-page {
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
-    max-width: 800px;
+    min-height: 0;
+    height: 100%;
+    max-width: none;
     margin: 0 auto;
     width: 100%;
 }
@@ -55,7 +63,7 @@ body {
 }
 
 .tratte-title {
-    font-size: clamp(15px, 2vw, 22px);
+    font-size: clamp(18px, 2vw, 24px);
     font-weight: bold;
     letter-spacing: 0.5px;
     margin: 0;
@@ -74,7 +82,7 @@ body {
     color: #000;
     border: 2px solid #cc5200;
     padding: 6px 18px;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: bold;
     cursor: pointer;
     border-radius: 2px;
@@ -90,7 +98,7 @@ body {
     color: #c00;
     border: 2px solid #c00;
     padding: 3px 10px;
-    font-size: 11px;
+    font-size: 14px;
     font-weight: bold;
     cursor: pointer;
     border-radius: 2px;
@@ -113,20 +121,20 @@ body {
     color: #c00;
     text-align: center;
     font-weight: bold;
-    font-size: 14px;
-    padding: 6px 12px;
+    font-size: 16px;
+    padding: 8px 12px;
     border-bottom: 2px solid #e0a800;
 }
 
 /* Intestazioni colonne */
 .tratte-colonne-header {
     display: grid;
-    grid-template-columns: 36px 1.1fr 40px 0.9fr 40px 54px 54px 58px 54px 68px;
-    gap: 3px;
-    padding: 5px 8px 3px;
+    grid-template-columns: 42px 1.7fr 48px 1.3fr 40px 60px 54px 82px 68px 82px;
+    gap: 4px;
+    padding: 6px 8px 4px;
     background-color: #2e8b3a;
     color: #fff;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: bold;
     align-items: end;
 }
@@ -141,9 +149,154 @@ body {
     text-align: left;
 }
 
+.tratte-colonne-header .col-comune {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+}
+
+.tratte-filtro-btn {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    border: 1px solid #fff;
+    border-radius: 2px;
+    background: #fff;
+    color: #1f6b2a;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+
+.tratte-filtro-btn:hover,
+.tratte-filtro-btn.is-aperto {
+    background: #d9f2dc;
+}
+
+.tratte-filtro-btn.is-filtrato,
+.tratte-filtro-btn.is-ordinato {
+    background: #1565c0;
+    border-color: #1565c0;
+    color: #fff;
+}
+
+.tratte-menu[hidden] {
+    display: none !important;
+}
+
+.tratte-menu {
+    position: fixed;
+    z-index: 40;
+    width: 260px;
+    max-height: min(420px, calc(100vh - 24px));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #90a4ae;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    color: #222;
+    text-align: left;
+}
+
+.tratte-menu-ordina {
+    display: flex;
+    gap: 6px;
+}
+
+.tratte-menu-ordina button,
+.tratte-menu-azzera {
+    flex: 1;
+    border: 1px solid #90a4ae;
+    border-radius: 4px;
+    background: #eceff1;
+    color: #263238;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 6px 8px;
+    cursor: pointer;
+}
+
+.tratte-menu-ordina button:hover,
+.tratte-menu-azzera:hover {
+    background: #cfd8dc;
+}
+
+.tratte-menu-ordina button.is-scelto {
+    background: #1565c0;
+    border-color: #1565c0;
+    color: #fff;
+}
+
+.tratte-menu-cerca-label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #455a64;
+}
+
+.tratte-menu input[type="search"] {
+    width: 100%;
+    border: 1px solid #90a4ae;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 15px;
+}
+
+.tratte-menu-tutti {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.tratte-menu-lista {
+    overflow: auto;
+    max-height: 220px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 4px 0;
+}
+
+.tratte-menu-valore {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 4px 8px;
+    font-size: 15px;
+    cursor: pointer;
+    margin: 0;
+}
+
+.tratte-menu-valore:hover {
+    background: #e3f2fd;
+}
+
+.tratte-menu-valore span {
+    overflow-wrap: anywhere;
+}
+
+.tratte-menu-vuoto {
+    padding: 8px;
+    margin: 0;
+    color: #78909c;
+    font-size: 14px;
+}
+
+.tratta-entry[hidden] {
+    display: none !important;
+}
+
 /* Lista scrollabile */
 .tratte-lista {
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
     overflow-y: auto;
     padding: 8px 10px 16px;
     background-color: #c8c6c3;
@@ -155,7 +308,7 @@ body {
     text-align: center;
     padding: 24px;
     color: #555;
-    font-size: 15px;
+    font-size: 17px;
 }
 
 .tratte-errore {
@@ -165,7 +318,7 @@ body {
 /* Singola tratta — griglia a 2 righe (dati + note) */
 .tratta-entry {
     display: grid;
-    grid-template-columns: 36px 1.1fr 40px 0.9fr 40px 54px 54px 58px 54px 68px;
+    grid-template-columns: 42px 1.7fr 48px 1.3fr 40px 60px 54px 82px 68px 82px;
     grid-template-rows: auto auto;
     gap: 3px;
     align-items: center;
@@ -185,8 +338,8 @@ body {
     width: 100%;
     border: 1px solid #bbb;
     background: #fff;
-    padding: 2px 3px;
-    font-size: 11px;
+    padding: 4px 4px;
+    font-size: 14px;
     border-radius: 1px;
     min-width: 0;
 }
@@ -221,7 +374,7 @@ body {
     color: #000;
     border: 1px solid #d39e00;
     padding: 10px 4px;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: bold;
     cursor: pointer;
     border-radius: 2px;
@@ -239,7 +392,7 @@ body {
     color: #ff6600;
     font-weight: bold;
     font-style: italic;
-    font-size: 11px;
+    font-size: 13px;
     white-space: nowrap;
     padding-left: 2px;
 }
@@ -250,8 +403,8 @@ body {
     width: 100%;
     border: 1px solid #bbb;
     background: #fff;
-    padding: 3px 6px;
-    font-size: 11px;
+    padding: 4px 6px;
+    font-size: 14px;
     min-width: 0;
 }
 
@@ -270,7 +423,7 @@ body {
     color: #fff;
     padding: 6px 14px;
     border-radius: 4px;
-    font-size: 13px;
+    font-size: 15px;
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.3s;
@@ -310,7 +463,7 @@ body {
 
 .tratte-modal-message {
     color: #c00;
-    font-size: 16px;
+    font-size: 18px;
     font-weight: bold;
     line-height: 1.4;
     margin-bottom: 18px;
@@ -321,7 +474,7 @@ body {
     color: #000;
     border: 2px solid #cc5200;
     padding: 8px 32px;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: bold;
     cursor: pointer;
     border-radius: 3px;

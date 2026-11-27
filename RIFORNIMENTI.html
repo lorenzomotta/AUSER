@@ -26,17 +26,7 @@
         <div class="rif-tabella-wrap" id="rif-tabella-wrap" hidden>
             <table class="rif-tabella">
                 <thead>
-                    <tr>
-                        <th>DATA</th>
-                        <th>MEZZO</th>
-                        <th>OPERATORE</th>
-                        <th>DISTRIBUTORE</th>
-                        <th>KM</th>
-                        <th>LITRI</th>
-                        <th>COSTO</th>
-                        <th>NOTE</th>
-                        <th class="rif-col-x"></th>
-                    </tr>
+                    <tr id="rif-intestazione"></tr>
                 </thead>
                 <tbody id="rif-corpo"></tbody>
             </table>
@@ -113,6 +103,30 @@
                 <button type="button" class="rif-btn rif-btn-elimina-ok" id="rif-conferma-ok">ELIMINA</button>
             </div>
         </div>
+    </div>
+
+    <div class="rif-menu" id="rif-menu" hidden>
+        <div class="rif-menu-ordina">
+            <button type="button" id="rif-ordina-asc">A → Z</button>
+            <button type="button" id="rif-ordina-desc">Z → A</button>
+        </div>
+        <div id="rif-menu-valori">
+            <label class="rif-menu-cerca-label" for="rif-menu-cerca">Contiene</label>
+            <input type="search" id="rif-menu-cerca" placeholder="Scrivi per filtrare">
+            <label class="rif-menu-tutti">
+                <input type="checkbox" id="rif-menu-tutti" checked>
+                <span>Seleziona tutto</span>
+            </label>
+            <div class="rif-menu-lista" id="rif-menu-lista"></div>
+        </div>
+        <div class="rif-menu-date" id="rif-menu-date" hidden>
+            <label for="rif-data-dal">Dalla data</label>
+            <input type="date" id="rif-data-dal">
+            <label for="rif-data-al">Alla data</label>
+            <input type="date" id="rif-data-al">
+            <p class="rif-menu-vuoto">Puoi compilare solo una delle due. I giorni estremi sono compresi.</p>
+        </div>
+        <button type="button" class="rif-menu-azzera" id="rif-menu-azzera">Azzera filtro</button>
     </div>
 
     <script type="module" src="rifornimenti.js"></script>

@@ -18,6 +18,15 @@ let calMeseVista = { anno: 0, mese: 0 };
 /** Giorni YYYY-MM-DD con appunto nel mese corrente della griglia */
 let giorniConAppunto = new Set();
 let calAperto = false;
+/**
+ * Inserimento foto negli appunti.
+ * false = nascosto e spento, il codice resta. true = di nuovo attivo.
+ */
+const IMMAGINI_AGENDA_ATTIVE = false;
+/** Foto scelta nel modulo «Nuovo appunto», prima del salvataggio */
+let immagineNuova = '';
+/** Riga dell'elenco a cui associare il file scelto. Null = nuovo appunto. */
+let articoloPerImmagine = null;
 
 async function initTauri() {
     try {
@@ -270,9 +279,10 @@ function mostraRisultatiRicerca(lista, messaggio) {
         const quando = data ? formatGiornoItaliano(data) : '';
         const autore = a.autore_username || '';
         const chi = autore ? ` · ${autore}` : '';
+        const testo = anteprimaTesto(a.testo) || (a.immagine ? 'Appunto con immagine' : '');
         return `<button type="button" class="ap-risultato" data-data="${escapeHtml(data)}" data-id="${escapeHtml(id)}">
             <span class="ap-risultato-data">${escapeHtml(quando)}${escapeHtml(chi)}</span>
-            <span class="ap-risultato-testo">${escapeHtml(anteprimaTesto(a.testo))}</span>
+            <span class="ap-risultato-testo">${escapeHtml(testo)}</span>
         </button>`;
     }).join('');
 }
@@ -311,6 +321,8 @@ function apriModaleAggiungi() {
     const input = document.getElementById('ap-aggiungi-data');
     if (input) input.value = giornoCorrente;
     aggiornaEtichettaAggiungi();
+    immagineNuova = '';
+    mostraAnteprimaNuova();
     apriModale('ap-dialog-aggiungi');
     document.getElementById('ap-nuovo-testo')?.focus();
 }
@@ -667,6 +679,16 @@ function renderLista() {
                </div>`
             : `<div class="ap-item-azioni"></div>`;
 
+        const haFoto = String(a.immagine || '').startsWith('data:image/');
+        const foto = (haFoto || (mio && IMMAGINI_AGENDA_ATTIVE))
+            ? `<div class="ap-item-foto">
+                <img class="ap-item-foto-img" alt="Immagine dell'appunto" hidden>
+                ${mio && IMMAGINI_AGENDA_ATTIVE ? `<div class="ap-item-foto-azioni">
+                    <button type="button" class="ap-btn ap-btn-foto" data-azione="immagine">IMMAGINE</button>
+                    <button type="button" class="ap-btn ap-btn-foto-togli" data-azione="togli-immagine" hidden>TOGLI</button>
+                </div>` : ''}
+            </div>`
+            : '';
         const nRisp = Number(a.num_risposte) || 0;
         const apriChat = nRisp > 0;
         const chat = puoAvereChat(a)
@@ -695,6 +717,7 @@ function renderLista() {
             <input type="checkbox" class="ap-item-check" ${fatto ? 'checked' : ''} ${mio ? '' : 'disabled'} title="Segna come fatto">
             <textarea class="ap-item-testo" rows="1" maxlength="2000" ${mio ? '' : 'readonly'}></textarea>
             ${azioni}
+            ${foto}
             ${chat}
         </article>`;
     }).join('');
@@ -704,6 +727,13 @@ function renderLista() {
         if (ta) {
             ta.value = appunti[i]?.testo || '';
             adattaAltezzaTextarea(ta);
+        }
+        const foto = String(appunti[i]?.immagine || '');
+        const img = el.querySelector('.ap-item-foto-img');
+        if (img && foto.startsWith('data:image/')) {
+            img.src = foto;
+            img.hidden = false;
+            el.querySelector('[data-azione="togli-immagine"]')?.removeAttribute('hidden');
         }
     });
 
@@ -843,11 +873,119 @@ async function eliminaRisposta(btn, article) {
     }
 }
 
+function fileDaIncolla(evento) {
+    if (!IMMAGINI_AGENDA_ATTIVE) return null;
+    const elementi = evento.clipboardData?.items;
+    if (!elementi) return null;
+    for (const elemento of elementi) {
+        if (elemento.type && elemento.type.startsWith('image/')) {
+            return elemento.getAsFile();
+        }
+    }
+    return null;
+}
+
+function riduciImmagine(file) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            let larghezza = img.width;
+            let altezza = img.height;
+            const massimo = 900;
+            if (larghezza > massimo || altezza > massimo) {
+                const scala = massimo / Math.max(larghezza, altezza);
+                larghezza = Math.round(larghezza * scala);
+                altezza = Math.round(altezza * scala);
+            }
+            const tela = document.createElement('canvas');
+            tela.width = larghezza;
+            tela.height = altezza;
+            const ctx = tela.getContext('2d');
+            if (!ctx) {
+                reject(new Error('Non riesco a preparare l\'immagine.'));
+                return;
+            }
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, larghezza, altezza);
+            ctx.drawImage(img, 0, 0, larghezza, altezza);
+            let qualita = 0.72;
+            let dati = tela.toDataURL('image/jpeg', qualita);
+            while (dati.length > 280000 && qualita > 0.4) {
+                qualita -= 0.08;
+                dati = tela.toDataURL('image/jpeg', qualita);
+            }
+            if (!dati.startsWith('data:image/jpeg') || dati.length > 450000) {
+                reject(new Error('Immagine troppo grande. Prova con una foto più piccola.'));
+                return;
+            }
+            resolve(dati);
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error('Non riesco a leggere questa immagine.'));
+        };
+        img.src = url;
+    });
+}
+
+function mostraAnteprimaNuova() {
+    const img = document.getElementById('ap-immagine-anteprima');
+    const togli = document.getElementById('btn-immagine-togli');
+    const ok = immagineNuova.startsWith('data:image/');
+    if (img) {
+        img.src = ok ? immagineNuova : '';
+        img.hidden = !ok;
+    }
+    if (togli) togli.hidden = !ok;
+}
+
+function aggiornaFotoRiga(article, dati) {
+    const img = article?.querySelector('.ap-item-foto-img');
+    const togli = article?.querySelector('[data-azione="togli-immagine"]');
+    const ok = String(dati || '').startsWith('data:image/');
+    if (img) {
+        img.src = ok ? dati : '';
+        img.hidden = !ok;
+    }
+    if (togli) togli.hidden = !ok;
+}
+
+function apriFotoGrande(src) {
+    const img = document.getElementById('ap-foto-grande');
+    if (!img || !String(src || '').startsWith('data:image/')) return;
+    img.src = src;
+    apriModale('ap-dialog-foto');
+}
+
+function scegliFileImmagine(article) {
+    if (!IMMAGINI_AGENDA_ATTIVE) return;
+    const input = document.getElementById('ap-immagine-file');
+    if (!input) return;
+    articoloPerImmagine = article || null;
+    input.value = '';
+    input.click();
+}
+
+async function applicaImmagineRiga(article, dati) {
+    const idx = parseInt(article?.dataset?.idx || '0', 10);
+    if (!appunti[idx]) return;
+    const prima = String(appunti[idx].immagine || '');
+    appunti[idx].immagine = dati;
+    aggiornaFotoRiga(article, dati);
+    const salvato = await salvaAppuntoDaRiga(article, { immaginePrecedente: prima, senzaRicarica: true });
+    if (salvato === false) {
+        appunti[idx].immagine = prima;
+        aggiornaFotoRiga(article, prima);
+    }
+}
+
 async function aggiungiAppunto() {
     const ta = document.getElementById('ap-nuovo-testo');
     const testo = String(ta?.value || '').trim();
-    if (!testo) {
-        alert('Scrivi un testo prima di aggiungere.');
+    if (!testo && !immagineNuova) {
+        alert('Scrivi un testo oppure inserisci un\'immagine.');
         ta?.focus();
         return;
     }
@@ -876,6 +1014,7 @@ async function aggiungiAppunto() {
                 autore_username: sessione.username || '',
                 data: dataScelta,
                 testo,
+                immagine: immagineNuova,
                 fatto: false,
                 ordine: dataScelta === giornoCorrente ? appunti.length : 100000,
                 visibilita,
@@ -884,6 +1023,8 @@ async function aggiungiAppunto() {
             }
         });
         if (ta) ta.value = '';
+        immagineNuova = '';
+        mostraAnteprimaNuova();
         document.querySelector('input[name="ap-vis"][value="privato"]')?.click();
         document.querySelectorAll('#ap-destinatari-list input[type="checkbox"]').forEach((c) => {
             c.checked = false;
@@ -916,8 +1057,12 @@ async function salvaAppuntoDaRiga(article, opzioni = {}) {
     const prev = appunti[idx] || {};
     const testoSalvato = String(prev.testo || '').trim();
     const fattoSalvato = prev.fatto === true;
-    if (testo === testoSalvato && fatto === fattoSalvato) return;
-    if (!testo) {
+    const immagine = String(prev.immagine || '');
+    const immaginePrima = Object.prototype.hasOwnProperty.call(opzioni, 'immaginePrecedente')
+        ? String(opzioni.immaginePrecedente || '')
+        : immagine;
+    if (testo === testoSalvato && fatto === fattoSalvato && immagine === immaginePrima) return;
+    if (!testo && !immagine) {
         alert('Il testo non può essere vuoto.');
         return;
     }
@@ -933,6 +1078,7 @@ async function salvaAppuntoDaRiga(article, opzioni = {}) {
                 autore_username: sessione.username || prev.autore_username || '',
                 data: giornoCorrente,
                 testo,
+                immagine,
                 fatto,
                 ordine: prev.ordine ?? idx,
                 visibilita: prev.visibilita || 'privato',
@@ -948,10 +1094,12 @@ async function salvaAppuntoDaRiga(article, opzioni = {}) {
             await caricaGiorno();
         }
         setStato('Appunto aggiornato');
+        return true;
     } catch (error) {
         console.error(error);
         alert(`Impossibile aggiornare:\n${error?.message || error}`);
         setStato('Errore salvataggio');
+        return false;
     } finally {
         salvataggioAppunti.delete(id);
     }
@@ -1003,6 +1151,7 @@ function payloadDaRiga(article, opzioni = {}) {
         autore_username: sessione.username || prev.autore_username || '',
         data: data || giornoCorrente,
         testo,
+        immagine: String(prev.immagine || ''),
         fatto: fattoVal,
         ordine: prev.ordine ?? idx,
         visibilita: prev.visibilita || 'privato',
@@ -1015,7 +1164,9 @@ async function duplicaAppunto(article) {
     if (article?.dataset?.mio !== '1') return;
     if (!invoke || !sessione?.user_id) return;
     const testo = String(article.querySelector('.ap-item-testo')?.value || '').trim();
-    if (!testo) {
+    const idx = parseInt(article.dataset.idx || '0', 10);
+    const haFoto = String(appunti[idx]?.immagine || '').startsWith('data:image/');
+    if (!testo && !haFoto) {
         alert('Il testo non può essere vuoto.');
         return;
     }
@@ -1055,7 +1206,9 @@ async function spostaAppunto(article) {
     const id = article?.dataset?.id;
     if (!id || !invoke || !sessione?.user_id) return;
     const testo = String(article.querySelector('.ap-item-testo')?.value || '').trim();
-    if (!testo) {
+    const idx = parseInt(article.dataset.idx || '0', 10);
+    const haFoto = String(appunti[idx]?.immagine || '').startsWith('data:image/');
+    if (!testo && !haFoto) {
         alert('Il testo non può essere vuoto.');
         return;
     }
@@ -1121,6 +1274,10 @@ async function chiudiFinestra() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     initZoomAgenda();
+    if (!IMMAGINI_AGENDA_ATTIVE) {
+        const boxImmagine = document.querySelector('.ap-immagine');
+        if (boxImmagine) boxImmagine.hidden = true;
+    }
 
     sessione = await richiediSessione();
     if (!sessione) return;
@@ -1246,6 +1403,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     document.getElementById('btn-aggiungi')?.addEventListener('click', aggiungiAppunto);
+    document.getElementById('btn-immagine')?.addEventListener('click', () => scegliFileImmagine(null));
+    document.getElementById('btn-immagine-togli')?.addEventListener('click', () => {
+        immagineNuova = '';
+        mostraAnteprimaNuova();
+    });
+    document.getElementById('ap-immagine-anteprima')?.addEventListener('click', () => {
+        apriFotoGrande(immagineNuova);
+    });
+    document.getElementById('ap-foto-chiudi')?.addEventListener('click', () => chiudiModale('ap-dialog-foto'));
+    document.getElementById('ap-dialog-foto')?.addEventListener('click', (ev) => {
+        if (ev.target?.id === 'ap-dialog-foto') chiudiModale('ap-dialog-foto');
+    });
+    document.getElementById('ap-immagine-file')?.addEventListener('change', async (ev) => {
+        const file = ev.target.files?.[0];
+        ev.target.value = '';
+        if (!file) return;
+        const article = articoloPerImmagine;
+        try {
+            const dati = await riduciImmagine(file);
+            if (article) await applicaImmagineRiga(article, dati);
+            else {
+                immagineNuova = dati;
+                mostraAnteprimaNuova();
+            }
+        } catch (error) {
+            alert(error?.message || error);
+        }
+    });
+    document.getElementById('ap-nuovo-testo')?.addEventListener('paste', async (ev) => {
+        const file = fileDaIncolla(ev);
+        if (!file) return;
+        ev.preventDefault();
+        try {
+            immagineNuova = await riduciImmagine(file);
+            mostraAnteprimaNuova();
+        } catch (error) {
+            alert(error?.message || error);
+        }
+    });
     document.getElementById('ap-nuovo-testo')?.addEventListener('keydown', (ev) => {
         if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
             ev.preventDefault();
@@ -1254,6 +1450,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     document.getElementById('ap-lista')?.addEventListener('click', (ev) => {
+        const foto = ev.target.closest?.('.ap-item-foto-img');
+        if (foto && !foto.hidden) {
+            apriFotoGrande(foto.src);
+            return;
+        }
         const btn = ev.target.closest('button[data-azione]');
         if (!btn) return;
         const article = btn.closest('.ap-item');
@@ -1262,9 +1463,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (azione === 'duplica') duplicaAppunto(article);
         else if (azione === 'sposta') spostaAppunto(article);
         else if (azione === 'elimina') eliminaAppunto(article);
+        else if (azione === 'immagine') scegliFileImmagine(article);
+        else if (azione === 'togli-immagine') applicaImmagineRiga(article, '');
         else if (azione === 'toggle-chat') toggleChat(article);
         else if (azione === 'invia-risposta') inviaRisposta(article);
         else if (azione === 'elimina-risposta') eliminaRisposta(btn, article);
+    });
+
+    document.getElementById('ap-lista')?.addEventListener('paste', async (ev) => {
+        const file = fileDaIncolla(ev);
+        if (!file) return;
+        const article = ev.target.closest?.('.ap-item');
+        if (!article || article.dataset.mio !== '1') return;
+        ev.preventDefault();
+        try {
+            const dati = await riduciImmagine(file);
+            await applicaImmagineRiga(article, dati);
+        } catch (error) {
+            alert(error?.message || error);
+        }
     });
 
     document.getElementById('ap-lista')?.addEventListener('focusout', (ev) => {

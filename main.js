@@ -1100,8 +1100,36 @@ async function initApp() {
 }
 
 // Event listener per chiusura applicazione
+const CHIAVE_LATO_SIDEBAR = 'auser_sidebar_sinistra';
+
+/** Barra a destra (come ora) oppure a sinistra, per chi usa la mano sinistra. */
+function applicaLatoSidebar(sinistra) {
+    document.body.classList.toggle('sidebar-sinistra', sinistra);
+    const btn = document.getElementById('btn-sidebar-lato');
+    if (!btn) return;
+    if (sinistra) {
+        btn.textContent = '▶';
+        btn.title = 'Riporta la barra a destra';
+        btn.setAttribute('aria-label', 'Riporta la barra a destra');
+    } else {
+        btn.textContent = '◀';
+        btn.title = 'Sposta la barra a sinistra';
+        btn.setAttribute('aria-label', 'Sposta la barra a sinistra');
+    }
+}
+
+function impostaLatoSidebar() {
+    applicaLatoSidebar(localStorage.getItem(CHIAVE_LATO_SIDEBAR) === '1');
+    document.getElementById('btn-sidebar-lato')?.addEventListener('click', () => {
+        const sinistra = !document.body.classList.contains('sidebar-sinistra');
+        localStorage.setItem(CHIAVE_LATO_SIDEBAR, sinistra ? '1' : '0');
+        applicaLatoSidebar(sinistra);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('=== DOMContentLoaded index.html ===');
+    impostaLatoSidebar();
 
     // Login obbligatorio
     const sessione = await richiediSessione();
@@ -1399,25 +1427,36 @@ document.addEventListener('DOMContentLoaded', async () => {
                 alert('Non hai il permesso per aprire Incassi Giornalieri.');
                 return;
             }
+            const oggi = oggiIsoLocale();
+            const url = `RIEPILOGOINCASSI.html?data=${encodeURIComponent(oggi)}`;
             if (isTauri()) {
                 try {
-                    await apriFinestraPopup('selezione-data-incassi', {
-                        url: 'SELEZIONEDATAINCASSI.html',
-                        title: 'Incassi giornalieri',
-                        width: 480,
-                        height: 340,
-                        resizable: false,
-                        maximized: false,
+                    const { WebviewWindow } = await import('@tauri-apps/api/window');
+                    const existing = WebviewWindow.getByLabel('riepilogo-incassi');
+                    if (existing) {
+                        await existing.close().catch(() => {});
+                        for (let i = 0; i < 20; i += 1) {
+                            if (!WebviewWindow.getByLabel('riepilogo-incassi')) break;
+                            await new Promise((resolve) => setTimeout(resolve, 50));
+                        }
+                    }
+                    await apriFinestraPopup('riepilogo-incassi', {
+                        url,
+                        title: 'INCASSI GIORNALIERI',
+                        width: 1400,
+                        height: 900,
+                        resizable: true,
+                        maximized: true,
                         decorations: true,
                         alwaysOnTop: false,
                         center: true
                     });
                 } catch (error) {
-                    console.error('Errore apertura selezione data incassi:', error);
+                    console.error('Errore apertura incassi giornalieri:', error);
                     alert('Impossibile aprire Incassi Giornalieri.');
                 }
             } else {
-                window.open('SELEZIONEDATAINCASSI.html', '_blank', 'width=480,height=340');
+                window.open(url, '_blank');
             }
         });
     }
@@ -1494,11 +1533,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             if (isTauri()) {
                 try {
+                    const { WebviewWindow, LogicalSize } = await import('@tauri-apps/api/window');
+                    const giaAperta = WebviewWindow.getByLabel('appunti');
+                    if (giaAperta) {
+                        await giaAperta.setSize(new LogicalSize(780, 680)).catch(() => {});
+                        await giaAperta.center().catch(() => {});
+                    }
                     await apriFinestraPopup('appunti', {
                         url: 'APPUNTI.html',
                         title: 'Agenda',
                         width: 780,
-                        height: 860,
+                        height: 680,
                         resizable: true,
                         maximized: false,
                         decorations: true,
@@ -1510,7 +1555,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     alert('Impossibile aprire l\'Agenda.');
                 }
             } else {
-                window.open('APPUNTI.html', '_blank', 'width=780,height=860');
+                window.open('APPUNTI.html', '_blank', 'width=780,height=680');
             }
         });
     }
@@ -1721,13 +1766,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         tratteBtn.addEventListener('click', async () => {
             if (isTauri()) {
                 try {
-                    const { WebviewWindow } = await import('@tauri-apps/api/window');
+                    const { WebviewWindow, LogicalSize } = await import('@tauri-apps/api/window');
                     const label = 'tratte-fuori-asti';
+                    const larghezza = 933;
+                    const altezza = 680;
 
                     const existing = WebviewWindow.getByLabel(label);
                     if (existing) {
                         try {
                             await existing.show();
+                            await existing.setSize(new LogicalSize(larghezza, altezza)).catch(() => {});
+                            await existing.center().catch(() => {});
                             await existing.setFocus();
                             return;
                         } catch (err) {
@@ -1739,8 +1788,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const webview = new WebviewWindow(label, {
                         url: 'TRATTEFUORIASTI.html',
                         title: 'Costo Tratte Fuori Asti',
-                        width: 800,
-                        height: 800,
+                        width: larghezza,
+                        height: altezza,
                         resizable: true,
                         maximized: false,
                         decorations: true,
